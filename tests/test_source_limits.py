@@ -5,6 +5,7 @@ files, unknown areas and entries back under the soft cap. The recorded count
 is a growth ceiling, not an exact claim about the current size.
 """
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -85,6 +86,18 @@ class SourceLimitsBaselineTests(unittest.TestCase):
         result = run_tool(ROOT)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('failures=0', result.stdout)
+
+    def test_utf8_sources_ignore_the_host_locale(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            build(root, {'ai_router/x.py': OVER}, {'ai_router/x.py': OVER})
+            (root / 'ai_router/x.py').write_text('# \u201cUTF-8\u201d\n' * OVER, encoding='utf-8')
+            result = subprocess.run(
+                [sys.executable, '-X', 'utf8=0', str(TOOL), '--root', str(root)],
+                env={**os.environ, 'LC_ALL': 'C', 'PYTHONCOERCECLOCALE': '0'},
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('checked=1 failures=0', result.stdout)
 
     def test_the_hard_cap_fails_even_with_an_exact_baseline(self):
         result = self.fixture({'ai_router/x.py': 401}, {'ai_router/x.py': 401})

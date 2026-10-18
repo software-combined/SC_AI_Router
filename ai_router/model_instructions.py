@@ -8,8 +8,8 @@ with the square of the roster. Leaf: no `ai_router` imports.
 """
 from pathlib import Path
 
-BASE_INSTRUCTIONS = (Path(__file__).with_name('routed_base_instructions.txt')).read_text()
-SUBSCRIBER_INSTRUCTIONS = (Path(__file__).with_name('subscription_base_instructions.txt')).read_text()
+BASE_INSTRUCTIONS = (Path(__file__).with_name('routed_base_instructions.txt')).read_text(encoding='utf-8')
+SUBSCRIBER_INSTRUCTIONS = (Path(__file__).with_name('subscription_base_instructions.txt')).read_text(encoding='utf-8')
 SUBAGENT_MODEL_PLACEHOLDER = '{{SUBAGENT_MODEL_IDS}}'
 MAX_ROSTER_IDS = 40
 # Openings only this router's routed text has ever used. A stored template

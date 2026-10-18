@@ -9,7 +9,7 @@ EFFORTS = frozenset(('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max')
 RESPONSE_EVENTS = frozenset(('response.created', 'response.in_progress',
     'response.completed', 'response.failed', 'response.incomplete'))
 MAX_REPORTS = 8
-ERROR_TYPES = frozenset(('TimeoutError', 'ConnectionResetError', 'BrokenPipeError',
+ERROR_TYPES = frozenset(('TimeoutError', 'ConnectionResetError', 'ConnectionAbortedError', 'BrokenPipeError',
     'RemoteDisconnected', 'IncompleteRead', 'SSLError', 'SSLCertVerificationError',
     'ConnectionRefusedError', 'gaierror', 'OSError', 'ValueError', 'TypeError',
     'AttributeError', 'KeyError', 'HTTPException', 'other'))

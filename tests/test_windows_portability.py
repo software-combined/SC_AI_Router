@@ -4,7 +4,9 @@ Pins the TOML path form in the Codex block, the windowless subprocess seam,
 and the platform-correct no-interpreter remedy. Offline; no real tasks.
 """
 import importlib.util
+import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -22,6 +24,25 @@ def _load(name, rel):
 
 codex_config = _load('router_codex_config_portability', 'packaging/codex_config.py')
 service = _load('router_service_portability', 'packaging/service.py')
+
+
+class BundledTextEncodingTests(unittest.TestCase):
+    def test_model_labels_and_instructions_ignore_the_host_locale(self):
+        script = r'''
+from pathlib import Path
+from ai_router import model_instructions, model_refresh, registry
+assert all(m.display_name.endswith(' \u00b7 OpenRouter')
+           for m in registry.MODELS if m.provider == 'openrouter')
+for name, text in (('routed_base_instructions.txt', model_instructions.BASE_INSTRUCTIONS),
+                   ('subscription_base_instructions.txt', model_instructions.SUBSCRIBER_INSTRUCTIONS)):
+    path = Path(model_instructions.__file__).with_name(name)
+    assert text == path.read_text(encoding='utf-8')
+    assert model_refresh._read(path) == text
+'''
+        result = subprocess.run([sys.executable, '-X', 'utf8=0', '-c', script],
+                                cwd=ROOT, capture_output=True, text=True,
+                                env={**os.environ, 'LC_ALL': 'C', 'PYTHONCOERCECLOCALE': '0'})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 class CodexBlockPathTests(unittest.TestCase):

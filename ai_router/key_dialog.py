@@ -151,7 +151,7 @@ def _windows_script(which='codex', provider_id=None):
         "Add-Type -AssemblyName System.Drawing; "
         "[System.Windows.Forms.Application]::EnableVisualStyles(); "
         "$f = New-Object System.Windows.Forms.Form; $f.Text = '%s'; "
-        "$f.TopMost = $true; $f.StartPosition = 'CenterScreen'; "
+        "$f.TopMost = $true; $f.StartPosition = 'CenterScreen'; $f.Tag = 'cancel'; "
         "$f.FormBorderStyle = 'FixedDialog'; $f.MaximizeBox = $false; "
         "$f.MinimizeBox = $false; $f.AutoSize = $true; "
         "$f.AutoSizeMode = 'GrowAndShrink'; "
@@ -173,14 +173,14 @@ def _windows_script(which='codex', provider_id=None):
         "$r.Margin = New-Object System.Windows.Forms.Padding(0, 12, 0, 0); "
         "$b = New-Object System.Windows.Forms.Button; $b.Text = 'Save and connect'; "
         "$b.AutoSize = $true; "
-        "$b.Add_Click({ $f.Close() }); $r.Controls.Add($b); "
+        "$b.Add_Click({ $f.Tag = 'save'; $f.Close() }); $r.Controls.Add($b); "
         "$c = New-Object System.Windows.Forms.Button; $c.Text = 'Cancel'; "
         "$c.AutoSize = $true; "
         "$c.Add_Click({ $f.Tag = 'cancel'; $f.Close() }); $r.Controls.Add($c); "
         "$p.Controls.Add($r); $f.Controls.Add($p); "
         "$f.AcceptButton = $b; $f.CancelButton = $c; "
         "$f.Add_Shown({ $f.Activate(); $k.Focus() }); "
-        "[void]$f.ShowDialog(); if ($f.Tag -eq 'cancel') { exit 2 }; "
+        "[void]$f.ShowDialog(); if ($f.Tag -ne 'save') { exit 2 }; "
         "%s" % (TITLE, picture, key_prompt(provider_id).replace("'", "''"), boxes, output))
 
 

@@ -23,6 +23,16 @@ requires_posix_perms = unittest.skipUnless(
 ON_WINDOWS = os.name == 'nt'
 
 
+def symlink_or_skip(source, destination):
+    """Exercise real links unless Windows denies the required privilege."""
+    try:
+        destination.symlink_to(source)
+    except OSError as exc:
+        if getattr(exc, 'winerror', None) == 1314:
+            raise unittest.SkipTest('Windows symlink privilege is unavailable') from exc
+        raise
+
+
 def assert_owner_only(test, path):
     """Assert `path` is owner-only in the way this OS can express it.
 

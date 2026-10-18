@@ -1,5 +1,26 @@
 # Compatibility
 
+## Windows source and service checks, 19 October 2026 AEDT
+
+The public stable bootstrap installed `1.3.2.186` on Windows 11 Pro x64
+(`10.0.26200`) with PowerShell 7.6.5 and its bundled Python 3.14.7.
+Windows PowerShell 5.1's default execution policy refused the downloaded script;
+no execution policy was changed. Installation, router restart, automatic-update
+tasks, six Codex plugins and tray-process delivery passed. The owner confirmed
+the key window was usable. The saved OpenRouter key passed the private-file
+check, and setup completed. Bedrock was not configured.
+
+The desktop-bundled Codex CLI `0.162.0-alpha.17.2` completed one synthetic
+`gpt-6-luna` turn at requested Low effort, including a dynamic-tool round trip.
+One separately invoked Responses request through the installed router completed
+on `z-ai/glm-5.3-flash`, returned the expected marker and reported that model.
+That request used requested Low effort, a 2,048-output-token cap and a 60-second
+client timeout, with no application retries. Served effort was not exposed.
+
+These checks do not establish desktop model switching, sign-in relaunch, Claude
+integration or native-installer acceptance. The source candidate fixes Windows
+UTF-8 asset loading and stops key collection after a stored-key conflict.
+
 ## Desktop menu candidate, 18 October 2026 AEDT
 
 Source checks used macOS 26.6 (25G72), ARM64, Codex desktop 26.1013.31256

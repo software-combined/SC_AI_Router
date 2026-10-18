@@ -124,8 +124,10 @@ python3.14 packaging/install.py --feed "file://$PWD/dist/latest.json"
 On Windows, run the build and install commands in PowerShell:
 
 ```powershell
-py -3 packaging/release.py --out dist --url-base "file://$PWD/dist"
-py -3 packaging/install.py --feed "file://$PWD/dist/latest.json"
+$RouterDist = Join-Path $PWD 'dist'
+$RouterDistUrl = ([uri]$RouterDist).AbsoluteUri
+py -3.14 packaging/release.py --out $RouterDist --url-base $RouterDistUrl
+py -3.14 packaging/install.py --feed "$RouterDistUrl/latest.json"
 ```
 
 Use Python 3.14 for these commands. The installer still supports Python 3.9

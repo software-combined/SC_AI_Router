@@ -15,6 +15,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
+from tests._platform import symlink_or_skip
 from tests.install_fixtures import install_mod
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -56,7 +57,7 @@ class PruneLogsTests(unittest.TestCase):
             logs.mkdir()
             target = _aged(logs / 'router.jsonl.9')
             link = logs / 'link.log'
-            link.symlink_to(target)
+            symlink_or_skip(target, link)
             os.utime(link, (time.time() - 90 * _DAY,) * 2, follow_symlinks=False)
             nested = logs / 'nested'
             nested.mkdir()

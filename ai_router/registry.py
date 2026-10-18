@@ -212,7 +212,7 @@ def load(text):
     return tuple(models)
 
 
-MODELS = load((Path(__file__).with_name('models.json')).read_text())
+MODELS = load((Path(__file__).with_name('models.json')).read_text(encoding='utf-8'))
 BY_SLUG = {m.slug: m for m in MODELS}
 
 
