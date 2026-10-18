@@ -120,13 +120,13 @@ class RemovalRecoveryTests(unittest.TestCase):
         entry['reviewer'] = {'removed': ['model_provider = "previous-provider"']}
         self.config.write_text(self.config.read_text() + '\n[model_providers.person]\nname = "Keep"\n')
         _, restored = self.owner.removal_plan(self.config, entry)
-        self.config.write_text(restored)
+        self.config.write_text(restored, newline='')
         self.assertEqual(self.owner.removal_plan(self.config, entry), (restored, restored))
-        changed = restored.replace('model_provider = "previous-provider"\n', '')
-        self.config.write_text(changed)
+        changed = restored.replace('model_provider = "previous-provider"', '# removed previous route')
+        self.config.write_text(changed, newline='')
         with self.assertRaises(SystemExit):
             self.owner.removal_plan(self.config, entry)
-        self.assertEqual(self.config.read_text(), changed)
+        self.assertEqual(self.config.read_bytes(), changed.encode())
 
     def test_legacy_claude_receipt_restores_only_proven_keys_and_migrates_new_key_evidence(self):
         cli = self.install._claude_config
