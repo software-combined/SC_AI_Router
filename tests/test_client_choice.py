@@ -83,7 +83,9 @@ def _full_install(test, tmp, home, version, argv, extra_env=None):
            'OPENROUTER_API_KEY': 'test-key', 'ROUTER_NO_KEY_WINDOW': '1'}
     env.update(extra_env or {})
     out = io.StringIO()
-    with mock.patch.dict(os.environ, env), contextlib.redirect_stdout(out):
+    with mock.patch.dict(os.environ, env), \
+            mock.patch.object(install_mod, 'platform_backend'), \
+            contextlib.redirect_stdout(out):
         code = install_mod.do_install(args, _fetch=fetch, _run=fake_run)
     return code, out.getvalue(), Path(env['HOME']), Path(env['CLAUDE_CONFIG_DIR'])
 
