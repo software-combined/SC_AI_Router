@@ -29,6 +29,15 @@ def _home(tmp):
     return home
 
 
+def _saved_settings(settings):
+    doc = json.loads(settings.read_text())
+    doc['permissions'] = {'allow': ['Read']}
+    doc['hooks'] = {'SessionStart': [{'matcher': 'startup', 'hooks': [
+        {'type': 'command', 'command': 'echo keep-user-hook'}]}]}
+    settings.write_text(json.dumps(doc, indent=2) + '\n')
+    return settings.read_text()
+
+
 def _install(tmp, home, argv, extra_env=None):
     """Run a current-install do_install with every client path isolated."""
     args = install_mod.build_parser().parse_args(
@@ -80,6 +89,15 @@ def _full_install(test, tmp, home, version, argv, extra_env=None):
 
 
 class CurrentInstallAttachTests(unittest.TestCase):
+    def _assert_only_callback_added(self, home, settings, before):
+        receipt = json.loads((home / 'claude-profile-hook-receipt.json').read_text())
+        self.assertEqual(receipt['settings_path'], str(settings))
+        self.assertTrue(receipt['inserted'])
+        self.assertIn(str(home / 'claude_profile_launch.py'), receipt['entry']['hooks'][0]['command'])
+        expected = json.loads(before)
+        expected['hooks']['SessionStart'].append(receipt['entry'])
+        self.assertEqual(json.loads(settings.read_text()), expected)
+
     def test_helpers_isolate_windows_home_for_current_and_full_install(self):
         for full in (False, True):
             with self.subTest(full=full), tempfile.TemporaryDirectory() as tmp:
@@ -137,12 +155,13 @@ class CurrentInstallAttachTests(unittest.TestCase):
 
     def test_desktop_only_attaches_the_profile_and_detaches_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
+            tmp = str(Path(tmp).resolve())
             home = _home(tmp)
             _install(tmp, home, ['--clients', 'both'])
             config = Path(tmp) / 'fakehome' / '.codex' / 'config.toml'
             before = config.read_text()
             settings = Path(tmp) / 'claude' / 'settings.json'
-            before_settings = settings.read_text()
+            before_settings = _saved_settings(settings)
             code, out, _, _, _ = _install(tmp, home, ['--clients', 'none', '--desktop'])
             self.assertEqual(code, 0)
             entry = install_mod._desktop_config.applied_entry_path(Path(tmp) / 'Claude-3p')
@@ -151,7 +170,7 @@ class CurrentInstallAttachTests(unittest.TestCase):
             clients = install_mod._codex_config.read_receipt(home)['clients']
             self.assertIn('codex', clients)
             self.assertIn('claude', clients)
-            self.assertEqual(settings.read_text(), before_settings)
+            self._assert_only_callback_added(home, settings, before_settings)
             self.assertIn('Claude desktop connected', out)
 
     def test_hand_edited_claude_setting_refuses(self):
@@ -170,6 +189,7 @@ class CurrentInstallAttachTests(unittest.TestCase):
         # The newer-version path used to drop --desktop and detach every
         # client instead; only this test covers that branch.
         with tempfile.TemporaryDirectory() as tmp:
+            tmp = str(Path(tmp).resolve())
             home = Path(tmp) / 'router'
             code, _, fake_home, claude = _full_install(
                 self, tmp, home, '1.0.0', ['--clients', 'both'])
@@ -177,14 +197,14 @@ class CurrentInstallAttachTests(unittest.TestCase):
             config = fake_home / '.codex' / 'config.toml'
             config_bytes = config.read_bytes()
             settings = claude / 'settings.json'
-            settings_bytes = settings.read_bytes()
+            before_settings = _saved_settings(settings)
             code, out, fake_home, claude = _full_install(
                 self, tmp, home, '1.0.1', ['--clients', 'none', '--desktop'])
             self.assertEqual(code, 0)
             entry = install_mod._desktop_config.applied_entry_path(Path(tmp) / 'Claude-3p')
             self.assertEqual(json.loads(entry.read_text())['inferenceProvider'], 'gateway')
             self.assertEqual(config.read_bytes(), config_bytes)
-            self.assertEqual(settings.read_bytes(), settings_bytes)
+            self._assert_only_callback_added(home, settings, before_settings)
             clients = install_mod._codex_config.read_receipt(home)['clients']
             self.assertIn('codex', clients)
             self.assertIn('claude', clients)
