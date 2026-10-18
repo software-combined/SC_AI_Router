@@ -45,6 +45,12 @@ class AtomicWriteTests(unittest.TestCase):
         mod.replace_text(target, 'x = 1\n')
         assert_owner_only(self, target)
 
+    def test_explicit_newline_preserves_saved_line_endings(self):
+        target = self._dir() / 'setup-current'
+        saved = 'one\r\ntwo\n'
+        _mod().replace_text(target, saved, newline='')
+        self.assertEqual(target.read_bytes(), saved.encode())
+
     def test_failed_write_keeps_original_and_no_temp(self):
         mod = _mod()
         home = self._dir()

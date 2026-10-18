@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.1
+
+- Preserve the exact previous menu pointer after failed Windows menu delivery.
+
 ## 1.3.0
 
 - Keep desktop controls responsive across profile changes, expose menu delivery

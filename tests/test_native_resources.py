@@ -2,6 +2,7 @@
 import hashlib
 import io
 import json
+import os
 import tarfile
 import tempfile
 import unittest
@@ -79,15 +80,22 @@ class NativeResourcesTests(unittest.TestCase):
     def test_failed_shortcut_update_restores_previous_pointer(self):
         with tempfile.TemporaryDirectory() as temporary:
             owner, home, latest, data = self.fixture(Path(temporary))
-            (home / 'setup-current').write_text('previous-menu\n')
+            previous = b'previous-menu\r\n'
+            (home / 'setup-current').write_bytes(previous)
             original = owner.load
+            fdopen = os.fdopen
+            def windows_text(fd, mode, **kwargs):
+                if kwargs.get('newline') is None:
+                    kwargs['newline'] = '\r\n'
+                return fdopen(fd, mode, **kwargs)
             def install(home, permanent, python):
                 (home / 'setup-current').write_text(permanent.name)
                 raise OSError('shortcut failure')
             with mock.patch.object(owner, 'load', side_effect=lambda name:
-                    SimpleNamespace(install=install) if name == 'native_shortcuts' else original(name)):
+                    SimpleNamespace(install=install) if name == 'native_shortcuts' else original(name)), \
+                    mock.patch.object(os, 'fdopen', side_effect=windows_text):
                 self.assertFalse(owner.deliver(home, latest, 'https://dist.softwarecombined.com/stable/latest.json', lambda url: data))
-            self.assertEqual((home / 'setup-current').read_text(), 'previous-menu\n')
+            self.assertEqual((home / 'setup-current').read_bytes(), previous)
 
     def test_runtime_links_stay_inside_resources_and_escape_links_are_refused(self):
         owner = module('native_resources')
