@@ -324,10 +324,11 @@ original tool results and the newest turns. This acceptance does not cover Cowor
 sharing or Windows/Linux switching. See [compatibility evidence](compatibility.md)
 for client versions, tested models and limits.
 
-On macOS, candidate desktop setup installs **Open Claude** and **Switch Claude**
-launchers for the current user. In this beta they, and task sharing, are
-macOS-only: on Windows and Linux setup connects Claude without them until
-native acceptance exists. **Open Claude** opens the app with the selected connection.
+The [SCG Router menu](desktop-menu.md) offers explicit Claude connections on Mac,
+Windows and Linux. Native desktop acceptance remains separate from source and
+filesystem checks; see the compatibility record for outstanding platform checks.
+Mac setup retains **Open Claude** and **Switch Claude** recovery launchers.
+**Open Claude** opens the app with the selected connection.
 **Switch Claude** asks for confirmation,
 lets Claude exit normally, shares local tasks using the old selection as the
 conflict winner, rechecks settings and that Claude is still closed, changes only

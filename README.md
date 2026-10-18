@@ -37,6 +37,10 @@ See [integration scope and data flows](docs/publication.md) for release decision
 
 ## Get started
 
+Open **SCG Router** for its Mac menu bar or Windows/Linux tray controls.
+Switch connections, repair setup and manage updates from the
+[desktop menu](docs/desktop-menu.md).
+
 Have your assistant installed and an OpenRouter key if you want to use models
 billed to OpenRouter. Those models cost money and have no local spend cap.
 An AWS Bedrock API key is optional and only enables the Bedrock models;
@@ -66,32 +70,31 @@ If Codex's **Send button is greyed out** after your ChatGPT allowance runs out,
 selecting an OpenRouter model alone may not help. Use the connection steps below.
 OpenRouter replies charge your OpenRouter key, even when a subscription is unavailable.
 
-| Assistant | Microsoft Windows | macOS |
-|---|---|---|
-| Codex | Follow the [PowerShell steps for new chats](docs/troubleshooting.md#codex-send-button-is-greyed-out-or-chatgpt-subscription-access-is-unavailable) to choose OpenRouter or your ChatGPT subscription | Open **Switch Codex**, confirm the restart; open it again to switch back |
-| Claude desktop | Setup connects the OpenRouter profile; [manual switching is an IT pilot](docs/troubleshooting.md#claude-desktop-switch-to-openrouter-and-back), with no automatic Windows shortcut | Open **Switch Claude**, confirm the restart; open it again to switch back |
-| Claude Code in the terminal | Use `/model` to choose a Claude-family OpenRouter or subscription model; keep your Claude subscription sign-in | Same terminal steps |
+| Assistant | Mac, Windows and Linux |
+|---|---|
+| Codex | Open **SCG Router → Codex**, then choose **OpenRouter only** or **ChatGPT + OpenRouter**. Confirm the required restart. |
+| Claude desktop | Open **SCG Router → Claude**, then choose **OpenRouter** or **Claude subscription**. Confirm the required restart. |
+| Claude Code in the terminal | Use `/model` to choose a Claude-family OpenRouter or subscription model. Keep your Claude subscription sign-in. |
 
 For **Codex without ChatGPT subscription access**, choose **No subscription**
-in the key setup window, or use the Windows OpenRouter command in the linked guide.
+in the key setup window.
 That connection needs no ChatGPT sign-in. Switch back only after subscription
 access returns, then select a subscription model. Your existing sign-in stays in place.
 
-Before changing Codex's Windows connection, save a short task handover outside
-the chat. Start a new chat after each change. Earlier chats can need their
-original connection to reopen; switching back does not migrate their history.
-The Mac Switch Codex app preserves the connections needed to resume chats in both modes.
+The menu preserves the connections needed to resume saved Codex chats in both modes.
+Claude shares saved Code tasks using the existing account binding.
+Cowork tasks stay in their original profile.
 
 For **Claude without subscription access**, this repo currently rejects
 `--claude-mode none`. Use Codex's OpenRouter connection or contact IT about
 Claude access. An OpenRouter key alone does not establish that Claude setup works.
 
 After either switch, select the intended model and send a short greeting.
-Check that you receive a reply. On Mac, **Open Claude** opens the selected
-connection; **Switch Claude** changes it. The automatic switch apps are macOS-only
-in this beta. See [Codex switching](docs/operations.md#switch-codex),
-[Claude desktop setup](docs/claude-code.md#claude-desktop-app) and the
-[Windows pilot limits](docs/troubleshooting.md#claude-desktop-switch-to-openrouter-and-back).
+Check that you receive a reply. The existing Mac switch shortcuts remain available.
+See the [desktop menu guide](docs/desktop-menu.md),
+[Codex switching](docs/operations.md#switch-codex) and
+[Claude desktop setup](docs/claude-code.md#claude-desktop-app).
+The [compatibility record](docs/compatibility.md) distinguishes source checks from native desktop acceptance.
 
 If you are reading the installed `<home>/README.md`, open
 `<home>/releases/<version>/README.md` for working guide links. The default home is

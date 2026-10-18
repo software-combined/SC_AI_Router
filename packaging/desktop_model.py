@@ -10,6 +10,8 @@ def menu(facts, *, busy=None, available=None):
     changing = not busy
     status = busy or facts.get('status', 'Status unknown')
     rows = [item('SCG Router — ' + status, enabled=False), item('')]
+    if facts.get('menu_delivery') == 'failed':
+        rows += [item('Menu update needs repair; choose Set up or repair', enabled=False)]
     for client in facts.get('clients', []):
         options = [item(choice['label'] + ('…' if choice['id'] != client['selected'] else ''),
                         client['id'] + '.' + choice['id'],

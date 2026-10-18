@@ -56,8 +56,15 @@ def snapshot(home):
                             for key, label in DESTINATIONS[client]]))
     status = ('Running' if raw.get('serving') is True else
               'Router is not running' if raw.get('serving') is False else 'Status unknown')
+    delivery = 'unknown'
+    try:
+        value = json.loads((home / 'desktop-delivery.json').read_text()).get('status')
+        if value in ('ready', 'failed'):
+            delivery = value
+    except (OSError, ValueError, AttributeError):
+        pass
     return dict(schema=1, status=status, version=version(raw.get('version')),
-                clients=clients, autostart=load('desktop_startup').enabled(home))
+                clients=clients, autostart=load('desktop_startup').enabled(home), menu_delivery=delivery)
 
 
 def _installer(home, flags, run):
@@ -82,7 +89,10 @@ def execute(home, resources, action, run=subprocess.run):
         if client == 'codex':
             owner = load('codex_desktop_switch')
             if target == 'open':
-                owner._platform.open_app(sys.platform, app=owner.CODEX)
+                with load('service').install_lock(home) as held:
+                    if not held:
+                        raise RuntimeError('Another router operation is in progress')
+                    owner._platform.open_app(sys.platform, app=owner.CODEX)
                 result = True
             else:
                 result = owner.switch(home, target=('switched' if target == 'openrouter'
@@ -127,7 +137,17 @@ def execute(home, resources, action, run=subprocess.run):
                        if available else 'SCG Router is up to date.')
         return dict(outcome='done', available=available)
     if action == 'help.support':
-        dialog.message('A redacted support bundle was saved in your SCG Router folder.')
+        path = Path(result.stdout.strip())
+        if (not path.is_absolute() or path.is_symlink() or not path.is_file()
+                or path.parent.resolve() != (home / 'logs').resolve()
+                or not re.fullmatch(r'support-\d{8}T\d{6}Z\.json', path.name)):
+            raise ValueError('Invalid support bundle path')
+        command = (['open', '-R', str(path)] if sys.platform == 'darwin' else
+                   ['explorer', '/select,', str(path)] if sys.platform == 'win32' else
+                   ['xdg-open', str(path.parent)])
+        run(command, check=sys.platform != 'win32', timeout=15,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        dialog.message('Your redacted support bundle is in the opened folder.')
     return dict(outcome='done')
 
 

@@ -15,6 +15,16 @@ from tests.test_native_setup import module, resources
 
 
 class DesktopControlsTests(unittest.TestCase):
+    def test_linux_sessions_remain_distinct_when_they_share_a_user_bus(self):
+        menu = module('desktop_menu')
+        with mock.patch.object(menu.sys, 'platform', 'linux'), \
+                mock.patch.dict(os.environ, {'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/1/bus',
+                                             'XDG_SESSION_ID': 'first'}):
+            first = menu.session_lock()
+            self.assertEqual(menu.session_lock(), first)
+            os.environ['XDG_SESSION_ID'] = 'second'
+            self.assertNotEqual(menu.session_lock(), first)
+
     def test_snapshot_redacts_owner_status_and_keeps_health_separate(self):
         control = module('desktop_control')
         installer = mock.Mock()
@@ -91,7 +101,7 @@ class DesktopControlsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             (home / 'control').mkdir()
-            (home / 'control/scg-router-menu').touch()
+            (home / 'control' / ('scg-router-menu.exe' if os.name == 'nt' else 'scg-router-menu')).touch()
             with mock.patch.object(menu, '_events', side_effect=events), \
                     mock.patch.object(menu, '_control', side_effect=control), \
                     mock.patch.object(menu.subprocess, 'Popen', return_value=shell):

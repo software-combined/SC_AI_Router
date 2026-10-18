@@ -314,11 +314,13 @@ manager. Direct `do_install` calls in tests must use the fake `run` seam.
 
 ## Switch Codex
 
+Open the [SCG Router menu](desktop-menu.md) and choose an explicit Codex connection.
+The existing Mac Switch Codex shortcut remains available for recovery.
+
 From version 26.917.51856, the ChatGPT app (Codex) stops sending messages once
 your ChatGPT subscription reaches its usage limit, even for OpenRouter models.
 Switch Codex selects a separately billed OpenRouter profile until the
-limit resets, then back to your ChatGPT subscription. Like Switch Claude,
-Switch Codex is macOS-only in this beta. SCG Router adds Switch Codex to your
+limit resets, then back to your ChatGPT subscription. On Mac, SCG Router adds Switch Codex to your
 Applications folder when Codex uses your ChatGPT subscription and your ChatGPT
 app is affected.
 
@@ -464,6 +466,10 @@ The state directory, key file and loopback token remain in place for you to
 delete separately. Uninstall does not remove them.
 
 ## Operator surface
+
+The [desktop menu](desktop-menu.md) exposes the same setup, key, restart, update,
+removal and support owners. Closing the menu leaves routing running.
+Menu delivery has its own status and retained files, separate from service health.
 
 Every command is read-only unless it says otherwise, and none prints a
 token, key or URL:

@@ -1,5 +1,29 @@
 # Compatibility
 
+## Desktop menu candidate, 18 October 2026 AEDT
+
+Source checks used macOS 26.6 (25G72), ARM64, Codex desktop 26.1013.31256
+(20586), Claude desktop 2.42304.0 and Claude Code 2.1.283.
+The shared controller read the live Codex attachment and service status without
+exposing paths or keys. Selecting its existing subscription connection preserved
+the exact settings, activation receipt, router state and release pointer.
+This was a read-only/current-selection proof; no assistant restart or model request occurred.
+
+The Mac helper compiled with Apple Swift 6.2.1. The Linux ARM64 helper built
+with Rust 1.90.0. A private D-Bus test distinguished a watcher from an actual
+tray host, detected host loss and verified registration recovery.
+Offline file transitions covered both Claude connection directions, saved Code
+tasks, unchanged account binding, cancellation, managed settings and interrupted
+publication recovery. Windows handle and process-path contracts have regression tests.
+These checks do not establish native desktop interaction or provider replies.
+
+The client versions and inference paths match the 17 October checks below.
+Those unchanged inference paths reuse that paid evidence. The new menu-driven
+Mac switch/restart/reply/return proof remains pending. Windows 11 and Ubuntu
+24.04/26.04 GNOME desktop checks on x64/ARM64 remain pending; no test desktops
+were identified. Intel Mac desktop acceptance also remains pending.
+Keep first-install publication gates unchanged until their native evidence exists.
+
 ## DeepSeek Flash 1017 and release checks, 17 October 2026 AEDT
 
 The pinned `deepseek/deepseek-v4.1-flash-1017` replaces the earlier Flash ID.

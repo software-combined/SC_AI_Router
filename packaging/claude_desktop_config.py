@@ -197,16 +197,14 @@ def _remove_old_switch_shim(home):
 
 
 def _install_switch_launcher(home, python, env=None):
-    # Switch Claude, Open Claude and task sharing are macOS-only until native
-    # Windows and Linux acceptance exists; their helpers stay in the release.
-    if sys.platform != 'darwin':
-        return
+    # Keep the existing Mac recovery shortcuts. Native tray controls on other
+    # platforms still need the same identity callback for account-bound sharing.
     spec = _ilu.spec_from_file_location(
         'router_desktop_switch', Path(__file__).with_name('claude_desktop_switch.py'))
     switch = _ilu.module_from_spec(spec)
     spec.loader.exec_module(switch)
-    for action, name in (('switch', 'Switch Claude'),
-                         ('start', 'Open Claude')):
+    actions = (('switch', 'Switch Claude'), ('start', 'Open Claude')) if sys.platform == 'darwin' else ()
+    for action, name in actions:
         try:
             switch.install_launcher(home, python, action=action)
         except switch.SwitchError as exc:
@@ -221,6 +219,9 @@ def _install_switch_launcher(home, python, env=None):
             if action == 'switch':
                 _remove_old_switch_shim(home)
     try:
+        if sys.platform != 'darwin':
+            atomic_write.replace_text(Path(home) / 'claude_profile_launch.py',
+                Path(__file__).with_name('claude_profile_launch.py').read_text(encoding='utf-8'))
         switch._load('claude_profile_hook').install(home, python, env)
     except (OSError, ValueError, TypeError, SystemExit):
         print('Claude connected; automatic task sharing needs setup again.')

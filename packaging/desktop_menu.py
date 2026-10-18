@@ -64,7 +64,11 @@ def _events(stream, events):
 
 def session_lock():
     # UI uniqueness is per graphical session; configuration locks span sessions.
-    session = os.environ.get('DBUS_SESSION_BUS_ADDRESS') or os.environ.get('SESSIONNAME') or 'aqua'
+    if sys.platform == 'linux':
+        session = (os.environ.get('XDG_SESSION_ID') or os.environ.get('WAYLAND_DISPLAY')
+                   or os.environ.get('DISPLAY') or os.environ.get('DBUS_SESSION_BUS_ADDRESS') or 'desktop')
+    else:
+        session = os.environ.get('SESSIONNAME', 'console') if sys.platform == 'win32' else 'aqua'
     return '.desktop-menu-' + hashlib.sha256(session.encode()).hexdigest()[:16] + '.lock'
 
 
@@ -158,10 +162,13 @@ def run_menu(home, resources, *, autostart=False):
     return 75 if reload_menu else 0
 
 
-def start(home, resources):
+def start(home, resources, *, autostart=False):
+    if autostart and not load('desktop_startup').enabled(home):
+        return
     helper = Path(resources) / 'control' / ('scg-router-menu.exe' if os.name == 'nt' else 'scg-router-menu')
-    if helper.is_file():
-        subprocess.Popen([sys.executable, str(Path(home) / 'desktop_launch.py')],
+    launcher = Path(home) / 'desktop_launch.py'
+    if helper.is_file() and launcher.is_file():
+        subprocess.Popen([sys.executable, str(launcher)] + (['--autostart'] if autostart else []),
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                          **({'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt'
                             else {'start_new_session': True}))

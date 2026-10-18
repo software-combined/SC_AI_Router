@@ -114,6 +114,8 @@ def _switch(home, run, ops, prove, ready, record, target=None):
         raise SwitchError(_blocks.EDITED) from exc
     if current is None:
         raise SwitchError(_blocks.NOT_CONNECTED)
+    if target == SWITCHED and entry.get('openai_mode') == 'none':
+        return target
     if target and ((current == SWITCHED) == (target == SWITCHED)):
         return target
     target = record['to'] = target or (SWITCHED_BACK if current == SWITCHED else SWITCHED)

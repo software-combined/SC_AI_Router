@@ -147,6 +147,7 @@ def reconcile(home, latest, feed_url, fetch=None):
         permanent = retained(resources, home, repair=True)
         try:
             load('native_shortcuts').install(home, permanent, permanent / 'runtime' / doc['runtime_exec'])
+            load('desktop_menu').start(home, permanent, autostart=True)
         except (Exception, SystemExit):
             if before is None:
                 pointer.unlink(missing_ok=True)

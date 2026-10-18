@@ -501,7 +501,8 @@ survive updates and release pruning. After a rollback to a release without task
 sharing it runs that release's plain switch, opens Claude for Open Claude and
 keeps the callback silent. Setup rebuilds 0.6 shortcuts and deletes only the
 router's own copy of their home shim. Setup owns the callback installation and
-removal, and installs the launchers and callback on macOS only in this beta.
+removal. Existing recovery launchers remain Mac applications; the identity
+callback also supports account-bound task sharing from Windows and Linux tray controls.
 
 `claude_profile_rules.py` owns the local-data transfer policy being integrated
 by Plan 169. It keeps conversation payloads intact, excludes separate sign-in
@@ -595,8 +596,8 @@ Linux identity check delegates to `desktop_linux.py`, which selects one XDG
 desktop entry, resolves its supported command shape, and validates the matching
 Electron `resources/app.asar` package metadata. It reads only `package.json`
 from the archive and never launches the desktop command or wrapper. Linux
-switching stays unavailable until lifecycle support and native acceptance are
-complete. A
+tray switching uses this verified entry and waits for bundled writers.
+Native desktop acceptance remains separate from these source and filesystem checks. A
 process that execs another program keeps its start time and stays tracked; an
 exited process still waiting for its parent (a zombie) can no longer write, so
 it counts as gone. Before the quit request, an unknown writer or unreadable
@@ -608,7 +609,7 @@ so a failed check, including a reused process ID, is retried until the deadline
 and only a clean check ends the wait. Its macOS lifecycle helpers take an
 `app` (bundle id, plus the executable names only that app may run) that
 defaults to Claude; Switch Codex passes the ChatGPT app's, which lists no such
-names, so a running Claude or Codex CLI never blocks it.
+names, so unrelated standalone clients do not seed its writer set.
 On macOS, bundle discovery uses Spotlight metadata because AppleScript app
 lookup launches a closed app. Browser-owned native messaging hosts do not seed
 the writer set, and crash reporters (any `crashpad_handler`) never join it:
@@ -640,14 +641,14 @@ back. While Codex is switched, `tools/disable.py` (and so a
 service-only install), `--uninstall` and `--rollback` refuse and leave its
 settings as they are.
 
-`packaging/codex_desktop_switch.py` is the Switch Codex flow, macOS only. It
+`packaging/codex_desktop_switch.py` owns the native desktop connection transition. It
 moves an attached install to the other variant, holding the installer lock
 throughout, and a hand-edited block refuses before anything is asked. Each
 run appends one line to `logs/codex-switch.log` (docs/runtime-files.md).
 
 `switched` is strict. It needs `codex_route.ready`, a subscription install
 (no-subscription mode already runs without sign-in), exactly one ChatGPT app
-(Codex) with its bundled CLI wherever Spotlight finds it, and a graceful
+(Codex) with its bundled CLI at the verified platform installation, and a graceful
 quit. It then writes a pending marker, calls `codex_switch_config.switch` and
 proves the result with `codex_config_proof`: that CLI, started as an app
 server on `~/.codex`, must load the config and report no managed

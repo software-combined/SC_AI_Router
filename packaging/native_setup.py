@@ -37,6 +37,13 @@ def environment(resources):
     return env
 
 
+def _succeeded(result):
+    output = getattr(result, 'stdout', '') or ''
+    if isinstance(output, bytes):
+        output = output.decode(errors='replace')
+    return result.returncode == 0 and not any(line.startswith('deferred:') for line in output.splitlines())
+
+
 def run_installer(resources, home, flags=(), run=subprocess.run):
     state = read_json(Path(home) / 'mixed-router-state.json')
     repair = '--setup' in flags
@@ -114,7 +121,7 @@ def _key(resources, home, replace=False, run=subprocess.run):
             return
     if replace:
         result = run_installer(resources, home, ['--setup'])
-        if result.returncode:
+        if not _succeeded(result):
             raise ValueError('The key window could not be prepared. Try setup again.')
         state = read_json(Path(home) / 'mixed-router-state.json')
     setup = state.get('setup', {})
@@ -195,9 +202,10 @@ def onboard(resources, home, action=None):
         result = subprocess.run([str(python), str(resources / 'router/packaging/install.py'),
                                  '--home', str(home), '--uninstall'], capture_output=True,
                                 timeout=300, env=environment(resources))
-        dialog.message('SCG Router was removed.' if not result.returncode else
+        removed = _succeeded(result)
+        dialog.message('SCG Router was removed.' if removed else
                        'SCG Router could not be removed safely. Contact Software Combined IT.')
-        return result.returncode
+        return 0 if removed else result.returncode or 1
     flags = _select(dialog) if not existing or action == 'add' else ['--setup']
     if flags is None or ('--clients' in flags and _missing_assistant(flags, dialog)):
         return 0
@@ -209,7 +217,7 @@ def onboard(resources, home, action=None):
             load('atomic_write').replace_text(
                 home / 'channel', ('stable' if existing else doc['channel']) + '\n')
         result = run_installer(permanent, home, flags)
-    if result.returncode:
+    if not _succeeded(result):
         dialog.message('Setup could not finish. '
                        'Open SCG Router to try again, or contact Software Combined IT.')
         return 1

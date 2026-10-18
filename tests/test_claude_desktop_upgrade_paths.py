@@ -61,12 +61,20 @@ class UpdateAndPlatformTests(unittest.TestCase):
                              receipt)
             self.assertFalse(new.exists())
 
-    def test_windows_and_linux_install_no_launchers_or_session_callback(self):
+    def test_windows_and_linux_install_callback_without_legacy_launchers(self):
         for name in ('win32', 'linux'):
-            with self.subTest(platform=name), mock.patch.object(desktop.sys, 'platform', name), \
-                    mock.patch.object(desktop._ilu, 'spec_from_file_location') as load:
-                desktop._install_switch_launcher('/router', '/python')
-                load.assert_not_called()
+            spec, module = fake_switch(('switch', 'start'))
+            module.install_launcher = mock.Mock()
+            callback = mock.Mock()
+            module._load = mock.Mock(return_value=SimpleNamespace(install=callback))
+            with self.subTest(platform=name), tempfile.TemporaryDirectory() as tmp, \
+                    mock.patch.object(desktop.sys, 'platform', name), \
+                    mock.patch.object(desktop._ilu, 'spec_from_file_location', return_value=spec), \
+                    mock.patch.object(desktop._ilu, 'module_from_spec', return_value=module):
+                desktop._install_switch_launcher(tmp, '/python', env={})
+                module.install_launcher.assert_not_called()
+                callback.assert_called_once_with(tmp, '/python', {})
+                self.assertTrue((Path(tmp) / 'claude_profile_launch.py').is_file())
 
     def test_setup_deletes_only_the_routers_own_old_switch_shim(self):
         own = hashlib.sha256(b'router copy').hexdigest()
