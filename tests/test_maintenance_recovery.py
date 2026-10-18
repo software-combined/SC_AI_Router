@@ -5,6 +5,8 @@ import io
 import json
 from pathlib import Path
 from types import SimpleNamespace
+import subprocess
+import sys
 import unittest
 from unittest import mock
 
@@ -23,8 +25,10 @@ def payload(version=NEW):
         'packaging/VERSION': (version + '\n').encode(),
         'packaging/install.py': b'# synthetic maintenance installer\n',
         'packaging/native_controller.py': b'# synthetic controller marker\n',
-        'packaging/router_launch.py': b'# synthetic runtime launcher\n',
+        'packaging/router_launch.py': (ROOT / 'packaging/router_launch.py').read_bytes(),
         'packaging/update_launch.py': (ROOT / 'packaging/update_launch.py').read_bytes(),
+        'packaging/native_launch.py': (ROOT / 'packaging/native_launch.py').read_bytes(),
+        'packaging/desktop_launch.py': (ROOT / 'packaging/desktop_launch.py').read_bytes(),
     }
     manifest = dict(version=version, files={name: hashlib.sha256(data).hexdigest()
                                           for name, data in files.items()})
@@ -60,10 +64,34 @@ class MaintenanceRecoveryTests(unittest.TestCase):
         self.assertEqual(selected, self.home / 'control' / NEW)
         self.assertEqual((self.home / 'control-version').read_text().strip(), NEW)
         self.assertEqual(receipt.read_text(), '{broken receipt')
+        for name in ('native_launch.py', 'desktop_launch.py'):
+            self.assertEqual((self.home / name).read_bytes(), (ROOT / 'packaging' / name).read_bytes())
         self.assertEqual((self.home / 'download-auth.json').read_text(), '{legacy sign-in state')
         self.backend.repair_updates.assert_called_once_with('/managed/python3.14', self.home)
         self.assertEqual(self.state['component_repairs'],
-                         dict(controller='ready', updater_launcher='ready', scheduler='ready'))
+                         dict(assistants='ready', controller='ready', updater_launcher='ready',
+                              controls_launchers='ready', scheduler='ready'))
+
+    def test_launcher_retry_clears_only_its_own_failure_without_native_resources(self):
+        service, original = module('service'), delivery._load
+        copy = service._install_home_file
+        failed = False
+        def copy_once(home, source, name, target=None):
+            nonlocal failed
+            if name == 'native_launch.py' and not failed:
+                failed = True
+                raise OSError('interrupted launcher copy')
+            return copy(home, source, name, target)
+        service._install_home_file = copy_once
+        self.state['component_repairs']['controls'] = 'failed'
+        with mock.patch.object(delivery, '_load', side_effect=lambda name:
+                service if name == 'service' else original(name)):
+            self.prepare()
+            self.assertEqual(self.state['component_repairs']['controls_launchers'], 'failed')
+            self.prepare()
+        self.assertEqual(self.state['component_repairs']['controls_launchers'], 'ready')
+        self.assertEqual(self.state['component_repairs']['controls'], 'failed')
+        self.assertNotIn('native_resources', self.latest)
 
     def test_failed_controller_delivery_keeps_launchers_and_records_its_own_failure(self):
         before = (self.home / 'update_launch.py').read_bytes()
@@ -74,7 +102,7 @@ class MaintenanceRecoveryTests(unittest.TestCase):
             self.assertIsNone(self.prepare())
         self.assertEqual((self.home / 'update_launch.py').read_bytes(), before)
         self.backend.repair_updates.assert_not_called()
-        self.assertEqual(self.state['component_repairs'], {'controller': 'failed'})
+        self.assertEqual(self.state['component_repairs'], {'assistants': 'ready', 'controller': 'failed'})
 
     def test_an_old_runtime_cannot_replace_the_newer_updater(self):
         selected = self.prepare()
@@ -88,6 +116,25 @@ class MaintenanceRecoveryTests(unittest.TestCase):
         self.assertEqual((self.home / 'update_launch.py').read_bytes(), before)
         self.assertEqual(module('native_controller').installer(self.home),
                          selected / 'packaging/install.py')
+
+    def test_stable_launchers_work_before_the_legacy_main_job_is_migrated(self):
+        pointer = self.home / 'current'
+        release = self.home / 'releases/1.2.6.174'
+        pointer.unlink()
+        pointer.symlink_to(release, target_is_directory=True)
+        self.backend.repair_updates.side_effect = lambda *_: self.assertTrue(pointer.is_symlink())
+        selected = self.prepare()
+        self.assertTrue(pointer.is_symlink())
+        (selected / 'packaging/install.py').write_text("# '--update'\nprint('stable updater ran')\n")
+        (release / 'ai_router').mkdir(exist_ok=True)
+        (release / 'ai_router/__main__.py').write_text("print('stable runtime ran')\n")
+        for name, expected in (('update_launch.py', 'stable updater ran'),
+                               ('router_launch.py', 'stable runtime ran')):
+            result = subprocess.run([sys.executable, str(self.home / name)],
+                                    capture_output=True, text=True, timeout=15)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(expected, result.stdout)
+        self.backend.repair_updates.assert_called_once()
 
     def test_intermediate_runtime_upgrade_keeps_the_newer_controller_launchers(self):
         self.prepare()

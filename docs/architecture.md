@@ -7,8 +7,11 @@ transitional owners name the plan that will move them.
 Native packaging lives under `packaging/native/`; it wraps the canonical
 installer without adding inference rules. `native_payload` retains disposable
 downloads. `native_setup` owns the graphical flow and uses the existing client,
-service and key-window owners. Repair uses the canonical `--setup` path;
+service and key-window owners. Repair uses the canonical `--repair` path;
 explicit assistant additions use the existing client-selection path.
+`repair_ui` owns explicit maintenance's graceful assistant-close prompt.
+Scheduled updates never call it. Public bootstrap scripts retain the saved
+channel and working runtime; repair never starts key setup.
 `dialog_tool` is a Python 3.9 leaf shared by installer and runtime dialogs.
 It validates retained setup paths before selecting the Linux wrapper.
 `native_dialog` distinguishes cancellation from failed presentation so renewal

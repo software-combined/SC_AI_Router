@@ -11,7 +11,7 @@ ERROR_CODES = (
     'feed_signature', 'bundle_checksum', 'bundle_invalid', 'installer_timeout',
     'installer_failed', 'update_failed', 'download_signin_required',
 )
-COMPONENTS = ('controller', 'updater_launcher', 'scheduler', 'assistants', 'controls')
+COMPONENTS = ('controller', 'updater_launcher', 'scheduler', 'assistants', 'controls', 'controls_launchers')
 
 
 def version(value):

@@ -17,7 +17,8 @@ from pathlib import Path
 home = Path(__file__).resolve().parent
 express = Path(__file__).name == 'express_launch.py'
 try:
-    name = (home / 'current').read_text(encoding='utf-8').strip().split('/')[-1]
+    pointer = home / 'current'
+    name = pointer.resolve().name if pointer.is_symlink() else pointer.read_text(encoding='utf-8').strip().split('/')[-1]
 except (OSError, ValueError):
     raise SystemExit('router pointer file missing: reinstall the router')
 installer = home / 'releases' / name / 'packaging' / 'install.py'

@@ -15,6 +15,48 @@ def _load(name):
     return module
 
 
+close_assistants = _load('repair_ui').close_assistants
+
+
+def normalize_pointer(home):
+    """Migrate only after the main job has loaded and verified its stable launcher."""
+    if (home / 'current').is_symlink():
+        service = _load('service')
+        active = service.current_release_dir(home)
+        if active is None or active.resolve() != (home / 'releases' / active.name).resolve():
+            raise ValueError('unsupported legacy release pointer')
+        service.swap_current(home, active)
+
+
+def result(home, delivery, successful, cancelled=False):
+    """Clear each warning only after this operation verifies its own component."""
+    service, status = _load('service'), _load('update_status')
+    state = service._state.read(service._state.path(home))
+    if not isinstance(state, dict):
+        return
+    components = state.get('component_repairs')
+    if not isinstance(components, dict):
+        components = state['component_repairs'] = {}
+    report = service.load('router_delivery_classification',
+        Path(__file__).resolve().parents[1] / 'tools/classify_attachments.py').classify(
+            home, python=delivery.get('python'))
+    entries = report.get('clients', {})
+    if report.get('receipt') == 'readable' and entries:
+        owned = all(row.get('classification') == 'owned' for row in entries.values())
+        components['assistants'] = 'ready' if owned else 'failed'
+    elif report.get('receipt') == 'missing' and state.get('clients') == 'none':
+        components['assistants'] = 'ready'
+    else:
+        components['assistants'] = 'failed' if report.get('receipt') == 'conflict' else 'unknown'
+    if delivery.get('maintenance_done'):
+        status.verified(state, delivery['latest'], delivery['feed'], status.channel(home), None)
+    current = service.current_version(home)
+    repaired = successful and components.get('assistants') == 'ready' and 'failed' not in components.values()
+    status.record(state, error=None if cancelled else '' if successful else 'installer_failed',
+                  applied=current if successful else None, repaired=repaired)
+    service._write_state(home, state)
+
+
 def clients(home, state):
     try:
         attached = _load('codex_config').read_receipt(home).get('clients', {})
@@ -61,6 +103,13 @@ def maintain(home, source, state, python=None, backend=None):
         if (selected / 'packaging/task_launch.py').is_file():
             service.install_task_launcher(home, selected)
         components[step] = 'ready'
+        step = 'controls_launchers'
+        copied = 0
+        for name in ('native_launch.py', 'desktop_launch.py'):
+            if (selected / 'packaging' / name).is_file():
+                service._install_home_file(home, selected, name)
+                copied += 1
+        components[step] = 'ready' if copied == 2 else 'unknown'
         repair = getattr(backend, 'repair_updates', None)
         if repair is not None and (home / 'current').exists():
             step = 'scheduler'
@@ -126,3 +175,9 @@ def run_install(args, install, *, run, fetch):
                     python=delivery.get('python'), backend=delivery.get('backend'))
             except (Exception, SystemExit):
                 print('SCG setup tools need repair; open SCG Router to retry.')
+            if delivery.get('maintenance_done'):
+                try:
+                    result(Path(args.home).expanduser(), delivery, rc == 0,
+                           getattr(args, 'repair_cancelled', False))
+                except (Exception, SystemExit):
+                    print('The repair result could not be verified; run setup again.')

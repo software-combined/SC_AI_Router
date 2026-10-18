@@ -1,5 +1,5 @@
 #!/bin/sh
-# First-install bootstrap for hosts without repository access.
+# Public setup and in-place repair for hosts without repository access.
 # POSIX sh + curl/python3/tar plus shasum or sha256sum only: resolves the
 # pinned CPython runtime from runtimes.json, verifies every download by
 # SHA-256, then runs the verified bundle installer. The feed is public: no
@@ -31,6 +31,12 @@ case "$OS" in Darwin) OS=darwin ;; Linux) OS=linux ;; esac
 case "$ARCH" in arm64|aarch64) ARCH=arm64 ;; x86_64|amd64) ARCH=x86_64 ;; esac
 mkdir -p "$HOME_DIR"
 chmod 700 "$HOME_DIR"
+HOME_DIR="$(cd "$HOME_DIR" && pwd -P)"
+REPAIR=""
+if [ -e "$HOME_DIR/current" ] || [ -L "$HOME_DIR/current" ]; then
+  REPAIR="--repair"
+  echo "Updating or repairing SCG Router. Your key and saved choices stay in place."
+fi
 dl() {
   curl -fsSL "$FEED_ORIGIN/$1" -o "$2"
 }
@@ -55,11 +61,20 @@ set -- $RT; MIRROR="$1"; RSHA="$2"; REXEC="$3"
 # Percent-encode the URL path: a raw '+' in an S3 key is decoded as a space
 # at the edge and denied, and upstream runtime names carry '+' (3.14.7+DATE).
 MIRROR_URL="$(python3 -c "import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1], safe='/'))" "$MIRROR")"
-dl "$MIRROR_URL" "$HOME_DIR/runtime.tar.gz"
-echo "$RSHA  $HOME_DIR/runtime.tar.gz" | verify_sha256
-mkdir -p "$HOME_DIR/runtime"
-tar -xzf "$HOME_DIR/runtime.tar.gz" -C "$HOME_DIR/runtime"
 PY="$HOME_DIR/runtime/$REXEC"
+if ! "$PY" -c 'import sys,compression.zstd;assert sys.version_info >= (3,14)' >/dev/null 2>&1; then
+  dl "$MIRROR_URL" "$HOME_DIR/runtime.tar.gz"
+  echo "$RSHA  $HOME_DIR/runtime.tar.gz" | verify_sha256
+  RUNTIME_DIR="$HOME_DIR/runtime"
+  # A running Windows or POSIX service can still use the old runtime files.
+  # Keep those files and stage a replacement beside them when repair needs one.
+  if [ -d "$RUNTIME_DIR" ]; then RUNTIME_DIR="$RUNTIME_DIR/$RSHA"; fi
+  mkdir -p "$RUNTIME_DIR"
+  PY="$RUNTIME_DIR/$REXEC"
+  if ! "$PY" -c 'import sys,compression.zstd;assert sys.version_info >= (3,14)' >/dev/null 2>&1; then
+    tar -xzf "$HOME_DIR/runtime.tar.gz" -C "$RUNTIME_DIR"
+  fi
+fi
 "$PY" -c "import compression.zstd; print('runtime ok')"
 dl "$CHANNEL/latest.json" "$HOME_DIR/latest.json"
 set -- $(python3 -c "import json,os;d=json.load(open(os.environ['HOME_DIR']+'/latest.json'));print(d['version'],d['url'],d['sha256'])")
@@ -75,8 +90,8 @@ tar -xzf "$HOME_DIR/bundle.tar.gz" -C "$HOME_DIR/bootstrap"
 # bootstrap cannot move a stable host onto pre-releases. A host already
 # ahead of the requested channel is current, not deferred.
 if "$PY" "$HOME_DIR/bootstrap/packaging/install.py" --home "$HOME_DIR" --python "$PY" \
-     --feed "$FEED_ORIGIN/$CHANNEL/latest.json" ${CHOOSE:+"$CHOOSE"}; then
-  CURRENT="$(cat "$HOME_DIR/current" 2>/dev/null || true)"
+     --feed "$FEED_ORIGIN/$CHANNEL/latest.json" ${REPAIR:+"$REPAIR"} ${CHOOSE:+"$CHOOSE"}; then
+  CURRENT="$("$PY" -c 'import pathlib,sys;p=pathlib.Path(sys.argv[1]);print(p.resolve().name if p.is_symlink() and p.is_dir() else p.read_text().strip() if p.exists() else str())' "$HOME_DIR/current")"
 else
   exit $?
 fi

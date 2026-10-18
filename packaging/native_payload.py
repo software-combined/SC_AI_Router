@@ -104,16 +104,21 @@ def retained(resources, home, expected_target=None, *, repair=False):
     return destination
 
 
-def install_arguments(resources, home, state=None, *, choose=False, key=False):
+def install_arguments(resources, home, state=None, *, choose=False, key=False, repair=False):
     """Use permanent Python and a local bundle, preserving existing clients."""
     resources, home = Path(resources), Path(home)
     doc = metadata(resources)
     python = resources / 'runtime' / doc['runtime_exec']
-    args = [str(python), str(resources / 'router' / 'packaging' / 'install.py'),
+    source = load('native_controller').launcher_source(home, resources / 'router')
+    feed = ('file://' + str(resources / 'payload/latest.json') if not repair else
+            load('feed').FEED_URL.replace('/stable/', '/' + load('update_status').channel(home) + '/'))
+    args = [str(python), str(source / 'packaging' / 'install.py'),
             '--python', str(python), '--home', str(home),
-            '--feed', 'file://' + str(resources / 'payload' / 'latest.json')]
+            '--feed', feed]
     if key:
         args.append('--setup')
+    elif repair:
+        args.append('--repair')
     elif choose or not state:
         args.append('--choose-clients')
     else:

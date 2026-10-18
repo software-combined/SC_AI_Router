@@ -38,7 +38,7 @@ def launcher_source(home, source):
                     (Path(source) / 'packaging/VERSION').read_text().strip()):
                 return selected.parent.parent
         except (OSError, ValueError):
-            pass
+            return selected.parent.parent  # Unknown source identity cannot downgrade verified maintenance.
     return Path(source)
 
 

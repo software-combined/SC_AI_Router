@@ -308,9 +308,8 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
     serial = check_serial(home, latest, pinned=bool(args.feed))
     if delivery is not None: delivery.update(latest=latest, feed=feed)
     current = current_version(home)
-    # --setup repairs the current runtime without re-extracting or downgrading it.
-    # Maintenance can advance independently when this channel's feed lags.
-    repair = bool(args.setup) and not newer(latest['version'], current)
+    # Current-runtime repair keeps its code; verified maintenance can advance independently.
+    repair = bool(args.setup or args.repair) and not newer(latest['version'], current)
     if not newer(latest['version'], current) and not repair:
         if PLATFORM == 'win32' and not args.dry_run:
             platform_backend().recover_pending(python, home, current_release_dir(home), current)
@@ -358,6 +357,9 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
     if delivery is not None:
         delivery['controller_source'] = _delivery.prepare(home, tarball, latest, manifest_doc, state, python, backend)
         delivery['maintenance_done'] = True
+    if args.repair and not _delivery.close_assistants(home):
+        args.repair_cancelled = True
+        raise SystemExit('Repair cancelled; run setup again when your assistants are ready.')
     client, clients, claude_mode, mode = _resolve_clients_and_modes(args, home, state, repair=repair)
     # First-run window: the router boots keyless on a single-use link and
     # the operator pastes one key there instead of into the terminal. TTL
@@ -387,9 +389,7 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
         if exc.code != 3 or setup_url is None:
             raise
     if repair:
-        # --setup on a current install changes no code: restart the current
-        # release so the service reads the fresh setup nonce, then open the
-        # window. Never re-extract a release the running service is using.
+        # Restart retained code; --setup also asks it to read a fresh key-window link.
         try:
             backend.install(python, home, state, current_release_dir(home), None)
             healthy = wait_version(state, current)
@@ -400,10 +400,13 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
             print('the service did not come back with the fresh setup link; '
                   're-run the installer')
             return 1
-        # A receipt that predates the listing snapshot (or one whose fetch
-        # failed) can only be refreshed from here: a plain re-run returns
-        # "up to date" before the client stage, and the scheduled child never
-        # passes --clients. The merge is idempotent for unchanged values.
+        _delivery.normalize_pointer(home)
+        if args.repair:
+            return _client_choice.attach_current(args, home, codex=_codex_config,
+                desktop=_desktop_config, claude=attach_claude, write_state=_write_state,
+                python=python, resolve=_resolve_clients_and_modes,
+                ensure_state=ensure_state, ready=_current_ready)
+        # Explicit key refresh also upgrades a legacy Claude listing snapshot.
         _claude_config.refresh_snapshot(
             home, state, _codex_config,
             lambda: _operator.listing(state))
@@ -613,6 +616,8 @@ def build_parser():
     parser.add_argument('--static-catalogue', action='store_true', help='Use the static catalogue fallback.')
     parser.add_argument('--setup', action='store_true',
                         help='First-run key window: mint a setup link and open it even when a key exists.')
+    parser.add_argument('--repair', action='store_true',
+                        help='Update or repair existing setup, preserving working keys and saved choices.')
     parser.add_argument('--choose-clients', action='store_true', help='Ask which assistant and surface this computer uses.')
     parser.add_argument('--openai-mode', default=None)
     parser.add_argument('--anthropic-mode', default=None,

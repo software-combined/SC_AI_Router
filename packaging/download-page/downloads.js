@@ -6,9 +6,8 @@
     'windows/x86_64': 'Windows · x64', 'linux/x86_64': 'Ubuntu · x64', 'linux/arm64': 'Ubuntu · arm64'};
   const systems = [['darwin/', 'macOS', 'apple'], ['windows/', 'Windows', 'microsoft'], ['linux/', 'Linux', 'linux']];
   async function load() {
-    document.getElementById('downloads').hidden = true;
     const response = await fetch('stable.json', {cache: 'no-store', credentials: 'omit', redirect: 'error'});
-    if (!response.ok) throw problem('The stable installer is being prepared. Use the other setup options below, or contact Software Combined IT.');
+    if (!response.ok) throw problem('Use the setup and repair scripts below. Desktop installers are being prepared.');
     const doc = await response.json();
     const macOnly = doc.scope === 'macos-arm64';
     const expected = macOnly ? 1 : 5;
@@ -49,10 +48,11 @@
     }
     document.getElementById('recommendation').textContent = `Version ${doc.version} · Stable${macOnly ? ' · Apple silicon' : ''}`;
     document.getElementById('downloads').hidden = false;
+    document.getElementById('verification').hidden = false;
     status.textContent = '';
   }
   function failure(error) {
-    status.textContent = error.publicMessage || 'Downloads need attention. Use the other setup options below, or contact Software Combined IT.';
+    status.textContent = error.publicMessage || 'Use the setup and repair scripts below, or contact Software Combined IT.';
   }
   load().catch(failure);
 })();

@@ -22,9 +22,10 @@ REASONS = frozenset(('damaged_receipt', 'marker_conflict', 'unsupported_structur
     'ownership_conflict', 'duplicate_keys', 'invalid_json', 'unreadable'))
 
 
-def classify(home):
+def classify(home, python=None):
     """Use the repair/removal proof without applying it or making network requests."""
     owner, removal = _load('codex_config'), _load('client_removal')
+    owner._owned.PYTHON = python
     home = Path(home)
     result = dict(schema=1, receipt='missing', clients={})
     try:

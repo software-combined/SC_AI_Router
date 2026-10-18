@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from native_payload import install_arguments, load, metadata, retained
 
-ACTIONS = (('resume', 'Set up or repair'), ('status', 'Check setup'),
+ACTIONS = (('resume', 'Update or repair'), ('status', 'Check setup'),
            ('add', 'Connect another assistant'), ('key', 'Replace model key'),
            ('remove', 'Remove router'))
 ASSISTANT_DOWNLOADS = {'codex': 'https://chatgpt.com/download/',
@@ -46,8 +46,8 @@ def _succeeded(result):
 
 def run_installer(resources, home, flags=(), run=subprocess.run):
     state = read_json(Path(home) / 'mixed-router-state.json')
-    repair = '--setup' in flags
-    args = install_arguments(resources, home, state, key=repair)
+    key, repair = '--setup' in flags, '--repair' in flags
+    args = install_arguments(resources, home, state, key=key, repair=repair)
     # Flags from the graphical chooser replace, rather than combine with,
     # the previous selection. No unattended fallback can attach Codex.
     if '--clients' in flags:
@@ -56,8 +56,8 @@ def run_installer(resources, home, flags=(), run=subprocess.run):
         if '--clients' in args:
             index = args.index('--clients')
             del args[index:index + 2]
-    args += [flag for flag in flags if flag != '--setup']
-    if not repair:
+    args += [flag for flag in flags if flag not in ('--setup', '--repair')]
+    if not key and not repair:
         attached = load('codex_config').read_receipt(home).get('clients', {})
         if '--desktop' not in args and 'claude-desktop' in attached:
             args.append('--desktop')
@@ -69,7 +69,7 @@ def run_installer(resources, home, flags=(), run=subprocess.run):
 def status(resources, home, run=subprocess.run):
     doc = metadata(resources)
     python = Path(resources) / 'runtime' / doc['runtime_exec']
-    source = Path(resources) / 'router'
+    source = load('native_controller').launcher_source(home, Path(resources) / 'router')
     result = run([str(python), str(source / 'packaging/install.py'),
                   '--status', '--json', '--home', str(home)], capture_output=True,
                  text=True, timeout=30, env=environment(resources))
@@ -144,13 +144,20 @@ def _check(resources, home, dialog):
     facts = status(resources, home)
     pending = facts['onboarding']['clients']
     if not facts.get('serving'):
-        dialog.message('SCG Router needs repair. Open it again and choose Set up or repair.')
+        dialog.message('SCG Router needs repair. Open it again and choose Update or repair.')
+        return
+    update = facts.get('update', {})
+    if update.get('required_action'):
+        dialog.message('SCG Router is running, but updates need attention.\n\n'
+            'Running version: %s\nLatest known for this channel: %s\nLast successful check: %s\n\n'
+            'Choose Update or repair to continue.' % (facts.get('running_version') or 'Unknown',
+            update.get('latest_known_version') or 'Unknown', update.get('last_successful_check_at') or 'Unknown'))
         return
     if 'claude-desktop' in pending and _missing_assistant(
             ['--clients', 'none', '--desktop'], dialog):
         return
     if not pending or any(not row['plugins_available'] for row in pending.values()):
-        dialog.message('Your assistant tools still need setup. Open SCG Router and choose Set up or repair.')
+        dialog.message('Your assistant tools still need setup. Open SCG Router and choose Update or repair.')
         return
     progress = read_json(Path(home) / 'setup-progress.json')
     for client, checks in pending.items():
@@ -180,7 +187,7 @@ def _check(resources, home, dialog):
 
 def onboard(resources, home, action=None):
     dialog = load('native_dialog')
-    existing = (home / 'current').is_file()
+    existing = (home / 'current').exists() or (home / 'current').is_symlink()
     action = action or (dialog.choose('What would you like to do?', ACTIONS) if existing else 'resume')
     if action is None:
         return 0
@@ -199,14 +206,17 @@ def onboard(resources, home, action=None):
                               'Your key and saved setup files will remain on this computer.'):
             return 0
         python = resources / 'runtime' / doc['runtime_exec']
-        result = subprocess.run([str(python), str(resources / 'router/packaging/install.py'),
+        if not load('repair_ui').close_assistants(home, removing=True):
+            return 0
+        source = load('native_controller').launcher_source(home, resources / 'router')
+        result = subprocess.run([str(python), str(source / 'packaging/install.py'),
                                  '--home', str(home), '--uninstall'], capture_output=True,
                                 timeout=300, env=environment(resources))
         removed = _succeeded(result)
         dialog.message('SCG Router was removed.' if removed else
                        'SCG Router could not be removed safely. Contact Software Combined IT.')
         return 0 if removed else result.returncode or 1
-    flags = _select(dialog) if not existing or action == 'add' else ['--setup']
+    flags = _select(dialog) if not existing or action == 'add' else ['--repair']
     if flags is None or ('--clients' in flags and _missing_assistant(flags, dialog)):
         return 0
     with dialog.Progress() as progress:
@@ -221,10 +231,16 @@ def onboard(resources, home, action=None):
         dialog.message('Setup could not finish. '
                        'Open SCG Router to try again, or contact Software Combined IT.')
         return 1
+    try:
+        permanent = load('native_resources').current(home)
+        doc = metadata(permanent)
+    except (OSError, ValueError, KeyError):
+        pass
     source = permanent / 'router'
     load('native_controller').install(home, source)
     python = permanent / 'runtime' / doc['runtime_exec']
     load('native_shortcuts').install(home, permanent, python)
+    load('native_resources').confirm_controls(home, permanent)
     load('desktop_menu').start(home, permanent)
     atomic = load('atomic_write')
     atomic.replace_json(home / 'setup-progress.json',

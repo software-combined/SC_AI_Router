@@ -16,7 +16,7 @@ release to the public feed and creates the GitHub Release with
 `latest.json` as a public mirror for humans. The semantic version remains in
 the public tag, bundle and feed, where the updater uses it for ordering.
 Healthy current updaters check their saved channel every four hours. Old installs
-blocked by download sign-in need the current public setup once; publication alone
+blocked by download sign-in need the [current public setup once](recovery.md); publication alone
 does not recover them. Never push to `main` directly for a release; a direct push runs
 checks but publishes nothing.
 

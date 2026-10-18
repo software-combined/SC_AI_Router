@@ -46,8 +46,8 @@ billed to OpenRouter. Those models cost money and have no local spend cap.
 An AWS Bedrock API key is optional and only enables the Bedrock models;
 see [setup options](docs/setup.md).
 
-1. Ask a maintainer for the setup script for your computer. You do not need
-   a GitHub account or access to this repository.
+1. Open [SCG Router setup and repair](https://dist.softwarecombined.com/install/)
+   and choose your computer. You do not need a download sign-in or GitHub account.
 2. Run setup and choose the assistant you use. Enter your key only in the
    setup window when prompted; never paste it into a chat or support ticket.
    On Microsoft Windows 11 x64, use the supplied `bootstrap.ps1` in PowerShell.
@@ -59,9 +59,10 @@ You should see the model in the picker and receive a reply. Installation alone
 does not confirm that the assistant works. See [setup options](docs/setup.md)
 for prerequisites, changing assistants and installation from source.
 
-Native DMG, EXE and AppImage builds and a staff download page are prepared.
-The [release checklist](docs/native-installers.md) records what must pass before
-the permanent download link replaces the setup-script route.
+If you already use Router, run the current setup once to update or repair it.
+Your keys, saved channel and connected assistants remain in place. See
+[recovery instructions](docs/recovery.md) for older installations.
+The [release checklist](docs/native-installers.md) records native installer acceptance.
 
 ## Switch to OpenRouter and back
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Repair existing installations through the public setup without replacing keys
+  or saved choices. Keep platform repair links visible when native downloads
+  are unavailable. Existing controls use the newest verified maintenance code.
+
 - Show the latest verified channel version and last successful update check.
   Keep failed and parked updates visible after cached responses, channel changes
   and runtime rollback. Report component repair separately from routing health.

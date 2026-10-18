@@ -194,18 +194,22 @@ def attach_current(args, home, *, codex, desktop, claude, write_state, resolve,
     state = ensure_state(home)
     previous = state.copy()
     _, clients, claude_mode, mode = resolve(args, home, state)
+    saved = desktop.saved_profile(home, codex) if getattr(args, 'repair', False) else None
     if args.choose_clients and args.clients is None:
         # The chooser was asked for but could not ask (no dialog tool, or an
         # unattended run): attach nothing rather than guessing.
         ready(home, state, previous, python, only_if_changed=True)
         return 0
     if clients == 'none':
-        if not args.desktop:
+        if not args.desktop and not saved:
             ready(home, state, previous, python, only_if_changed=True)
             if not getattr(args, 'client_choice_cancelled', False):
                 print('nothing to attach: --clients none attaches no client')
             return 0
         ready(home, state, previous, python)
+        if saved:
+            desktop.attach(home, state, codex, saved, python=python, refresh=True)
+            return 0
         return desktop.attach_current(args, codex, write_state, python=python)
     if claude_mode == 'none' and clients in ('claude', 'both'):
         write_state(home, previous)
@@ -220,8 +224,11 @@ def attach_current(args, home, *, codex, desktop, claude, write_state, resolve,
     if clients in ('claude', 'both'):
         claude(home, state, python=python)
         names.append('Claude Code')
-    if args.desktop:
-        desktop.attach_current(args, codex, write_state, python=python)
+    if args.desktop or saved:
+        if saved:
+            desktop.attach(home, state, codex, saved, python=python, refresh=True)
+        else:
+            desktop.attach_current(args, codex, write_state, python=python)
         names.append('Claude desktop')
     print(_connected(names))
     return 0

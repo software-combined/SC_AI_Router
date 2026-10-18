@@ -62,8 +62,12 @@ class SystemdTests(unittest.TestCase):
         self.assertFalse(current.is_symlink())
         self.assertEqual(current.read_text().strip(), '0.6.6.0')
         after = json.loads((self.home / 'mixed-router-state.json').read_text())
-        self.assertEqual({k: v for k, v in after.items() if k != 'setup'},
-                         {k: v for k, v in before.items() if k != 'setup'})
+        update_fields = {'setup', 'last_check_at', 'last_successful_check_at',
+                         'last_applied_version', 'latest_verified', 'component_repairs'}
+        self.assertEqual({k: v for k, v in after.items() if k not in update_fields},
+                         {k: v for k, v in before.items() if k not in update_fields})
+        self.assertEqual(after['latest_verified']['version'], '0.6.6.0')
+        self.assertEqual(after['last_applied_version'], '0.6.6.0')
         # Env-only key: the upgrade mints a fresh setup nonce for the window.
         self.assertIn('setup', after)
         self.assertNotEqual(after['setup'], before.get('setup'))
