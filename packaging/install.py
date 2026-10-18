@@ -164,7 +164,7 @@ def write_catalogue(home, release_dir, python):
 replace_config_block = _codex_config.replace_config_block
 
 
-def _restore_owned_config(home, python=None):
+def _restore_owned_config(home, python=None, expected=None, entry=None):
     """Detach an active client via the single owned remover path.
 
     Runs the matching tools/disable.py with ROUTER_RESTORE_ONLY=1: exact
@@ -176,6 +176,7 @@ def _restore_owned_config(home, python=None):
     if python is None: raise SystemExit('Python 3.14 is required to restore Codex settings safely.')
     result = run([python, str(disable)], capture_output=True, text=True,
                  env={**os.environ, 'ROUTER_HOME': str(home),
+                      'ROUTER_EXPECTED_CONFIG_SHA256': expected or '',
                       'ROUTER_RESTORE_ONLY': '1'})
     print((result.stdout or '')[-2000:])
     if result.returncode != 0:
@@ -183,7 +184,7 @@ def _restore_owned_config(home, python=None):
         raise SystemExit('configuration restore failed; refusing the client change')
     # The remover restores files but keeps the receipt; a detached client
     # must not leave a claim to settings it no longer owns.
-    _codex_config.drop_client(home, 'codex')
+    _codex_config.drop_client(home, 'codex', expected=entry)
 
 
 def do_rollback(args):
@@ -441,9 +442,9 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
                                                _desktop_config, saved, python)
         else:
             if args.client == 'none':
-                if previous_receipt.get('inserted_block'):
-                    _restore_owned_config(home, python)
-                detach_claude(home)
+                _delivery._load('client_removal').remove_all(home, _codex_config,
+                    lambda expected, entry: _restore_owned_config(home, python, expected, entry))
+                _delivery._load('claude_profile_hook').uninstall(home)
         prune_releases(home, latest['version'], previous,
                        backend.pinned_release(home))
         if not args.feed:
@@ -540,37 +541,31 @@ def do_uninstall(args):
         configured = config_path.read_text()
     except OSError:
         configured = ''
-    attached = _codex_config.codex_attachment(home)
+    try:
+        attached = _codex_config.codex_attachment(home)
+    except (OSError, ValueError):
+        raise SystemExit('Removal conflict: damaged receipt. No assistants were detached.') from None
     if (attached == {}
             and (_codex_config.BEGIN in configured or _codex_config.END in configured)):
         raise SystemExit('managed Codex block present without a receipt; run tools/disable.py first')
     _client_choice.refuse_switched(home)  # also before anything changes: switch back first
-    release = current_release_dir(home)
-    detach_claude(home)  # sweep first: each surface no-ops without its claim
-    if release is not None and attached == {} and not _codex_config.read_receipt(home).get('clients', {}):
-        # Service-only installation: no client settings were ever touched,
-        # so there is no receipt and no restore to run.
-        backend.uninstall(home)
-        _delivery._load('desktop_startup').remove(home)
-        print(f'uninstalled services; {home} left in place for the operator to delete')
-        return 0
-    if release is not None:
-        disable = Path(__file__).resolve().parents[1] / 'tools' / 'disable.py'
-        if disable.exists():
-            python = find_python(args.python)
-            if python is None: raise SystemExit('Python 3.14 is required to restore Codex settings safely.')
-            result = run([python, str(disable)], capture_output=True, text=True,
-                              env={**os.environ, 'ROUTER_HOME': str(home),
-                                   'ROUTER_RESTORE_ONLY': '1'})
-            print((result.stdout or '')[-2000:])
-            if result.returncode != 0:
-                print((result.stderr or '')[-2000:])
-                raise SystemExit('configuration restore failed; '
-                                 'services left running for manual review')
-            # As on a client switch: a stale receipt makes the next install
-            # refuse a block it finds missing rather than changed.
-            _codex_config.drop_client(home, 'codex')
-    detach_claude(home)
+    python = find_python(args.python) if attached else None
+    if attached and python is None:
+        raise SystemExit('Python 3.14 is required to restore Codex settings safely.')
+    _codex_config._owned.PYTHON = python
+    removal = _delivery._load('client_removal')
+    try:
+        removal.remove_all(home, _codex_config,
+            lambda expected, entry: _restore_owned_config(home, python, expected, entry))
+    except (OSError, ValueError) as exc:
+        raise SystemExit('Removal conflict: damaged receipt. Services left running.') from exc
+    try:
+        _delivery._load('claude_profile_hook').uninstall(home)
+    except (OSError, ValueError, SystemExit):
+        raise SystemExit('Assistants detached; control cleanup failed. '
+                         'Services left running; retry removal.') from None
+    if _codex_config.read_receipt(home).get('clients'):
+        raise SystemExit('Attachments remain; services left running. Retry removal.')
     backend.uninstall(home)
     _delivery._load('desktop_startup').remove(home)
     print(f'uninstalled services; {home} left in place for the operator to delete')

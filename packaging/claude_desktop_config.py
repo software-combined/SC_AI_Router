@@ -22,6 +22,9 @@ _spec = _ilu.spec_from_file_location(
     Path(__file__).resolve().parents[1] / 'ai_router' / 'atomic_write.py')
 atomic_write = _ilu.module_from_spec(_spec)
 _spec.loader.exec_module(atomic_write)
+_spec = _ilu.spec_from_file_location('router_desktop_removal', Path(__file__).with_name('client_removal.py'))
+_removal = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_removal)
 
 PROVIDER_KEY = 'inferenceProvider'
 CREDENTIAL_KIND_KEY = 'inferenceCredentialKind'
@@ -173,7 +176,7 @@ def _owned_snapshot(home, data_dir, state, receipts):
         path = applied_entry_path(data_dir)
         if Path(existing['config_path']).resolve() != path.resolve():
             return None
-        snapshot = receipts.parse_snapshot(existing['inserted_block'])
+        snapshot = _removal.saved_values(existing, OWNED_KEYS + ('deploymentMode',))
         if not all(key in snapshot for key in OWNED_KEYS + ('deploymentMode',)):
             return None
         current = read_entry(path)
@@ -251,6 +254,7 @@ def attach(home, state, receipts, data_dir_override=None, env=None, *, python=No
                 else user_data_dir(env))
     existing = receipts.read_receipt(home).get('clients', {}).get(CLIENT_KEY)
     if existing:
+        _removal.saved_values(existing, OWNED_KEYS + ('deploymentMode',))
         try:
             attached = Path(existing['config_path'])
             same = (attached.is_absolute() and attached.parent.name == 'configLibrary'
@@ -293,6 +297,7 @@ def attach(home, state, receipts, data_dir_override=None, env=None, *, python=No
     snapshot['deploymentMode'] = previous_mode
     entry = {'config_path': str(entry_path),
              'inserted_block': json.dumps(snapshot, sort_keys=True),
+             'written': desired_values(state),
              'claude_mode': state.get('claude_mode', 'subscription')}
     receipts.write_client_receipt(home, CLIENT_KEY, entry)
     if python is not None:
@@ -322,41 +327,13 @@ def attach_current(args, receipts, write_state, *, python=None):
 
 def detach(home, receipts, data_dir_override=None, env=None):
     """Restore desktop settings to pre-attach values; forget the attachment."""
+    del data_dir_override, env
+    try:
+        _removal.detach_json(home, CLIENT_KEY, receipts)
+    except _removal._json.Conflict as exc:
+        raise SystemExit('Claude desktop removal conflict: ' + str(exc)) from None
     spec = _ilu.spec_from_file_location(
         'router_desktop_hook', Path(__file__).with_name('claude_profile_hook.py'))
     hook = _ilu.module_from_spec(spec)
     spec.loader.exec_module(hook)
     hook.uninstall(home)
-    receipt = receipts.read_receipt(home)
-    entry = receipt.get('clients', {}).get(CLIENT_KEY, {})
-    if data_dir_override is None and not entry:
-        return  # never attached: nothing to restore, nowhere to resolve
-    if data_dir_override is not None:
-        data_dir = Path(data_dir_override)
-        path = applied_entry_path(data_dir)
-    elif isinstance(entry, dict) and entry.get('config_path'):
-        path = Path(entry['config_path'])
-        data_dir = path.parents[1] if path.parent.name == 'configLibrary' else None
-    else:
-        data_dir = user_data_dir(env)
-        path = applied_entry_path(data_dir)
-    previous = receipts.parse_snapshot(entry.get('inserted_block', '{}'))
-    restore_entry(path, previous)
-    old_mode = previous.get('deploymentMode')
-    if data_dir is not None:
-        cfg, cfg_path = read_desktop_config(data_dir)
-        if cfg_path is not None:
-            if old_mode is None:
-                cfg.pop('deploymentMode', None)
-            else:
-                cfg['deploymentMode'] = old_mode
-            if not cfg and old_mode is None:
-                # Attach created this file; detach removes it instead of
-                # leaving an empty object the app never had.
-                try:
-                    cfg_path.unlink()
-                except OSError:
-                    write_json(cfg_path, cfg)
-            else:
-                write_json(cfg_path, cfg)
-    receipts.drop_client(home, CLIENT_KEY)

@@ -30,6 +30,8 @@ load packaging/native_setup.py
 load packaging/native_shortcuts.py
 load packaging/native_readiness.py
 load packaging/atomic_write.py
+load packaging/owned_json.py
+load packaging/client_removal.py
 load packaging/bundle.py
 load packaging/claude_config.py
 load packaging/client_choice.py

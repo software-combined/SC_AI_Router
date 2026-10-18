@@ -276,7 +276,10 @@ def live_block(text, recorded):
 def removal_plan(config_path, entry):
     """Pure preflight, shared by the remover and all-client uninstall."""
     before = _read_text(config_path)
-    after = _owned.replace(before, entry.get('inserted_block'), '')
+    previous = '\n'.join((entry.get('reviewer') or {}).get('removed') or [])
+    after = _owned.replace(before, entry.get('inserted_block'), '', removing=True, restored=previous)
+    if BEGIN not in before and END not in before:
+        return before, after  # A completed restore is verified, never replayed.
     after = restore_desktop(after, entry.get('desktop'))
     after = restore_reviewer(after, entry.get('reviewer'))
     _owned.inspect(after)
@@ -400,12 +403,7 @@ RECEIPT_NAME = 'activation.json'
 
 
 def read_receipt(home):
-    """Versioned activation record: {version, clients: {name: attachment}}.
-
-    Legacy flat receipts (config path plus block, no version) import as the
-    `codex` attachment without losing restore information; nothing is
-    rewritten on read.
-    """
+    """Read clients, importing legacy flat Codex receipts without a write."""
     receipt_path = receipt_path_for(home)
     if not receipt_path.exists():
         return {}
@@ -479,23 +477,19 @@ def codex_attachment(home):
     return read_receipt(home).get('clients', {}).get('codex', {})
 
 
-def drop_client(home, client):
-    """Forget one attachment; returns True when anything was removed.
-
-    Removes the receipt file itself when no attachments remain, so a
-    fully detached home reads the same as a never-attached one.
-    """
+def drop_client(home, client, expected=None):
+    """Forget a proven attachment; refuse concurrent receipt changes."""
+    receipt_path = receipt_path_for(home)
+    before = _owned.read(receipt_path) if receipt_path.exists() else None
     doc = read_receipt(home)
     clients = doc.get('clients', {})
     if client not in clients:
         return False
+    if expected is not None and clients[client] != expected:
+        raise SystemExit('Attachment receipt changed concurrently; retry removal.')
     del clients[client]
-    receipt_path = receipt_path_for(home)
     if clients:
-        _replace_text(receipt_path, json.dumps(doc, indent=2) + '\n')
+        _atomic_write.replace_text(receipt_path.resolve(), json.dumps(doc, indent=2) + '\n', expected=before)
     else:
-        try:
-            receipt_path.unlink()
-        except OSError:
-            pass
+        _atomic_write.remove(receipt_path, expected=before)
     return True

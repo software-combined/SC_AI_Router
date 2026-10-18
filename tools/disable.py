@@ -6,6 +6,7 @@ must stay inert -- an import-time run detaches the live router (2026-09-13),
 so the body lives behind a __main__ guard and a test pins that it stays there.
 """
 import importlib.util as _ilu
+import hashlib
 import json
 import os
 import subprocess
@@ -35,6 +36,9 @@ def main():
     config = Path(entry['config_path'])
     codex_config = _packaging('codex_config')
     before, updated = codex_config.removal_plan(config, entry)
+    expected = os.environ.get('ROUTER_EXPECTED_CONFIG_SHA256')
+    if expected and hashlib.sha256(before.encode()).hexdigest() != expected:
+        raise SystemExit('Codex settings changed concurrently; retry removal.')
     # Global instructions are install-once: uninstall leaves them alone.
     codex_config._owned.write(config, before, updated, _packaging('atomic_write').replace_text)
     # The Switch Codex app leaves with the attachment (never while switched:

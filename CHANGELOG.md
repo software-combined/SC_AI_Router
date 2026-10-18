@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preflight every assistant before removal. Preserve changed connection values
+  and unrelated settings, and keep Router running when an interrupted removal
+  needs another attempt.
+
 - Repair Linux's scheduled updater independently of assistant settings. Retain
   verified maintenance code across runtime rollback and keep releases used by
   loaded jobs or the running updater.

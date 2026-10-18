@@ -261,7 +261,7 @@ class SwitchedRefusalTests(unittest.TestCase):
             # No additions must retain the switched config and restore receipt.
             _install(self, tmp, home, '1.0.2', '--clients', 'none')
             self.assertEqual((config.read_text(), _receipt(home)), (switched, receipt))
-            # Service-only reaches the real remover, which refuses the detach.
+            # Service-only refuses during shared preflight, before any detach.
             blob, latest = _craft_bundle('1.0.3')
             _patch_attrs(self, run=_real_remover, self_test=lambda *args: None,
                          write_catalogue=_fake_write_catalogue,
@@ -271,10 +271,10 @@ class SwitchedRefusalTests(unittest.TestCase):
             out = io.StringIO()
             with mock.patch.dict(os.environ, dict(fakehome, OPENROUTER_API_KEY='k',
                                                   ROUTER_NO_KEY_WINDOW='1')):
-                with self.assertRaisesRegex(SystemExit, 'refusing the client change'):
+                with self.assertRaisesRegex(SystemExit, 'Open Switch Codex') as conflict:
                     with contextlib.redirect_stdout(out):
                         install_mod.do_install(args, _fetch=_static_fetch(latest, blob))
-            self.assertIn(switch.SWITCHED_REFUSAL, out.getvalue())
+            self.assertIn(switch.SWITCHED_REFUSAL, str(conflict.exception))
             self.assertEqual(config.read_text(), switched)
             self.assertEqual(_receipt(home), receipt)
             # Once switched back, the same remover detaches as before.

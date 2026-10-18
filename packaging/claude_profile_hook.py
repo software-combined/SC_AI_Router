@@ -21,6 +21,7 @@ _identity = _load('claude_profile_identity')
 _desktop = _load('claude_desktop_config')
 _config = _load('claude_config')
 _atomic = _load('atomic_write')
+_json = _load('owned_json')
 RECEIPT = 'claude-profile-hook-receipt.json'
 # Start the router's launcher only while it exists: after a rollback or an
 # uninstall that kept this entry, every Claude Code session still starts quietly.
@@ -67,26 +68,42 @@ def install(home, python, env=None):
     _config.write_settings(path, doc)
 
 
-def uninstall(home):
+def removal_plan(home):
+    """Read-only callback proof, also checked before any assistant detach."""
     receipt_path = Path(home) / RECEIPT
     if not receipt_path.exists() and not receipt_path.is_symlink():
-        return
+        return None
     _safe(receipt_path)
-    receipt = json.loads(receipt_path.read_text())
+    with receipt_path.open(newline='') as stream:
+        recorded = stream.read()
+    receipt = _json.document(recorded)
+    if (not isinstance(receipt.get('settings_path'), str) or not isinstance(receipt.get('inserted'), bool)
+            or not isinstance(receipt.get('entry'), dict)):
+        raise ValueError('damaged_callback_receipt')
     path = Path(receipt['settings_path'])
+    if not path.is_absolute():
+        raise ValueError('damaged_callback_receipt')
     _safe(path)
-    if receipt['inserted'] and path.exists():
-        doc = _config.read_settings(path)
-        hooks = doc.get('hooks', {})
-        entries = hooks.get('SessionStart', [])
-        if receipt['entry'] in entries:
-            entries.remove(receipt['entry'])
-            if not entries:
-                hooks.pop('SessionStart')
-            if not hooks:
-                doc.pop('hooks')
-            _config.write_settings(path, doc)
-    receipt_path.unlink()
+    try:
+        with path.open(newline='') as stream:
+            before = stream.read()
+    except FileNotFoundError:
+        before = None
+    after = (_json.remove_item(before, ('hooks', 'SessionStart'), receipt['entry'])
+             if before is not None and receipt['inserted'] else before)
+    return receipt_path, recorded, path, before, after
+
+
+def uninstall(home):
+    plan = removal_plan(home)
+    if plan is None:
+        return
+    receipt_path, recorded, path, before, after = plan
+    if after != before:
+        _atomic.replace_text(path, after, newline='', expected=before)
+    else:
+        _atomic.check_unchanged(path, before)
+    _atomic.remove(receipt_path, expected=recorded)
 
 
 def capture(event, env=None):

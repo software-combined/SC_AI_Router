@@ -218,12 +218,14 @@ class CodexOwnershipTests(unittest.TestCase):
         (self.home / 'current').write_text('1.0.0')
         args = install_mod.build_parser().parse_args(
             ['--home', str(self.home), '--python', runtime])
+        load = install_mod._delivery._load
         with mock.patch.object(install_mod, 'find_python', return_value=runtime), \
                 mock.patch.object(install_mod.sys, 'executable', '/missing/python3.9'), \
                 mock.patch.object(install_mod, 'run', invoke), \
                 mock.patch.object(install_mod._svc, 'run', invoke), \
                 mock.patch.object(install_mod, 'platform_backend', return_value=mock.Mock()), \
-                mock.patch.object(install_mod._delivery, '_load', return_value=mock.Mock()), \
+                mock.patch.object(install_mod._delivery, '_load', side_effect=lambda name:
+                    mock.Mock() if name in ('desktop_startup', 'claude_profile_hook') else load(name)), \
                 mock.patch.dict(os.environ, HOME=str(self.root / 'user'), PATH='/usr/bin:/bin'), \
                 contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(install_mod.do_uninstall(args), 0)

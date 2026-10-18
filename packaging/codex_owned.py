@@ -35,13 +35,46 @@ def parser_python():
                 shutil.which('python3.14'))
 
 
-def _verified(text, recorded=None):
+def _unique_picks(value):
+    rows = value.splitlines(keepends=True)
+    selected = {line.split('=', 1)[0].strip(): index for index, line in enumerate(rows)
+                if '=' in line and line.split('=', 1)[0].strip() in PICKS}
+    return ''.join(line for index, line in enumerate(rows)
+                   if line.split('=', 1)[0].strip() not in selected
+                   or selected[line.split('=', 1)[0].strip()] == index)
+
+
+def _detached(text, recorded, restored):
+    import tomllib
+    _verified(recorded, recorded)
+    expected = tomllib.loads(_unique_picks(recorded))
+    actual, previous = tomllib.loads(text), tomllib.loads(restored)
+    for key in CONNECTION_KEYS.intersection(expected.keys() | previous.keys()):
+        if key == 'model_providers':
+            owned = expected.get(key, {})
+            prior = previous.get(key, {})
+            current = actual.get(key, {})
+            if not all(isinstance(value, dict) for value in (owned, prior, current)):
+                raise ValueError('connection')
+            for name in owned.keys() | prior.keys():
+                if (name in prior and current.get(name) != prior[name]
+                        or name not in prior and name in current):
+                    raise ValueError('connection')
+        elif (key in previous and actual.get(key) != previous[key]
+              or key not in previous and key in actual):
+            raise ValueError('connection')
+    return {'detached': True}
+
+
+def _verified(text, recorded=None, removing=False, restored=''):
     import tomllib
     if recorded is None:
         tomllib.loads(text)
         return {}
     if not isinstance(recorded, str) or not recorded:
         raise ValueError('receipt')
+    if removing and BEGIN not in text and END not in text:
+        return _detached(text, recorded, restored)
     if text.count(BEGIN) != 1 or text.count(END) != 1:
         raise ValueError('markers')
     lines = text.splitlines(keepends=True)
@@ -54,15 +87,8 @@ def _verified(text, recorded=None):
     region = ''.join(lines[first:last + 1])
     # Retain the existing repair of duplicate owner picks: the last wins.
     # Routing keys never receive this normalization.
-    def unique_picks(value):
-        rows = value.splitlines(keepends=True)
-        selected = {line.split('=', 1)[0].strip(): index for index, line in enumerate(rows)
-                    if '=' in line and line.split('=', 1)[0].strip() in PICKS}
-        return ''.join(line for index, line in enumerate(rows)
-                       if line.split('=', 1)[0].strip() not in selected
-                       or selected[line.split('=', 1)[0].strip()] == index)
-    expected = tomllib.loads(unique_picks(recorded))
-    actual = tomllib.loads(unique_picks(region))
+    expected = tomllib.loads(_unique_picks(recorded))
+    actual = tomllib.loads(_unique_picks(region))
     if (recorded.count(BEGIN) != 1 or recorded.count(END) != 1
             or not CONNECTION_KEYS.intersection(expected)):
         raise ValueError('receipt')
@@ -93,15 +119,15 @@ def _verified(text, recorded=None):
             'end': sum(map(len, lines[:last + 1])), 'keep': keep}
 
 
-def inspect(text, recorded=None):
+def inspect(text, recorded=None, removing=False, restored=''):
     try:
         if HAS_TOML:
-            return _verified(text, recorded)
+            return _verified(text, recorded, removing, restored)
         python = parser_python()
         if not python:
             raise ValueError('interpreter')
         result = run([python, str(Path(__file__).resolve()), '--verify'],
-                     input=json.dumps({'text': text, 'recorded': recorded}),
+                     input=json.dumps({'text': text, 'recorded': recorded, 'removing': removing, 'restored': restored}),
                      capture_output=True, text=True, timeout=15)
         if result.returncode or len(result.stdout) > 65536:
             raise ValueError('verifier')
@@ -115,8 +141,10 @@ def region(text, recorded):
     return text[proof['start']:proof['end']]
 
 
-def replace(text, recorded, block):
-    proof = inspect(text, recorded)
+def replace(text, recorded, block, removing=False, restored=''):
+    proof = inspect(text, recorded, removing, restored)
+    if proof.get('detached'):
+        return text
     lines = text.splitlines(keepends=True)
     preserved = ''.join(lines[index] for index in proof['keep'])
     added = {line.split('=', 1)[0].strip() for line in preserved.splitlines()
@@ -135,7 +163,7 @@ def write(path, before, after, writer):
     if read(path) != before or path.resolve() != target:
         raise SystemExit('Codex settings changed concurrently; retry the restore.')
     if after != before:
-        writer(target, after, newline='')
+        writer(target, after, newline='', expected=before)
     if path.resolve() != target or read(path) != after:
         raise SystemExit('Codex settings changed concurrently; run Check setup.')
 
@@ -143,6 +171,6 @@ def write(path, before, after, writer):
 if __name__ == '__main__':
     try:
         request = json.load(sys.stdin)
-        print(json.dumps(_verified(request['text'], request.get('recorded'))))
+        print(json.dumps(_verified(request['text'], request.get('recorded'), request.get('removing', False), request.get('restored', ''))))
     except (ValueError, KeyError, StopIteration):
         raise SystemExit(1) from None

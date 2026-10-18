@@ -16,3 +16,6 @@ _spec.loader.exec_module(_mod)
 replace_text = _mod.replace_text
 replace_json = _mod.replace_json
 StaleTmp = _mod.StaleTmp
+ConcurrentChange = _mod.ConcurrentChange
+check_unchanged = _mod.check_unchanged
+remove = _mod.remove

@@ -29,6 +29,14 @@ refuse before a write. Its bounded managed-Python verifier keeps Python 3.9
 entrypoints importable without another TOML dependency. Removal uses the same
 proof and atomic writer, preserving dotfile links and detecting concurrent edits.
 
+`client_removal` checks all connected assistants before detaching any. Its
+JSON edits use `owned_json` to preserve unrelated bytes and reject duplicate
+keys. Receipts retain original values and the written connection values.
+Legacy Claude receipts use the saved Router state for those connection values.
+Completed restores remain complete after an I/O failure; remaining receipts
+keep the service running for a safe retry. Atomic writes compare saved content
+again after preparing the temporary file.
+
 `native_controller` retains verified installer code under an independent version
 pointer. `update_launch` selects that controller across runtime rollback.
 Linux reloads and reads back the effective stable updater command before

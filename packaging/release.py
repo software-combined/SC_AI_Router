@@ -30,6 +30,7 @@ PACKAGING_FILES = (
     'packaging/router_launch.py', 'packaging/service.py',
     'packaging/feed.py', 'packaging/feed_verify.py',
     'packaging/atomic_write.py',
+    'packaging/owned_json.py', 'packaging/client_removal.py',
     'packaging/notice.py', 'packaging/notice_text.py',
     # Plan 179: the router carries the agent skills, so a machine needs no
     # git account and no marketplace command to receive them.

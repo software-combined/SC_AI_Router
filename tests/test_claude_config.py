@@ -176,7 +176,7 @@ class ClaudeMergeTests(unittest.TestCase):
                 claude_config.merge_env(Path(tmp), _state(), path)
             self.assertNotIn('127.0.0.1', path.read_text())
 
-    def test_detach_restores_hand_kept_value(self):
+    def test_detach_refuses_a_changed_connection(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
@@ -186,12 +186,11 @@ class ClaudeMergeTests(unittest.TestCase):
             doc = json.loads(path.read_text())
             doc['env']['ANTHROPIC_BASE_URL'] = 'https://keep.example'
             path.write_text(json.dumps(doc))
-            install_mod.detach_claude(home, settings_path=path)
-            # Detach restores the attach-time value, not the hand edit:
-            # the receipt owns the prior state, concurrent edits are
-            # refused at attach time by merge_env.
-            doc = json.loads(path.read_text())
-            self.assertNotIn('127.0.0.1', doc['env'].get('ANTHROPIC_BASE_URL', ''))
+            before = path.read_bytes()
+            with self.assertRaisesRegex(SystemExit, 'connection_changed'):
+                install_mod.detach_claude(home, settings_path=path)
+            self.assertEqual(path.read_bytes(), before)
+            self.assertIn('claude', install_mod._codex_config.read_receipt(home)['clients'])
 
     def test_attach_and_detach_round_trip(self):
         with tempfile.TemporaryDirectory() as tmp:

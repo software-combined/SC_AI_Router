@@ -47,6 +47,8 @@ INSTALLER_PATHS = (
     'tests/test_client_dialog.py',
     'tests/test_client_choice.py',
     'tests/test_codex_owned.py',
+    'tests/test_owned_json.py',
+    'tests/test_removal_recovery.py',
     'tests/test_native_setup.py',
     'tests/test_native_readiness.py',
     'tests/test_private_updates.py',
@@ -104,6 +106,8 @@ INSTALLER_PATHS = (
 
 INSTALLER_TESTS = (
     'tests.test_codex_owned',
+    'tests.test_owned_json',
+    'tests.test_removal_recovery',
     'tests.test_install',
     'tests.test_install_catalogue',
     'tests.test_install_config',

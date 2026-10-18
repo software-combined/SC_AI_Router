@@ -5,6 +5,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from tests._platform import assert_owner_only
@@ -24,6 +25,50 @@ def _mod():
 
 
 class AtomicWriteTests(unittest.TestCase):
+    def test_concurrent_edit_during_temp_write_is_not_overwritten(self):
+        mod = _mod()
+        target = self._dir() / 'settings.json'
+        target.write_text('{"before":true}\n')
+        original = mod._mod.os.chmod
+        def changed(path, mode):
+            target.write_text('{"concurrent":true}\n')
+            original(path, mode)
+        with mock.patch.object(mod._mod.os, 'chmod', side_effect=changed), \
+                self.assertRaises(mod.ConcurrentChange):
+            mod.replace_text(target, '{}\n', expected='{"before":true}\n')
+        self.assertEqual(target.read_text(), '{"concurrent":true}\n')
+        self.assertEqual(list(target.parent.iterdir()), [target])
+
+    def test_guarded_removal_refuses_a_changed_receipt(self):
+        mod = _mod()
+        target = self._dir() / 'activation.json'
+        target.write_text('{"current":true}\n')
+        with self.assertRaises(mod.ConcurrentChange):
+            mod.remove(target, expected='{}\n')
+        self.assertTrue(target.exists())
+        mod.remove(target, expected=target.read_text())
+        self.assertFalse(target.exists())
+
+    def test_windows_sharing_retry_rechecks_concurrent_changes(self):
+        mod = _mod()
+        target = self._dir() / 'settings.json'
+        target.write_text('before')
+        attempts = []
+        def replace(source, destination):
+            attempts.append(1)
+            target.write_text('concurrent edit')
+            error = PermissionError('sharing violation')
+            error.winerror = 32
+            raise error
+        windows = SimpleNamespace(**dict(vars(os), name='nt', replace=replace))
+        with mock.patch.object(mod._mod, 'os', windows), \
+                mock.patch.object(mod._mod.time, 'sleep'), \
+                self.assertRaises(mod.ConcurrentChange):
+            mod.replace_text(target, 'restored', expected='before')
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(target.read_text(), 'concurrent edit')
+        self.assertEqual(list(target.parent.iterdir()), [target])
+
     def _dir(self):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, True)

@@ -458,7 +458,14 @@ it; the next unpinned update records the channel's own serial. Installs from
 
 From the source checkout or installed release directory, run
 `python3.14 packaging/install.py --uninstall`. This stops and removes the
-service, update schedule and client configuration. For a bootstrap installation,
+service and update schedule after restoring all verified client settings.
+Every assistant is checked before any detach. Changed connection values or
+damaged ownership records refuse with a conflict and keep the service running.
+If a later write fails, the result names completed and remaining attachments.
+Retry removal; it accepts an already completed restore without repeating it.
+Unrelated settings and their formatting remain in place. An empty assistant
+JSON file is retained when its ownership was not recorded.
+For a bootstrap installation,
 use the [pinned interpreter](setup.md#what-the-installer-does) if Python 3.14
 is not available on the system.
 
