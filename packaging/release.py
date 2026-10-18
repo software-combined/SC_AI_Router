@@ -49,7 +49,7 @@ PACKAGING_FILES = (
     'packaging/assets/router-icon.png',
     'packaging/systemd.py', 'packaging/update_launch.py',
     'packaging/task_launch.py',
-    'packaging/updater.py', 'packaging/codex_config.py',
+    'packaging/updater.py', 'packaging/codex_config.py', 'packaging/codex_owned.py',
     'packaging/codex_switch_config.py', 'packaging/codex_switch_offer.py',
     'packaging/codex_desktop_switch.py', 'packaging/codex_config_proof.py',
     'packaging/codex_switch_app.py', 'packaging/codex_switch_launch.py',

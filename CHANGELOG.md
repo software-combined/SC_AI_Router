@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Repair and remove Codex attachments after harmless client formatting changes.
+  Preserve added user settings, comments and dotfile links, while refusing
+  changed connection values and unsafe edits.
+
 ## 1.3.1
 
 - Preserve the exact previous menu pointer after failed Windows menu delivery.

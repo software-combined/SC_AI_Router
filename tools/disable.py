@@ -33,27 +33,10 @@ def main():
     # silently.
     _packaging('codex_switch_config').refuse_switched(root)
     config = Path(entry['config_path'])
-    before = config.read_text()
     codex_config = _packaging('codex_config')
-    block = codex_config.live_block(before, entry['inserted_block'])
-    if before.count(block) != 1:
-        raise SystemExit('Router settings changed; leaving configuration untouched for manual review.')
-    updated = before.replace(block, '', 1)
-    # The managed desktop preferences go back the way the attach found
-    # them; a value the owner changed afterwards is left alone.
-    updated = codex_config.restore_desktop(updated, entry.get('desktop'))
-    # Owner root lines set aside because the block set the same key come
-    # back, one per key, unless the owner has that key at root again.
-    updated = codex_config.restore_reviewer(updated, entry.get('reviewer'))
+    before, updated = codex_config.removal_plan(config, entry)
     # Global instructions are install-once: uninstall leaves them alone.
-    temp = config.with_name('config.toml.mixed-router-restore')
-    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        stream.write(updated)
-    if config.read_text() != before:
-        temp.unlink()
-        raise SystemExit('Codex settings changed concurrently; retry the restore.')
-    os.replace(temp, config)
+    codex_config._owned.write(config, before, updated, _packaging('atomic_write').replace_text)
     # The Switch Codex app leaves with the attachment (never while switched:
     # that refused above). The restore already stands, so a stuck app only warns.
     try:

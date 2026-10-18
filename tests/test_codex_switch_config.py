@@ -1,8 +1,6 @@
-"""Switch Codex blocks: the three variants, receipt truth, updates and refusals.
-
-The receipt records which variant the managed block is, every attach rebuilds
-that one, `switch` changes it with the config and receipt kept in step, and
-detach, uninstall, service-only and rollback refuse while Codex is switched.
+"""Switch Codex blocks, receipts, updates and refusals.
+Every attach retains the recorded variant. A switched Codex refuses detach,
+uninstall, service-only conversion and rollback until switched back.
 """
 import contextlib
 import io
@@ -220,7 +218,9 @@ class SwitchFlowTests(unittest.TestCase):
 def _real_remover(cmd, **kwargs):
     """Run the real tools/disable.py for the installer; fake everything else."""
     if len(cmd) > 1 and Path(cmd[1]).name == 'disable.py':
-        proc = subprocess.run(cmd, capture_output=True, text=True, env=kwargs.get('env'))
+        # The installer fixture reports a synthetic managed Python path.
+        proc = subprocess.run([sys.executable, *cmd[1:]], capture_output=True,
+                              text=True, env=kwargs.get('env'))
         return SimpleNamespace(returncode=proc.returncode, stdout=proc.stdout,
                                stderr=proc.stderr)
     return _ok_run(cmd, **kwargs)

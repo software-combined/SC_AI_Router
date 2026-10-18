@@ -48,6 +48,7 @@ load packaging/claude_profile_sync.py
 load packaging/claude_profile_ledger.py
 load packaging/claude_profile_hook.py
 load packaging/codex_config.py
+load packaging/codex_owned.py
 load packaging/codex_switch_config.py
 load packaging/codex_desktop_switch.py
 load packaging/codex_config_proof.py

@@ -79,7 +79,8 @@ class InstallerSelectionTests(unittest.TestCase):
                     config.write_text(text)
                     expected = tomllib.loads(text).get('agents', {})
                     previous = None
-                    writer = type('Writer', (), {'replace_text': staticmethod(lambda p, t: Path(p).write_text(t))})
+                    writer = type('Writer', (), {'replace_text': staticmethod(
+                        lambda p, t, **kwargs: Path(p).write_text(t, **kwargs))})
                     with patch.object(codex_config, '_atomic_write', writer):
                         for version in ('1.0.0', '1.0.1'):
                             block = codex_config.build_block(Path(tmp) / version,

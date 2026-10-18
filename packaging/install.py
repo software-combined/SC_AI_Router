@@ -164,7 +164,7 @@ def write_catalogue(home, release_dir, python):
 replace_config_block = _codex_config.replace_config_block
 
 
-def _restore_owned_config(home):
+def _restore_owned_config(home, python=None):
     """Detach an active client via the single owned remover path.
 
     Runs the matching tools/disable.py with ROUTER_RESTORE_ONLY=1: exact
@@ -172,7 +172,9 @@ def _restore_owned_config(home):
     machine result decides; success text alone never passes.
     """
     disable = Path(__file__).resolve().parents[1] / 'tools' / 'disable.py'
-    result = run([sys.executable, str(disable)], capture_output=True, text=True,
+    python = python or find_python()
+    if python is None: raise SystemExit('Python 3.14 is required to restore Codex settings safely.')
+    result = run([python, str(disable)], capture_output=True, text=True,
                  env={**os.environ, 'ROUTER_HOME': str(home),
                       'ROUTER_RESTORE_ONLY': '1'})
     print((result.stdout or '')[-2000:])
@@ -301,6 +303,7 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
                       if PLATFORM == 'win32' else 'brew install python@3.14')
             print(f'No Python 3.14 found: {remedy}')
             raise SystemExit(2)
+    _codex_config._owned.PYTHON = python
     feed = args.feed or _svc.channel_feed(home)
     latest = _updater._verified_feed(feed, _svc.feed_read(_fetch, feed), _fetch)
     serial = check_serial(home, latest, pinned=bool(args.feed))
@@ -309,7 +312,6 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
     # --setup on a current install is a repair run: it restarts the current
     # release with a fresh setup nonce and never re-extracts or downgrades
     # anything, so it also works when the feed lags the installed version.
-    # Only a newer feed version takes the full install path.
     repair = bool(args.setup) and not newer(latest['version'], current)
     if not newer(latest['version'], current) and not repair:
         if PLATFORM == 'win32' and not args.dry_run:
@@ -440,10 +442,7 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
         else:
             if args.client == 'none':
                 if previous_receipt.get('inserted_block'):
-                    # Never silently detach an active Codex configuration:
-                    # restore the exact owned settings first, or refuse when
-                    # the block was edited.
-                    _restore_owned_config(home)
+                    _restore_owned_config(home, python)
                 detach_claude(home)
         prune_releases(home, latest['version'], previous,
                        backend.pinned_release(home))
@@ -556,10 +555,11 @@ def do_uninstall(args):
         print(f'uninstalled services; {home} left in place for the operator to delete')
         return 0
     if release is not None:
-        # Use this installer's matching remover even after rolling back old code.
         disable = Path(__file__).resolve().parents[1] / 'tools' / 'disable.py'
         if disable.exists():
-            result = run([sys.executable, str(disable)], capture_output=True, text=True,
+            python = find_python(args.python)
+            if python is None: raise SystemExit('Python 3.14 is required to restore Codex settings safely.')
+            result = run([python, str(disable)], capture_output=True, text=True,
                               env={**os.environ, 'ROUTER_HOME': str(home),
                                    'ROUTER_RESTORE_ONLY': '1'})
             print((result.stdout or '')[-2000:])
