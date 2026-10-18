@@ -152,7 +152,7 @@ def reconcile(home, latest, feed_url, fetch=None):
             if before is None:
                 pointer.unlink(missing_ok=True)
             else:
-                load('atomic_write').replace_text(pointer, before.decode())
+                load('atomic_write').replace_text(pointer, before.decode(), newline='')
             raise
     load('atomic_write').replace_json(home / 'desktop-delivery.json',
         dict(status='ready', version=row['version'], sha256=row['sha256']))

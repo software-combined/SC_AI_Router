@@ -84,13 +84,13 @@ def _open_tmp(path, tmp_name, stale_tmp):
     raise StaleTmp(str(tmp))  # unreachable; keeps the contract explicit
 
 
-def replace_text(path, text, mode=0o600, tmp_name=None, stale_tmp='reuse'):
-    """Atomically replace path with text; unique tmp unless tmp_name is set."""
+def replace_text(path, text, mode=0o600, tmp_name=None, stale_tmp='reuse', *, newline=None):
+    """Atomically replace text; newline='' preserves saved line endings."""
     path = Path(path)
     fd, tmp = _open_tmp(path, tmp_name, stale_tmp)
     stream = None
     try:
-        stream = os.fdopen(fd, 'w')
+        stream = os.fdopen(fd, 'w', newline=newline)
         fd = None  # the stream owns the descriptor now
         stream.write(text)
         stream.close()
