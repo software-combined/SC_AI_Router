@@ -100,7 +100,7 @@ class NativeRouterSchedulerTests(unittest.TestCase):
         self.assertIn('OnUnitInactiveUSec=4h', timers)
         self.dropin.mkdir()
         (self.dropin / 'acceptance.conf').write_text(
-            '[Timer]\nOnActiveSec=\nOnActiveSec=1s\nOnUnitInactiveSec=\nAccuracySec=1ms\n')
+            '[Timer]\nOnActiveSec=\nOnActiveSec=1s\nAccuracySec=1ms\n')
         self.fire_timer()
         # The serving pointer remains on the old release: the newer controller wins.
         self.manager.install(sys.executable, None, updates_only=True)

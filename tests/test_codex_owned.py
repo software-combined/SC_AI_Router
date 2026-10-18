@@ -33,7 +33,7 @@ class CodexOwnershipTests(unittest.TestCase):
     def drift(self, extra=''):
         text = self.config.read_text().replace('openai_base_url = ', 'openai_base_url=')
         text = text.replace(self.owner.END, '# keep this note\n' + extra + self.owner.END)
-        self.config.write_text(text)
+        self.config.write_text(text, newline='')
         return text
 
     def test_spacing_and_comments_are_owned_but_foreign_url_is_not(self):
@@ -126,12 +126,12 @@ class CodexOwnershipTests(unittest.TestCase):
     def test_compare_before_write_does_not_overwrite_a_concurrent_edit(self):
         before, after = self.owner.removal_plan(self.config, self.entry)
         changed = before + '# saved by another writer\n'
-        self.config.write_text(changed)
+        self.config.write_bytes(changed.encode())
         writer = mock.Mock()
         with self.assertRaisesRegex(SystemExit, 'concurrently'):
             self.owner._owned.write(self.config, before, after, writer)
         writer.assert_not_called()
-        self.assertEqual(self.config.read_text(), changed)
+        self.assertEqual(self.config.read_bytes(), changed.encode())
 
     def test_crlf_removal_keeps_unrelated_text_bytes(self):
         before = self.block.replace('\n', '\r\n') + '\r\n[features]\r\nexample = true\r\n'
@@ -145,17 +145,19 @@ class CodexOwnershipTests(unittest.TestCase):
         changed = before + '# another writer during verification\n'
         writer = mock.Mock()
         with mock.patch.object(self.owner._owned, 'inspect',
-                               side_effect=lambda *_: self.config.write_text(changed)):
+                               side_effect=lambda *_: self.config.write_bytes(changed.encode())):
             with self.assertRaisesRegex(SystemExit, 'concurrently'):
                 self.owner._owned.write(self.config, before, after, writer)
         writer.assert_not_called()
-        self.assertEqual(self.config.read_text(), changed)
+        self.assertEqual(self.config.read_bytes(), changed.encode())
 
     def test_python39_attach_uses_the_installers_explicit_runtime(self):
         from tests.test_install_config import _install
         owned = self.owner._owned
         with mock.patch.object(install_mod, 'find_python', return_value=sys.executable), \
                 mock.patch.object(owned, 'HAS_TOML', False), \
+                mock.patch.object(install_mod, 'platform_backend', return_value=mock.Mock()), \
+                mock.patch.object(Path, 'home', return_value=self.root / 'fakehome'), \
                 mock.patch.object(owned.shutil, 'which', return_value=None):
             config, _, _, _ = _install(self, self.root, self.home, '1.0.0',
                                       '--python', sys.executable)
