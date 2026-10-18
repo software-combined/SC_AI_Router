@@ -43,6 +43,21 @@ def _aws(args):
     return (result.stdout or '').strip()
 
 
+def publish_setup_page(bucket):
+    """Public recovery remains available without accepted native packages."""
+    root = Path(__file__).resolve().parents[1] / 'packaging'
+    for path in sorted((root / 'download-page').iterdir()):
+        content_type = {'.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript',
+                        '.svg': 'image/svg+xml'}[path.suffix]
+        _aws(['s3', 'cp', str(path), 's3://' + bucket + '/install/' + path.name,
+              '--cache-control', 'no-cache', '--content-type', content_type])
+    _aws(['s3', 'cp', str(root / 'assets/router-icon.png'),
+          's3://' + bucket + '/install/router-icon.png', '--content-type', 'image/png'])
+    for name in ('bootstrap.sh', 'bootstrap.ps1'):
+        _aws(['s3', 'cp', str(root / name), 's3://' + bucket + '/install/' + name,
+              '--cache-control', 'no-cache', '--content-type', 'text/plain'])
+
+
 def bundle_name(latest):
     """Bundle file name for a feed document, after checking its shape."""
     for field in ('version', 'url', 'sha256', 'serial', 'min_python'):
@@ -232,14 +247,14 @@ def main(argv=None):
         name = row['url'].rsplit('/', 1)[1]
         publish_bundle(args.bucket, BUNDLE_PREFIX + name,
                        args.native_resources / name, row['sha256'])
-    for name in ('bootstrap.sh', 'bootstrap.ps1'):
-        source = Path(__file__).resolve().parents[1] / 'packaging' / name
-        _aws(['s3', 'cp', str(source), f's3://{args.bucket}/install/{name}',
-              '--cache-control', 'no-cache', '--content-type', 'text/plain'])
     publish_document(args.bucket, f'{args.channel}/latest.json',
                      dist / FEED_DOCUMENT, FEED_CACHE_CONTROL)
     publish_signature(args.bucket, f'{args.channel}/latest.json.sig',
                       dist / FEED_SIG_DOCUMENT)
+    # Publish shared setup only after stable points to its matching installer.
+    # Beta-only releases must not give stable users flags their installer lacks.
+    if args.channel == 'stable':
+        publish_setup_page(args.bucket)
     models_src = Path('ai_router/models.json')
     if models_src.is_file():
         publish_document(args.bucket, f'{args.channel}/models.json',
@@ -251,6 +266,8 @@ def main(argv=None):
         sig_target = f'/{args.channel}/latest.json.sig'
         print(f'invalidated {target} ({invalidate(args.distribution_id, target)})')
         print(f'invalidated {sig_target} ({invalidate(args.distribution_id, sig_target)})')
+        if args.channel == 'stable':
+            invalidate(args.distribution_id, '/install/*')
     else:
         print('no distribution id given; skipped invalidation, the 60 s cache expires on its own')
     return 0

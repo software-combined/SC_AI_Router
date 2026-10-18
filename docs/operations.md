@@ -105,8 +105,9 @@ defaults. Existing stack updates retain their parameter values unless the
 deployer explicitly overrides them. Publication retains this repository and
 publisher identity; public forks receive no publishing grants or copied
 repository variables. The role may read any object in the feed bucket and
-write only what a release publishes: `bundles/*` and, per channel,
-`latest.json`, `latest.json.sig` and `models.json`. It can also list the
+write only release objects: `bundles/*`, `native-builds/*`, `installers/*`,
+`install/*` and each channel's `latest.json`, `latest.json.sig` and `models.json`.
+Native first-install publication remains acceptance-gated. The role can also list the
 bucket, invalidate the feed, read the stack outputs and read the signing
 seed. An explicit deny refuses a delete or any change to the bucket's own
 configuration, so a later widening of the allow cannot reach them. The
@@ -429,6 +430,14 @@ release PR, confirm its head is still the beta commit; if `development` has move
 tag and watch a new beta on the new `development` commit first. Once the `Check`
 run for the push to `main` passes on the merge commit, tag that merge commit
 `v<VERSION>` for stable.
+
+The stable publisher refreshes the public setup and repair page independently
+of native-installer acceptance. It publishes the stable feed before shared setup
+scripts. Beta releases leave those shared files in place. Keep native acceptance
+flags unchanged until their desktop evidence is complete. After publication,
+verify anonymous downloads through [the repair page](https://dist.softwarecombined.com/install/)
+and both channel feeds. Distribute the notice in [recovery](recovery.md) only
+after those checks. Older blocked updaters still need that one external action.
 
 ## How to roll back
 

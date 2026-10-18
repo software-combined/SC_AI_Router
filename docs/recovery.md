@@ -47,3 +47,30 @@ Never send raw assistant configuration, keys or subscription credentials.
 
 Distribute the notice to known affected users after publication and anonymous
 download verification. Publication alone does not establish fleet recovery.
+
+## Verification record, 19 October 2026 AEDT
+
+An isolated profile started with the exact published `1.2.6.174` bundle and
+303 matching manifest files. Its signed-out legacy state reproduced the local
+download refusal before HTTP. Current setup repaired it to candidate build
+`1.3.2.900000`, preserving settings, key, beta selection and legacy auth files.
+Runtime health and a later applying update check passed without download sign-in.
+The stable Linux launcher selected the retained controller after rollback.
+The service manager was simulated; the later check was invoked directly.
+This does not prove a physical scheduler or Brent's signed-in session.
+
+Claude Code `2.1.283` completed two bounded synthetic file Read/reply runs through
+the recovered runtime. The first did not retain upstream counts. The final run
+retained two physical sends reporting `deepseek/deepseek-v4.1-flash-1017`.
+Low effort was requested; served effort was not exposed. The probe allowed
+three client turns, 2,048 output tokens per call and a USD 0.10 budget per run.
+These are retained client/provider reports, not independent model attestation.
+Live Router and assistant settings were unchanged.
+
+Codex desktop `26.1013.31256` (`20586`), bundled CLI `0.163.0-alpha.10.2` and
+Claude Code versions still match the 17 October compatibility checks. Inference
+paths are unchanged, so those paid checks remain applicable. Physical desktop
+acceptance and Brent's repair, real reply and later scheduled check remain pending.
+Native first-install publication flags remain unchanged.
+
+The unchanged paid client matrix is recorded in [compatibility](compatibility.md).

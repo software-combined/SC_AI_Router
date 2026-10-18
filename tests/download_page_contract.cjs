@@ -43,7 +43,7 @@ const settled = () => new Promise(resolve => setImmediate(resolve));
     const data = manifest();
     if (wrongOrigin) data.packages[0].url = 'https://other.example/private.exe';
     const app = browser(async (url, options) => {
-      assert.equal(url, 'stable.json');
+      assert.ok(['stable.json', '/stable/latest.json'].includes(url));
       assert.equal(options.credentials, 'omit');
       return {ok: true, status: 200, json: async () => data};
     });
@@ -66,6 +66,12 @@ const settled = () => new Promise(resolve => setImmediate(resolve));
   await settled();
   assert.equal(unavailable.element('downloads').hidden, false);
   assert.match(unavailable.element('status').textContent, /setup and repair scripts/);
+  const stale = browser(async url => ({ok: true, status: 200,
+    json: async () => url === 'stable.json' ? manifest() : {version: '1.2.3.5', channel: 'stable'}}));
+  execute(stale, 'downloads.js');
+  await settled();
+  assert.equal(stale.element('packages').children, undefined);
+  assert.match(stale.element('status').textContent, /setup and repair scripts/);
   for (const target of ['darwin/arm64', 'windows/x86_64']) {
     const data = manifest();
     data.scope = 'macos-arm64';

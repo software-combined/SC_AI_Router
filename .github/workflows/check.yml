@@ -222,9 +222,8 @@ jobs:
 
   plugin-schedulers:
     name: Plugin schedulers
-    # Native scheduler coverage for the agent-plugin updater: real systemd
-    # user timers on Linux and Task Scheduler on Windows, using a fake local
-    # Codex CLI. Run for main acceptance; development stays lightweight.
+    # Native plugin schedules and Router recovery use real service managers
+    # on disposable runners. Run for main acceptance; development stays lightweight.
     if: (github.event.action != 'edited' || github.event.changes.base) && ((github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
     strategy:
       matrix:
@@ -247,6 +246,12 @@ jobs:
         run: python -m unittest tests.test_scheduling_native -v
         env:
           SCG_TEST_NATIVE_SCHEDULER: '1'
+
+      - name: Native Router update recovery
+        if: runner.os == 'Linux'
+        run: python -m unittest tests.test_router_scheduler_native -v
+        env:
+          SCG_TEST_NATIVE_ROUTER_SCHEDULER: '1'
 
   hook-adapter:
     name: Hook adapter portability

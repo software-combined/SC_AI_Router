@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.3.2
+
+- Publish the common setup and repair page independently of native-installer
+  acceptance. Verify Linux's loaded stable updater and timer on native CI.
+
 - Keep update failures visible in Router controls. Offer **Repair now / Later**
   after a blocked update, two failures or two missed checks plus 15 minutes.
   Limit displayed prompts to once daily and retain warnings without a desktop.

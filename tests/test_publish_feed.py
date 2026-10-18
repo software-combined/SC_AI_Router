@@ -213,7 +213,7 @@ class PublishFeedTests(unittest.TestCase):
                       [call[4] for call in uploaded])
         invalidations = [call for call in runner.calls if 'create-invalidation' in call]
         self.assertEqual([[call[call.index('--paths') + 1]] for call in invalidations],
-                         [['/stable/latest.json'], ['/stable/latest.json.sig']])
+                         [['/stable/latest.json'], ['/stable/latest.json.sig'], ['/install/*']])
         feed_doc = json.loads((dist / 'feed-latest.json').read_text())
         original = json.loads((dist / 'latest.json').read_text())
         for field in ('version', 'sha256', 'serial', 'min_python'):

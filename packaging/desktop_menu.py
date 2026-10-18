@@ -41,7 +41,11 @@ def fallback(home, resources):
             facts = dict(status='Status unknown', clients=[], version='Unknown')
         rows = model.menu(facts, checked_update=checked_update)['menu']
         options = model.actions(rows)
-        action = load('native_dialog').choose('SCG Router controls', options)
+        details = [row['label'] for row in rows
+                   if row['label'] and not row['children'] and not row['action']]
+        details += [child['label'] for row in rows if row['label'] == 'Updates'
+                    for child in row['children'] if not child['action']]
+        action = load('native_dialog').choose('\n'.join(details), options)
         if action is None or action == 'menu.quit':
             return dict(outcome='done')
         result = _control(home, resources, action)

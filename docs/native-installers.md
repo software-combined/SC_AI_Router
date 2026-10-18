@@ -63,13 +63,20 @@ The download page follows Softcom Hub's light canvas, SC Pink, near-black text
 and Space Grotesk/Inter font stacks. The corporate icon is the existing bundled
 asset. Device-policy help sits below the main download area.
 
-Every ordinary release also publishes public `bootstrap.sh` and `bootstrap.ps1`
-setup scripts under `/install/` at the download origin. An installation whose old updater cannot
+Every stable release publishes the public page and `bootstrap.sh` / `bootstrap.ps1`
+under `/install/`, even when native packages have not passed their acceptance gates.
+Publication switches the stable feed first, so its installer supports the setup
+scripts it receives. Beta-only releases update the beta feed without replacing
+shared setup assets. An installation whose old updater cannot
 get past Microsoft sign-in must run the current public setup script once. It uses
 new installer code, so legacy download settings do not block it; successful delivery
 also replaces the independent update controller. The existing channel is preserved
 unless the operator explicitly requests another. Model keys and client settings are
 preserved. Users with working scheduled updates receive the release normally.
+
+The page advertises native packages only when their version matches the current
+stable feed. A stale list after deferred or interrupted publication keeps the
+current setup scripts visible instead.
 
 Normal update jobs run independently from the serving Router process. An offline
 computer or disabled update job cannot fetch a release until it runs again.

@@ -219,6 +219,20 @@ class WarningMenuTests(unittest.TestCase):
         self.assertIsNone(result['available'])
         self.assertEqual(result['checked_update']['source'], 'a' * 64)
 
+    def test_control_window_fallback_displays_the_same_verified_version_and_warning_rows(self):
+        menu, model, dialog = module('desktop_menu'), module('desktop_model'), mock.Mock()
+        control = mock.Mock()
+        control.snapshot.return_value = self.facts()
+        dialog.choose.return_value = None
+        owners = dict(desktop_model=model, desktop_control=control, native_dialog=dialog)
+        with mock.patch.object(menu, 'load', side_effect=owners.__getitem__):
+            menu.fallback(Path('/synthetic/home'), Path('/synthetic/resources'))
+        text, choices = dialog.choose.call_args.args
+        for label in ('Running version 1.2.6.174', 'Latest known beta version 1.3.2.185',
+                      'Last successful check 18 Oct 2026 AEDT', 'Updates need repair'):
+            self.assertIn(label, text)
+        self.assertIn('Repair now', dict(choices)['setup.resume'])
+
 
 class WarningRepairCommandTests(unittest.TestCase):
     def test_repair_uses_the_retained_controller_and_public_saved_channel(self):

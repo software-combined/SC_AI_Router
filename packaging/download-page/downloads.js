@@ -13,6 +13,9 @@
     const expected = macOnly ? 1 : 5;
     if (!/^\d+(?:\.\d+){2,3}$/.test(doc.version) || doc.channel !== 'stable' ||
         (doc.scope !== undefined && !macOnly) || !Array.isArray(doc.packages) || doc.packages.length !== expected) throw problem('The download list needs attention. Contact Software Combined IT.');
+    const current = await fetch('/stable/latest.json', {cache: 'no-store', credentials: 'omit', redirect: 'error'});
+    const latest = current.ok ? await current.json() : null;
+    if (!latest || latest.version !== doc.version || latest.channel !== 'stable') throw problem('Use the setup and repair scripts below. Desktop installers for the current release are being prepared.');
     const packages = document.getElementById('packages');
     const checked = doc.packages.map(item => {
       const url = new URL(item.url, location.origin);
