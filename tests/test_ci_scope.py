@@ -41,6 +41,7 @@ class InstallerScopeTests(unittest.TestCase):
                      '.github/workflows/release.yml',
                      'config/installer-python-surface.txt',
                      'tests/test_install_config.py', 'tests/test_windows_acl.py',
+                     'tests/test_client_choice.py',
                      'tests/_platform.py',
                      'tests/windows_native_fixture.py',
                      'ai_router/key_dialog.py', 'ai_router/key_prompt.py',
@@ -87,7 +88,7 @@ class InstallerScopeTests(unittest.TestCase):
                 self.assertTrue((ROOT / (module.replace('.', '/') + '.py')).is_file())
 
     def test_windows_leaves_out_only_the_macos_only_suites(self):
-        # Switch Claude and task sharing are off on Windows; the macOS job runs them.
+        # Legacy Mac fixtures stay scoped; shared attachment contracts run on Windows.
         module = scope_module()
         macos_only = module.MACOS_ONLY_TESTS
         self.assertLessEqual(macos_only, set(module.INSTALLER_TESTS))
@@ -95,6 +96,7 @@ class InstallerScopeTests(unittest.TestCase):
         self.assertEqual(module.installer_tests(windows=True),
                          [name for name in module.INSTALLER_TESTS if name not in macos_only])
         self.assertIn('tests.test_claude_desktop_platform', module.installer_tests(windows=True))
+        self.assertIn('tests.test_client_choice', module.installer_tests(windows=True))
 
 
 if __name__ == '__main__':
