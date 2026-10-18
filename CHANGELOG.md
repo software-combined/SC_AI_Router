@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve Codex line endings, preference comments and unrelated formatting
+  during repair and removal. Provide a read-only ownership report with specific
+  conflict reasons and no configuration contents.
+
 - Preflight every assistant before removal. Preserve changed connection values
   and unrelated settings, and keep Router running when an interrupted removal
   needs another attempt.

@@ -94,4 +94,5 @@ parse packaging/task_launch.py
 parse packaging/update_launch.py
 parse packaging/native_launch.py
 parse tools/disable.py
+parse tools/classify_attachments.py
 parse tools/global_instructions.py

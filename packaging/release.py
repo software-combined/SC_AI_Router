@@ -92,7 +92,7 @@ PACKAGING_FILES = (
 
 # Installed operator helpers only. Development probes, capture utilities and
 # publication tools belong to a source checkout, never an end-user release.
-OPERATOR_TOOLS = ('disable.py', 'global_instructions.py', 'provision_key.py')
+OPERATOR_TOOLS = ('disable.py', 'global_instructions.py', 'provision_key.py', 'classify_attachments.py')
 
 
 def bundle_files(root):

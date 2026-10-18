@@ -28,6 +28,8 @@ outside the replacement block. Unknown structures and changed connection values
 refuse before a write. Its bounded managed-Python verifier keeps Python 3.9
 entrypoints importable without another TOML dependency. Removal uses the same
 proof and atomic writer, preserving dotfile links and detecting concurrent edits.
+Preference and reviewer edits use the same lossless line helpers, including
+client-written line endings and inline comments.
 
 `client_removal` checks all connected assistants before detaching any. Its
 JSON edits use `owned_json` to preserve unrelated bytes and reject duplicate

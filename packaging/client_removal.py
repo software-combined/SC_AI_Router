@@ -137,7 +137,8 @@ def preflight(home, receipts):
             paths.update(targets)
             plans.append((client, entry, files))
         except (OSError, ValueError, SystemExit) as exc:
-            code = str(exc) if isinstance(exc, _json.Conflict) else 'ownership_conflict'
+            code = (str(exc) if isinstance(exc, _json.Conflict) else exc.reason
+                    if isinstance(exc, receipts._owned.OwnershipConflict) else 'ownership_conflict')
             raise SystemExit('%s removal conflict: %s. No assistants were detached.'
                              % (LABELS[client], code)) from None
     return plans

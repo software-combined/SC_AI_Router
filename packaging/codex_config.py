@@ -145,12 +145,12 @@ def _render(key, value):
     return key + ' = ' + json.dumps(value)
 
 
-def desktop_preferences(text, previous=None):
+def desktop_preferences(text, previous=None, evidence=None):
     """Apply preferences only to an unambiguous normal desktop table.
     The record retains prior values; an earlier attach's record wins.
     Unsupported forms stay unchanged, so no duplicate definition is added.
     """
-    lines = text.splitlines()
+    lines = text.splitlines(keepends=True)
     header, end, ambiguous = _desktop_table(lines)
     found = {} if header is None else {
         key: _key_line(lines, header, end, key) for key in (QUEUE_KEY, EFFORTS_KEY)}
@@ -161,18 +161,20 @@ def desktop_preferences(text, previous=None):
     written = {QUEUE_KEY: QUEUE_VALUE,
                EFFORTS_KEY: managed_efforts(current.get(EFFORTS_KEY))}
     record = {'written': written,
-              'previous': previous or {key: current.get(key) for key in written}}
+              'previous': previous or {key: current.get(key) for key in written},
+              'created': (evidence or {}).get('created', header is None),
+              'inserted_newline': (evidence or {}).get('inserted_newline')}
     if header is None:
-        lines.append(DESKTOP_TABLE)
+        _owned.insert_lines(lines, len(lines), [DESKTOP_TABLE], record)
         end = len(lines)
     for key, value in written.items():
         index = found.get(key)
         if index is None:
-            lines.insert(end, _render(key, value))
+            _owned.insert_lines(lines, end, [_render(key, value)], record)
             end += 1
-        else:
-            lines[index] = _render(key, value)
-    return '\n'.join(lines) + '\n', record
+        elif current[key] != value:
+            lines[index] = _owned.render_line(lines[index], _render(key, value))
+    return ''.join(lines), record
 
 
 def restore_desktop(text, record):
@@ -185,7 +187,7 @@ def restore_desktop(text, record):
     previous = (record or {}).get('previous') or {}
     if not written:
         return text
-    lines = text.splitlines()
+    lines = text.splitlines(keepends=True)
     header, end, ambiguous = _desktop_table(lines)
     if header is None or ambiguous:
         return text
@@ -204,10 +206,10 @@ def restore_desktop(text, record):
             del lines[index]
             end -= 1
         else:
-            lines[index] = _render(key, previous[key])
-    if not any('=' in line for line in lines[header + 1:end]):
+            lines[index] = _owned.render_line(lines[index], _render(key, previous[key]))
+    if record.get('created') is True and not any('=' in line for line in lines[header + 1:end]):
         del lines[header]
-    return '\n'.join(lines) + '\n' if text.endswith('\n') else '\n'.join(lines)
+    return _owned.restore_final_newline(''.join(lines), record)
 
 
 def restore_reviewer(text, record):
@@ -217,7 +219,7 @@ def restore_reviewer(text, record):
     (appending would nest them under a trailing table): one per key, the
     latest recorded, never over a key already at root.
     """
-    lines = text.splitlines()
+    lines = text.splitlines(keepends=True)
     at = next((index for index, line in enumerate(lines)
                if line.strip().startswith('[')), len(lines))
     present = {_key(line) for line in lines[:at] if '=' in line}
@@ -225,9 +227,8 @@ def restore_reviewer(text, record):
     removed = [line for key, line in latest.items() if key not in present]
     if not removed:
         return text
-    lines[at:at] = removed
-    joined = '\n'.join(lines)
-    return joined + '\n' if text.endswith('\n') or not text else joined
+    _owned.insert_lines(lines, at, removed)
+    return ''.join(lines)
 
 
 def seed_picker_selection(config_path, previous_block, block):
@@ -276,7 +277,7 @@ def live_block(text, recorded):
 def removal_plan(config_path, entry):
     """Pure preflight, shared by the remover and all-client uninstall."""
     before = _read_text(config_path)
-    previous = '\n'.join((entry.get('reviewer') or {}).get('removed') or [])
+    previous = _owned.restore_evidence(entry, (QUEUE_KEY, EFFORTS_KEY))
     after = _owned.replace(before, entry.get('inserted_block'), '', removing=True, restored=previous)
     if BEGIN not in before and END not in before:
         return before, after  # A completed restore is verified, never replayed.
@@ -288,14 +289,15 @@ def removal_plan(config_path, entry):
 
 def attach_config(config_path, block, previous=None):
     """Apply the block and preferences; return their original restore records."""
+    _owned.restore_evidence({} if previous is None else previous, (QUEUE_KEY, EFFORTS_KEY))
     recorded = (previous or {}).get('inserted_block')
     previous_block = live_block(_read_text(config_path), recorded)
     block = preserve_picker_selection(config_path, previous_block, block)
     block = seed_picker_selection(config_path, previous_block, block)
     before, removed = replace_config_block(config_path, block, previous_block, recorded)
     current = _read_text(config_path)
-    carried = ((previous or {}).get('desktop') or {}).get('previous')
-    updated, desktop = desktop_preferences(current, carried)
+    carried = (previous or {}).get('desktop') or {}
+    updated, desktop = desktop_preferences(current, carried.get('previous'), carried)
     if desktop and updated != current:
         _owned.write(config_path, current, updated, _atomic_write.replace_text)
     elif not desktop:

@@ -63,7 +63,7 @@ class PublicationTests(unittest.TestCase):
             self.assertNotIn('tools/probe_secret_reader.py', names)
         tools = {name for name in release.bundle_files(ROOT) if name.startswith('tools/')}
         self.assertEqual(tools, {'tools/disable.py', 'tools/global_instructions.py',
-                                 'tools/provision_key.py'})
+                             'tools/provision_key.py', 'tools/classify_attachments.py'})
 
     def test_legacy_flag_removal_preserves_the_original_detach_snapshot(self):
         with tempfile.TemporaryDirectory() as folder:

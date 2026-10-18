@@ -15,8 +15,9 @@ workflow then validates the exact version, builds the bundle, publishes the
 release to the public feed and creates the GitHub Release with
 `latest.json` as a public mirror for humans. The semantic version remains in
 the public tag, bundle and feed, where the updater uses it for ordering.
-Every router on the stable channel installs a stable release within about four
-hours. Never push to `main` directly for a release; a direct push runs
+Healthy current updaters check their saved channel every four hours. Old installs
+blocked by download sign-in need the current public setup once; publication alone
+does not recover them. Never push to `main` directly for a release; a direct push runs
 checks but publishes nothing.
 
 Develop PRs and branch pushes run fast static checks. The full offline suite,
@@ -468,6 +469,17 @@ JSON file is retained when its ownership was not recorded.
 For a bootstrap installation,
 use the [pinned interpreter](setup.md#what-the-installer-does) if Python 3.14
 is not available on the system.
+
+Before repair or removal, the current setup source can produce a redacted
+ownership report:
+
+```sh
+python3.14 tools/classify_attachments.py --home ~/.codex/mixed-model-router
+```
+
+Share only its JSON result. It contains assistant names, ownership classifications
+and specific conflict reasons. It reads the same evidence as repair and removal;
+it changes no settings and makes no model or download requests.
 
 The state directory, key file and loopback token remain in place for you to
 delete separately. Uninstall does not remove them.
