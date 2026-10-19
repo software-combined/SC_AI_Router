@@ -117,8 +117,9 @@ Run from the cloned repository:
 ```sh
 git clone https://github.com/software-combined/SC_AI_Router.git
 cd SC_AI_Router
-python3.14 packaging/release.py --out dist --url-base "file://$PWD/dist"
-python3.14 packaging/install.py --feed "file://$PWD/dist/latest.json"
+ROUTER_DIST_URL="$(python3.14 -c 'from pathlib import Path; print((Path.cwd() / "dist").as_uri())')"
+python3.14 packaging/release.py --out dist --url-base "$ROUTER_DIST_URL"
+python3.14 packaging/install.py --feed "$ROUTER_DIST_URL/latest.json"
 ```
 
 On Windows, run the build and install commands in PowerShell:
