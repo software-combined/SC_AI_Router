@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from tests.claude_profile_sync_fixtures import load_helper
+from tests._platform import symlink_or_skip
 
 identity = load_helper('claude_profile_identity')
 ACCOUNT = '12345678-1234-4567-8123-123456789abc'
@@ -81,6 +82,25 @@ class BindingTests(unittest.TestCase):
             db.commit()
         self.assertEqual(identity.subscription(self.profile), (ACCOUNT, ORG))
 
+    def test_network_cookie_store_binds_and_logout_does_not_use_a_stale_legacy_store(self):
+        network = self.profile / 'Network'
+        network.mkdir()
+        current = network / 'Cookies'
+        current.write_bytes(self.cookies.read_bytes())
+        self.assertTrue(self.capture())
+        self.assertEqual(identity.subscription(self.profile), (ACCOUNT, ORG))
+        with contextlib.closing(sqlite3.connect(current)) as db:
+            db.execute("DELETE FROM cookies WHERE name='sessionKey'")
+            db.commit()
+        self.assertIsNone(identity.subscription(self.profile))
+
+    def test_redirected_network_directory_cannot_supply_an_identity(self):
+        target = self.profile / 'other-network'
+        target.mkdir()
+        (target / 'Cookies').write_bytes(self.cookies.read_bytes())
+        symlink_or_skip(target, self.profile / 'Network', target_is_directory=True)
+        self.assertFalse(self.capture())
+
     def test_account_logout_and_organization_changes_invalidate_without_guessing(self):
         original = self.config.read_bytes()
         for change in ({'lastKnownAccountUuid': CLI}, {'windowSizeWasSignedIn': False}):
@@ -108,7 +128,7 @@ class BindingTests(unittest.TestCase):
         other.write_bytes(self.record.read_bytes())
         self.assertFalse(self.capture())
         other.unlink()
-        other.symlink_to(self.record)
+        symlink_or_skip(self.record, other)
         self.assertFalse(self.capture())
 
     def test_account_pair_binding_is_private_idempotent_and_never_reassigned(self):

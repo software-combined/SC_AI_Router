@@ -1,4 +1,37 @@
 """Resolve exactly one installed desktop package in the current Windows account."""
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+
+
+def claude_roaming_root(roaming, local, run=None):
+    """Store builds virtualize the subscription profile under their package."""
+    if not local or not (Path(local) / 'Packages').is_dir():
+        return roaming
+    system_root = os.environ.get('SystemRoot')
+    if not system_root or not Path(system_root).is_absolute():
+        raise OSError('Windows system directory could not be checked')
+    powershell = Path(system_root) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
+    run = subprocess.run if run is None else run
+    script = ("$ErrorActionPreference='Stop';"
+              "$families=@(Get-AppxPackage -Name Claude | ForEach-Object {$_.PackageFamilyName});"
+              "ConvertTo-Json -InputObject $families -Compress")
+    try:
+        answer = run([str(powershell), '-NoProfile', '-NonInteractive', '-Command', script],
+                     capture_output=True, text=True, timeout=10,
+                     creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        families = json.loads(answer.stdout)
+        if (answer.returncode or not isinstance(families, list) or len(families) > 1
+                or any(not isinstance(family, str) or not re.fullmatch(
+                    r'Claude_[A-Za-z0-9]+', family) for family in families)):
+            raise ValueError('invalid package identity')
+    except (ValueError, TypeError, subprocess.SubprocessError) as exc:
+        raise OSError('Claude profile location could not be checked') from exc
+    if not families:
+        return roaming
+    return Path(local) / 'Packages' / families[0] / 'LocalCache' / 'Roaming'
 
 
 def identity(bundle_id, query):

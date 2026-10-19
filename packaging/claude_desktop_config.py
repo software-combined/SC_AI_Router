@@ -25,6 +25,9 @@ _spec.loader.exec_module(atomic_write)
 _spec = _ilu.spec_from_file_location('router_desktop_removal', Path(__file__).with_name('client_removal.py'))
 _removal = _ilu.module_from_spec(_spec)
 _spec.loader.exec_module(_removal)
+_spec = _ilu.spec_from_file_location('router_desktop_windows_paths', Path(__file__).with_name('desktop_windows.py'))
+_windows = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_windows)
 
 PROVIDER_KEY = 'inferenceProvider'
 CREDENTIAL_KIND_KEY = 'inferenceCredentialKind'
@@ -49,7 +52,7 @@ def profile_root(env=None, platform_name=None):
     """Parent of the app's userData directory, the way Electron resolves it.
 
     macOS uses Application Support, Windows uses the roaming AppData
-    directory and Linux uses XDG_CONFIG_HOME (falling back to ~/.config).
+    directory (virtualized for Store installs) and Linux uses XDG_CONFIG_HOME.
     Getting this wrong pointed the installer at a macOS path that does not
     exist on the other platforms, so `--desktop` silently did nothing there.
     """
@@ -59,7 +62,8 @@ def profile_root(env=None, platform_name=None):
         return Path.home() / 'Library' / 'Application Support'
     if platform_name == 'win32':
         appdata = env.get('APPDATA')
-        return Path(appdata) if appdata else Path.home() / 'AppData' / 'Roaming'
+        roaming = Path(appdata) if appdata else Path.home() / 'AppData' / 'Roaming'
+        return _windows.claude_roaming_root(roaming, env.get('LOCALAPPDATA'))
     xdg = env.get('XDG_CONFIG_HOME')
     return Path(xdg) if xdg else Path.home() / '.config'
 

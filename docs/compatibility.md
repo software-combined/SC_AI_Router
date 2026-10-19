@@ -1,5 +1,42 @@
 # Compatibility
 
+## Windows Claude checks, 19 October 2026 AEDT
+
+Microsoft Store package `Claude 2.42304.0.0` bundles Claude Code `2.1.299`.
+The installed router `1.3.3.0` attached the desktop gateway without another key
+entry. A normal quit and reopen loaded the gateway and correct model labels.
+The desktop picker exposed the three advertised Claude-family models, while
+the router advertised other vendors too; this client did not expose DeepSeek.
+
+Bundled Claude Code completed one synthetic file-read round trip on
+`deepseek/deepseek-v4.1-flash-1017` at requested Low effort, two turns, a
+requested $0.10 client budget and a 2,048-output-token cap per turn. No row was
+retried. The marker matched; served identity and effort were not exposed by
+the client's JSON report. Earlier GLM Flash verification also passed.
+The deferred-tool leg searched a 700-tool MCP catalogue, called the released
+tool and returned the marker in three turns, with matching tool/result IDs and
+reported model `deepseek/deepseek-v4.1-flash-1017`. The first $0.10-capped run
+stopped at its budget after the two tool calls; one repeat with a $0.25 cap
+completed. The client's cost estimate was $0.13278, not an upstream bill.
+The zero-model local fake-upstream checks passed: three-turn and output limits
+survived resume, and a 503 produced one request without further recovery.
+
+The bounded desktop Sonnet experiment reached Read, but its four-request cap
+was consumed by startup checks, task naming and the first task request, so no
+completed desktop reply is claimed. The temporary gateway was stopped and
+the normal router URL restored. Further live tests use DeepSeek as requested.
+
+Source checks found the Store subscription profile under the package's
+`LocalCache/Roaming/Claude` and its cookie database under `Network/Cookies`.
+The candidate resolves both; a read-only native check found the profile and
+resolved its sign-in guard. A zero-model `--init-only` run in the actual
+bundled client executed the generated callback with spaces, Unicode and shell
+characters in its paths. The callback uses the documented
+[exec form](https://code.claude.com/docs/en/hooks#command-hook-fields), available
+since [2.1.139](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md#21139).
+Native task-sharing round trips, a subscription inference turn and native
+installer acceptance remain unverified.
+
 ## Windows source and service checks, 19 October 2026 AEDT
 
 The public stable bootstrap installed `1.3.2.186` on Windows 11 Pro x64
