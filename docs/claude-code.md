@@ -435,6 +435,12 @@ on Linux. Windows falls back to Electron's roaming AppData location only
 when `LOCALAPPDATA` is absent. The subscription profile uses roaming AppData.
 Set `CLAUDE_USER_DATA_DIR` to override the third-party profile on all three
 systems. The first-party profile remains at the platform's native location.
+Windows Store installations resolve that subscription profile from the signed-in
+user's package registration automatically. Its `Network/Cookies` storage is a
+sign-in change detector, with legacy `Cookies` storage still supported; neither
+location supplies authentication to a gateway or crosses profiles. On Windows,
+the session callback uses the client's documented executable-and-arguments form,
+available since Claude Code 2.1.139, so Git Bash is not a prerequisite.
 Automatic updates keep using the profile recorded when Claude was attached,
 so an attachment made before Windows moved to `LOCALAPPDATA` keeps updating.
 Running setup with `--desktop` refuses a different profile while an existing

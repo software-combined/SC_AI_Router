@@ -44,6 +44,19 @@ class HookTests(unittest.TestCase):
             'userAdded': True})
         hook.uninstall(self.home)
 
+    def test_windows_callback_uses_literal_arguments_without_a_shell(self):
+        home = self.home / "router ü's $name ` space"
+        home.mkdir()
+        with mock.patch.object(hook, '_ON_WINDOWS', True):
+            hook.install(home, 'C:/Program Files/Python/python.exe', self.env)
+        entry = json.loads(self.settings.read_text())['hooks']['SessionStart'][-1]['hooks'][0]
+        self.assertEqual(entry['command'], 'C:/Program Files/Python/python.exe')
+        self.assertEqual(entry['args'][:3], ['-P', '-c', hook.CAPTURE])
+        self.assertEqual(entry['args'][3], str(home / 'claude_profile_launch.py'))
+        self.assertEqual(entry['args'][4:], ['--home', str(home), '--action', 'capture'])
+        self.assertNotIn('shell', entry)
+        self.assertEqual(entry['timeout'], 15)
+
     def test_preexisting_identical_callback_is_not_owned_or_replaced(self):
         hook.install(self.home, '/python', self.env)
         original = json.loads(self.settings.read_text())['hooks']['SessionStart'][1]

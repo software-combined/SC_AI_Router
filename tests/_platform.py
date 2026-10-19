@@ -23,10 +23,10 @@ requires_posix_perms = unittest.skipUnless(
 ON_WINDOWS = os.name == 'nt'
 
 
-def symlink_or_skip(source, destination):
+def symlink_or_skip(source, destination, *, target_is_directory=False):
     """Exercise real links unless Windows denies the required privilege."""
     try:
-        destination.symlink_to(source)
+        destination.symlink_to(source, target_is_directory=target_is_directory)
     except OSError as exc:
         if getattr(exc, 'winerror', None) == 1314:
             raise unittest.SkipTest('Windows symlink privilege is unavailable') from exc

@@ -98,8 +98,13 @@ def _subscription_guard(profile):
     account = _uuid(config.get('lastKnownAccountUuid'))
     if not account or config.get('windowSizeWasSignedIn') is not True:
         return None
-    cookies = profile / 'Cookies'
-    for path in (profile, *profile.parents, cookies,
+    network = profile / 'Network'
+    if network.is_symlink():
+        return None
+    cookies = network / 'Cookies'
+    if not cookies.exists() and not cookies.is_symlink():
+        cookies = profile / 'Cookies'
+    for path in (profile, *profile.parents, cookies.parent, cookies,
                  cookies.with_name('Cookies-wal'), cookies.with_name('Cookies-shm')):
         if path.is_symlink():
             return None

@@ -4,7 +4,6 @@ import importlib.util
 import json
 import os
 import shlex
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -23,6 +22,7 @@ _config = _load('claude_config')
 _atomic = _load('atomic_write')
 _json = _load('owned_json')
 RECEIPT = 'claude-profile-hook-receipt.json'
+_ON_WINDOWS = os.name == 'nt'
 # Start the router's launcher only while it exists: after a rollback or an
 # uninstall that kept this entry, every Claude Code session still starts quietly.
 CAPTURE = ("import runpy,sys;from pathlib import Path;p=Path(sys.argv[1]);sys.argv=sys.argv[1:];"
@@ -44,8 +44,9 @@ def install(home, python, env=None):
     # stand in for pathlib, runpy or any later import (Python 3.11+).
     argv = [str(python), '-P', '-c', CAPTURE, str(home / 'claude_profile_launch.py'),
             '--home', str(home), '--action', 'capture']
-    command = subprocess.list2cmdline(argv) if os.name == 'nt' else shlex.join(argv)
-    entry = {'hooks': [{'type': 'command', 'command': command, 'async': True, 'timeout': 5}]}
+    launch = {'command': argv[0], 'args': argv[1:]} if _ON_WINDOWS else {'command': shlex.join(argv)}
+    entry = {'hooks': [{'type': 'command', **launch, 'async': True,
+                       'timeout': 15 if _ON_WINDOWS else 5}]}
     doc = _config.read_settings(path)
     hooks = doc.setdefault('hooks', {})
     if not isinstance(hooks, dict) or not isinstance(hooks.setdefault('SessionStart', []), list):

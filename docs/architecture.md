@@ -524,6 +524,8 @@ path (`AGENTS.md` section 3).
 `packaging/claude_desktop_config.py` owns desktop attachment and its original
 restore snapshot. A matching owned attachment keeps the user's selected
 subscription or gateway mode on subsequent setup and update runs.
+`desktop_windows.py` resolves the current user's registered Claude Store
+package and its virtualized roaming profile; the gateway profile stays separate.
 `claude_desktop_switch.py` owns the switch lifecycle. After Claude exits normally,
 it shares the current account's local tasks and changes the mode only when all
 required copies succeed. Open and Switch share one transition lock, held before

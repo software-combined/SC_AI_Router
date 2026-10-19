@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Resolve the Windows Store Claude subscription profile from its current-user
+  package registration, including its `Network/Cookies` sign-in change detector.
+  Keep legacy cookie storage supported without reviving a stale sign-in.
+- Run the Windows Claude identity callback directly with literal arguments,
+  so it needs no Git Bash and supports spaces and shell characters in paths.
+- Preserve review-hook template bytes in Windows-built bundles so setup checks
+  agree with the executable Bash hooks already installed.
+
 - Accept canonical local file URLs during Windows source and native setup,
   including spaces, Unicode and percent signs in the download folder.
 - Recognize Windows client-disconnect errors without treating them as an

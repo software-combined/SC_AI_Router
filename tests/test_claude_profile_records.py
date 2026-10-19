@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from tests import claude_profile_sync_fixtures as fixtures
+from tests._platform import symlink_or_skip
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -195,7 +196,7 @@ class ProfileRecordsTests(unittest.TestCase):
             root = Path(tmp).resolve()
             target = fixtures.profile(root, 'Claude', 'account', 'org')
             link = root / 'link'
-            link.symlink_to(target, target_is_directory=True)
+            symlink_or_skip(target, link, target_is_directory=True)
             for store in (link, link / 'claude-code-sessions'):
                 with self.assertRaises(ValueError):
                     records.namespace_paths(store)
