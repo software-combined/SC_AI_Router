@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.3.4
+
 - Resolve the Windows Store Claude subscription profile from its current-user
   package registration, including its `Network/Cookies` sign-in change detector.
   Keep legacy cookie storage supported without reviving a stale sign-in.
