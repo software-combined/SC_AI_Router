@@ -9,6 +9,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shlex
 import tempfile
 import unittest
 from unittest import mock
@@ -95,7 +96,12 @@ class CurrentInstallAttachTests(unittest.TestCase):
         receipt = json.loads((home / 'claude-profile-hook-receipt.json').read_text())
         self.assertEqual(receipt['settings_path'], str(settings))
         self.assertTrue(receipt['inserted'])
-        self.assertIn(str(home / 'claude_profile_launch.py'), receipt['entry']['hooks'][0]['command'])
+        hook = receipt['entry']['hooks'][0]
+        argv = ([hook['command'], *hook['args']] if os.name == 'nt'
+                else shlex.split(hook['command']))
+        self.assertEqual(argv[1:3], ['-P', '-c'])
+        self.assertEqual(argv[4:], [str(home / 'claude_profile_launch.py'),
+                                   '--home', str(home), '--action', 'capture'])
         expected = json.loads(before)
         expected['hooks']['SessionStart'].append(receipt['entry'])
         self.assertEqual(json.loads(settings.read_text()), expected)
