@@ -3,6 +3,7 @@ import re
 import shutil
 import tarfile
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -88,18 +89,19 @@ class PackagingTests(unittest.TestCase):
                             (root / 'docs' / 'setup.md').read_text(), re.S)
         release_blocks = [block for block in blocks if 'packaging/release.py' in block]
         self.assertEqual(len(release_blocks), 2)
-        for block in release_blocks:
-            self.assertIn('--url-base "file://$PWD/dist"', block)
-        out = root / 'dist-test-readme-quick-start'
-        self.addCleanup(shutil.rmtree, str(out), True)
-        spec = importlib.util.spec_from_file_location(
-            'release_quick_start', root / 'packaging' / 'release.py')
-        release_mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(release_mod)
-        release_mod.main(['--out', str(out), '--url-base', 'file://' + str(out)])
-        latest = json.loads((out / 'latest.json').read_text())
-        self.assertTrue(latest['url'].startswith('file://'))
-        self.assertTrue(Path(latest['url'][len('file://'):]).is_file())
+        posix, windows = release_blocks
+        self.assertIn('(Path.cwd() / "dist").as_uri()', posix)
+        self.assertIn('--url-base "$ROUTER_DIST_URL"', posix)
+        self.assertIn('--feed "$ROUTER_DIST_URL/latest.json"', posix)
+        self.assertIn('([uri]$RouterDist).AbsoluteUri', windows)
+        self.assertIn('--url-base $RouterDistUrl', windows)
+        self.assertIn('--feed "$RouterDistUrl/latest.json"', windows)
+        with tempfile.TemporaryDirectory(prefix='router source é %25 ') as temporary:
+            out = Path(temporary) / 'dist'
+            _release_module().main(['--out', str(out), '--url-base', out.as_uri()])
+            latest = json.loads((out / 'latest.json').read_text())
+            self.assertEqual(latest['url'], (out / Path.from_uri(latest['url']).name).as_uri())
+            self.assertTrue(Path.from_uri(latest['url']).is_file())
 
     def test_release_bundle_contains_deploy_list(self):
         root = Path(__file__).resolve().parents[1]

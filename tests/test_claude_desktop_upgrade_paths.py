@@ -106,16 +106,28 @@ class RollbackTests(unittest.TestCase):
         (self.home / 'current').write_text('0.6.140')
         shutil.copyfile(ROOT / 'packaging/claude_profile_launch.py', self.home / 'claude_profile_launch.py')
 
-    def callback(self, cwd=None):
+    def callback(self, cwd=None, exec_form=False):
         """Install the session callback, then run its exact command as Claude Code does."""
         config = self.root / 'claude'
         config.mkdir(exist_ok=True)
-        load_helper('claude_profile_hook').install(self.home, sys.executable,
-                                                   {'CLAUDE_CONFIG_DIR': str(config)})
-        command = json.loads((config / 'settings.json').read_text())[
-            'hooks']['SessionStart'][0]['hooks'][0]['command']
-        return subprocess.run(command, shell=True, cwd=cwd, input='{}', capture_output=True,
+        hook = load_helper('claude_profile_hook')
+        if exec_form:
+            hook._ON_WINDOWS = True
+        hook.install(self.home, sys.executable, {'CLAUDE_CONFIG_DIR': str(config)})
+        entry = json.loads((config / 'settings.json').read_text())[
+            'hooks']['SessionStart'][0]['hooks'][0]
+        command = ([entry['command'], *entry['args']] if 'args' in entry else entry['command'])
+        return subprocess.run(command, shell='args' not in entry, cwd=cwd, input='{}', capture_output=True,
                               text=True, timeout=30)
+
+    def test_exec_form_runs_callback_with_literal_arguments(self):
+        (self.home / 'claude_profile_launch.py').write_text(
+            'import json,sys\nfrom pathlib import Path\n'
+            'Path(__file__).with_name("callback-args.json").write_text(json.dumps(sys.argv[1:]))\n')
+        answer = self.callback(exec_form=True)
+        self.assertEqual((answer.returncode, answer.stdout, answer.stderr), (0, '', ''))
+        self.assertEqual(json.loads((self.home / 'callback-args.json').read_text()),
+                         ['--home', str(self.home), '--action', 'capture'])
 
     def test_session_callback_stays_quiet_after_a_rollback_or_removal(self):
         for removed in (False, True):

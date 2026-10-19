@@ -1,6 +1,7 @@
 """Management controls report owner outcomes and cannot reopen during a transition."""
 import json
 import os
+import shlex
 import sys
 import tempfile
 import unittest
@@ -27,7 +28,13 @@ class DesktopManagementTests(unittest.TestCase):
                 self.assertTrue((home / 'claude_profile_launch.py').is_file())
                 self.assertTrue((home / 'claude-profile-hook-receipt.json').is_file())
                 hook = json.loads((settings / 'settings.json').read_bytes())['hooks']['SessionStart'][0]
-                self.assertIn('capture', hook['hooks'][0]['command'])
+                command = hook['hooks'][0]
+                argv = ([command['command'], *command['args']] if os.name == 'nt'
+                        else shlex.split(command['command']))
+                self.assertEqual(argv[0], sys.executable)
+                self.assertEqual(argv[1:3], ['-P', '-c'])
+                self.assertEqual(argv[4:], [str(home / 'claude_profile_launch.py'),
+                                           '--home', str(home), '--action', 'capture'])
                 self.assertTrue(hook['hooks'][0]['async'])
 
     def test_update_starts_the_menu_silently_and_preserves_startup_opt_out(self):
