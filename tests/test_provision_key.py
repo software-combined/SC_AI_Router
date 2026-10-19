@@ -77,7 +77,7 @@ class ProvisionTests(unittest.TestCase):
             with self._env():
                 buf = io.StringIO()
                 with redirect_stdout(buf):
-                    rc = provision_mod.main(['--email', 'cyril@softwarecombined.com',
+                    rc = provision_mod.main(['--email', 'employee@example.invalid',
                                              '--machine', 'mac-01', '--limit', '25',
                                              '--guardrail', 'gr-7', '--audit', str(audit)],
                                             _urlopen=api)
@@ -87,13 +87,13 @@ class ProvisionTests(unittest.TestCase):
             audit_text = audit.read_text()
         method, url, payload = api.calls[0]
         self.assertEqual((method, url), ('POST', provision_mod.KEYS_URL))
-        self.assertEqual(payload['name'], 'cyril@softwarecombined.com/mac-01')
+        self.assertEqual(payload['name'], 'employee@example.invalid/mac-01')
         self.assertEqual(payload['limit'], 25)
         self.assertEqual(payload['limit_reset'], 'monthly')
         self.assertEqual(len(rows), 1)
         row = json.loads(rows[0])
         self.assertEqual(row['key_id'], 'key-123')
-        self.assertEqual(row['email'], 'cyril@softwarecombined.com')
+        self.assertEqual(row['email'], 'employee@example.invalid')
         self.assertNotIn('sk-live-secret', audit_text)
         self.assertNotIn('mgmt-test', audit_text)
 
@@ -103,7 +103,7 @@ class ProvisionTests(unittest.TestCase):
             audit = Path(tmp) / 'audit.jsonl'
             with self._env():
                 with self.assertRaisesRegex(SystemExit, 'guardrail'):
-                    provision_mod.main(['--email', 'cyril@softwarecombined.com',
+                    provision_mod.main(['--email', 'employee@example.invalid',
                                         '--machine', 'mac-01', '--limit', '25',
                                         '--guardrail', 'gr-7', '--audit', str(audit)],
                                        _urlopen=api)
@@ -147,7 +147,7 @@ class ProvisionTests(unittest.TestCase):
             with self._env():
                 out, err = io.StringIO(), io.StringIO()
                 with redirect_stdout(out), redirect_stderr(err):
-                    provision_mod.main(['--email', 'cyril@softwarecombined.com',
+                    provision_mod.main(['--email', 'employee@example.invalid',
                                         '--machine', 'mac-01', '--limit', '25',
                                         '--audit', str(Path(tmp) / 'a.jsonl')], _urlopen=api)
             self.assertNotIn('sk-live-secret', err.getvalue())

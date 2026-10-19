@@ -40,12 +40,15 @@ SETUP_STEP_RE = re.compile(
     rb'(?m)^[ \t]*(?:-[ \t]+)?uses: \./\.github/actions/setup'
     rb'(?:[ \t]*#.*)?[ \t]*\r?$')
 # An AWS account id inside an ARN, or a bucket-shaped name carrying one, is a
-# publication identifier (Plan 160): it belongs in repository variables, so a
-# copy returning to the tree fails here. Neither pattern spells an account id,
-# so this file needs no self-exclusion; `plans/` is gitignored working notes
-# that never ship.
+# publication identifier (Plan 160): it belongs in private release
+# configuration, so a copy returning to the tree fails here. Neither pattern
+# spells an account id, so this file needs no self-exclusion; `plans/` is
+# gitignored working notes that never ship.
 ACCOUNT_ARN_RE = re.compile(rb'arn:aws[a-z-]*:[a-z0-9-]+:[a-z0-9-]*:\d{12}:')
-ACCOUNT_BUCKET_RE = re.compile(rb'\b[a-z0-9][a-z0-9.-]{2,}-\d{12}-[a-z0-9-]+')
+ACCOUNT_BUCKET_RE = re.compile(
+    rb'\b(?=[a-z0-9.-]*[a-z])[a-z0-9][a-z0-9.-]{2,}-'
+    rb'(?<![0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-)\d{12}'
+    rb'(?:-[a-z0-9-]+)?\b')
 # A dialect comparison against a raw string (Plan 152): `provider_defs` owns
 # the dialect, so a call site compares the constant it exports. Only the
 # comparison is forbidden, not the table's own definitions. Every comparison
@@ -135,7 +138,7 @@ def check_publication_identifiers():
             hits.append(str(rel))
     if hits:
         print('AWS account id or bucket name committed; it belongs in '
-              'repository variables, not the tree (Plan 160)')
+              'private release configuration, not the tree (Plan 160)')
         for hit in hits:
             print(f'  {hit}')
         return False

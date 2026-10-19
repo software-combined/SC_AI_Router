@@ -1,23 +1,23 @@
 # SCG Prototypes
 
-Publishes a built frontend prototype to the SCG prototype channel and returns a
-shareable URL such as `https://prototypes.softwarecombined.com/checkout-v2-7f3a/`.
+This plugin publishes a built frontend prototype and returns a shareable URL,
+such as `https://prototypes.softwarecombined.com/checkout-v2-7f3a/`.
 
-The `publish-prototype` skill owns the procedure; `scripts/prototypes.py` under
-that skill does the work: validate the slug and asset paths, run the pinned
-gitleaks scan, archive the artifact in `software-combined/SC_Prototypes`, sync it
-to the private channel bucket, invalidate the CloudFront path, and verify the
-live URL before printing it.
+The `publish-prototype` skill validates the slug and asset paths, scans the
+artifact for secrets, archives the exact published files, uploads them to the
+configured channel, and verifies the live URL.
 
-Requirements on the machine that publishes:
+The bundled channel config is an empty template. A publisher needs:
 
-- AWS profile `scg-prototypes` from the `SC-AWS-PrototypePublisher` permission set.
-- Git access to `software-combined/SC_Prototypes`.
-- The gitleaks binary pinned by the SCG review hooks, verified by SHA-256 before
-  every scan. Publishing refuses to run until that pin exists, so install the
-  `scg-review` plugin and complete its review-setup skill first.
+- A completed private config outside the repository and installed plugin.
+- Access to the AWS profile and archive repository named in that config.
+- The gitleaks binary pinned by the SCG review hooks.
 
-The channel foundation lives in `SC_Infrastructure` at
-`domains/web-edge/static-site-cloudfront-s3` and stays fail-closed until its
-owner approves the production deploy. Until then every publish stops with a
-clear "not deployed yet" message.
+Select the private config with `--config` or
+`PROTOTYPE_CHANNEL_CONFIG`. Publishing fails before external operations when
+the selected config is missing or incomplete. See
+`skills/publish-prototype/references/channel.md` for the fields and commands.
+
+Publishing also verifies the scanner's SHA-256 hash before every scan. Install
+the `scg-review` plugin and complete its review-setup skill when this machine
+does not yet have the verified scanner record.

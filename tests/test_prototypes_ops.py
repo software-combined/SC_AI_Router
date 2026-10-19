@@ -33,13 +33,13 @@ def load_tests(loader, tests, pattern):
     return tests
 
 CONFIG = {
-    "account": "852138521410",
-    "archiveRepository": "software-combined/SC_Prototypes",
-    "bucket": "scg-prototypes-852138521410",
-    "distributionId": "E1234567890ABC",
-    "domain": "prototypes.softwarecombined.com",
+    "account": "000000000000",
+    "archiveRepository": "example/prototype-archive",
+    "bucket": "synthetic-prototype-bucket",
+    "distributionId": "ESYNTHETIC000000",
+    "domain": "prototypes.example.invalid",
     "expiryDays": 30,
-    "profile": "scg-prototypes",
+    "profile": "synthetic-prototypes",
 }
 
 
@@ -86,7 +86,7 @@ class PrototypeOpsTest(unittest.TestCase):
         (self.site / "assets").mkdir(parents=True)
         (self.site / "index.html").write_text('<!doctype html><link rel="stylesheet" href="assets/app.css"><h1>checkout</h1>\n')
         (self.site / "assets" / "app.css").write_text("body{color:#111}\n")
-        self.repo = self.root / "SC_Prototypes"
+        self.repo = self.root / "prototype-archive"
         (self.repo / ".git").mkdir(parents=True)
         self.previous_pin_path = prototypes.GITLEAKS_PIN_PATH
         prototypes.GITLEAKS_PIN_PATH = self.root / "hook-config.json"
@@ -108,7 +108,7 @@ class PrototypeOpsTest(unittest.TestCase):
     def test_publish_stops_before_any_write_when_the_profile_is_the_wrong_account(self):
         def wrong_account(args, cwd=None):
             if "sts" in args:
-                return json.dumps({"Account": "111122223333"})
+                return json.dumps({"Account": "000000000001"})
             return ""
 
         with self.assertRaises(prototypes.ChannelError) as error:
@@ -118,7 +118,7 @@ class PrototypeOpsTest(unittest.TestCase):
                 run=wrong_account,
                 verifier=lambda url: "",
             )
-        self.assertIn("expected 852138521410", str(error.exception))
+        self.assertIn("does not match the configured account", str(error.exception))
         self.assertFalse((self.repo / "prototypes.json").exists())
         self.assertFalse((self.repo / "prototypes").exists())
 
@@ -230,7 +230,7 @@ class PrototypeOpsTest(unittest.TestCase):
                 return False
 
         with patch("urllib.request.urlopen", return_value=RedirectedResponse()):
-            reason = prototypes.verify_live("https://prototypes.softwarecombined.com/checkout-v2-7f3a/", attempts=1, delay=0)
+            reason = prototypes.verify_live("https://prototypes.example.invalid/checkout-v2-7f3a/", attempts=1, delay=0)
         self.assertIn("redirected", reason)
 
     def test_publish_stops_before_writing_when_gitleaks_fails(self):
@@ -258,12 +258,21 @@ class PrototypeOpsTest(unittest.TestCase):
             )
         self.assertIn(".gitleaks.toml", str(error.exception))
 
-    def test_channel_config_must_be_deployed_before_publishing(self):
+    def test_incomplete_channel_config_fails_closed(self):
         config_file = self.root / "channel.json"
         config_file.write_text(json.dumps({**CONFIG, "distributionId": ""}))
         with self.assertRaises(prototypes.ChannelError) as error:
             prototypes.load_config(config_file)
-        self.assertIn("not deployed yet", str(error.exception))
+        self.assertIn("not configured", str(error.exception))
+
+    def test_private_config_loads_through_argument_and_environment_paths(self):
+        config_file = self.root / "private-channel.json"
+        config_file.write_text(json.dumps(CONFIG))
+
+        args = prototypes.parse_args(["--config", str(config_file), "list"])
+        self.assertEqual(prototypes.load_config(args.config), CONFIG)
+        with patch.dict(os.environ, {"PROTOTYPE_CHANNEL_CONFIG": str(config_file)}):
+            self.assertEqual(prototypes.load_config(), CONFIG)
 
 
 if __name__ == "__main__":

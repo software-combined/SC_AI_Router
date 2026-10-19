@@ -44,6 +44,13 @@ class DeptBriefsTest(unittest.TestCase):
         for name in BRIEFS:
             self.assertIn(f"../{name}/SKILL.md", entry)
 
+    def test_finance_inputs_require_verified_connected_account_identity(self):
+        skill = (SKILLS / "finance-subagent/SKILL.md").read_text()
+        inputs = skill.split("## Inputs", 1)[1].split("## Authority", 1)[0]
+        self.assertIn("connected account", inputs.lower())
+        self.assertIn("verified", inputs.lower())
+        self.assertIsNone(re.search(r"(?<![A-Za-z0-9.])\d{7,12}(?![A-Za-z0-9.])", inputs))
+
 
 if __name__ == "__main__":
     unittest.main()

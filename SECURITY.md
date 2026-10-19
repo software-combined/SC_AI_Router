@@ -2,23 +2,23 @@
 
 ## Reporting a vulnerability
 
-Email **cyril@softwarecombined.com**. Include the router version
-(`python3.14 packaging/install.py --status` prints it without secrets), your
-operating system and client, and the steps to reproduce.
+Contact the repository maintainers through an established private channel.
+Include the router version (`python3.14 packaging/install.py --status` prints it
+without secrets), your operating system and client, and the steps to reproduce.
 
-Please do not open a public issue for a suspected vulnerability, and do not
-attach state files, logs or configuration: they can carry the loopback token.
+Do not open a public issue for a suspected vulnerability. Do not attach state
+files, logs, or configuration. They can contain the loopback token.
 
 For the internal SC deployment, a confirmed vulnerability has a fix target of
-30 days. Public users have no guaranteed response or fix deadline. Fixes ship as a normal
-release, and installs on the `stable` channel pick them up automatically
+30 days. Public users have no guaranteed response or fix deadline. Fixes ship
+as a normal release. Installs on the `stable` channel pick them up automatically
 within about four hours.
 
 ## Scope
 
-In scope: the router service (`ai_router/`), the installer, updater and
-service definitions (`packaging/`), the bootstrap scripts, the update feed
-templates (`infra/`) and the release workflow.
+In scope: the router service (`ai_router/`), the installer, updater and service
+definitions (`packaging/`), the bootstrap scripts, the update feed templates
+(`infra/`) and the release workflow.
 
 Out of scope: the upstream providers and clients themselves (OpenAI,
 Anthropic, OpenRouter, Codex, Claude Code), and findings that require code
@@ -40,5 +40,5 @@ already running as the installing user, who holds the key by design.
 
 Never commit state files, activation receipts, catalogues, logs, API keys or
 bearer tokens. `tools/check_policy_scans.py` runs the secrets scan locally and
-in CI, and GitHub secret scanning with push protection is enabled on this
-repository.
+in continuous integration. GitHub secret scanning with push protection is also
+enabled on this repository.

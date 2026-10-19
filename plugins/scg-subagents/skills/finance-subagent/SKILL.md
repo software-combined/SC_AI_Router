@@ -25,12 +25,13 @@ variance review. Evidence: 2026-09-12 catalogue snapshot, live-checked
 
 ## Inputs
 
-Give the child: the period, entities, and source system (for example NetSuite
-account `9324845` via the read-only MCP connection when available), the exact
-deliverable (review, summary, variance note, draft), and the comparison basis.
-One deliverable per delegation. Load the installed `finance-analyst` skill
-from `scg-finance` first (`scg-finance:finance-analyst` in Codex). Resolve its
-current name through the active client's skill catalogue.
+Give the child the period, entities, source system, and connected account
+identity. State how you verified that identity in the active connector or
+client. Also give the exact deliverable (review, summary, variance note, or
+draft) and the comparison basis. Use one deliverable per delegation. Load the
+installed `finance-analyst` skill from `scg-finance` first
+(`scg-finance:finance-analyst` in Codex). Resolve its current name through the
+active client's skill catalogue.
 
 ## Authority
 

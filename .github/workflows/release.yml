@@ -16,14 +16,14 @@ env:
   AWS_REGION: ap-southeast-2
   # Stack name only: it carries no account id, so it may stay a literal here.
   FEED_STACK: scg-router-feed
-  # Repository variables, not secrets and not literals (Plan 160): an account
-  # id, a bucket name or a role ARN in the tree is an identifier disclosure and
-  # a fork running the publisher must not inherit our target by default.
-  FEED_BUCKET: ${{ vars.FEED_BUCKET }}
-  FEED_ROLE: ${{ vars.FEED_ROLE }}
+  # Private GitHub Actions secrets, not literals (Plan 160): an account id, a
+  # bucket name or a role ARN in the tree or logs is an identifier disclosure.
+  # A fork running the publisher must not inherit our target by default.
+  FEED_BUCKET: ${{ secrets.FEED_BUCKET }}
+  FEED_ROLE: ${{ secrets.FEED_ROLE }}
   # ARN of the Secrets Manager secret holding the feed signing seed.
   # Empty fails closed rather than shipping unsigned.
-  FEED_SIGNING_SEED_ARN: ${{ vars.FEED_SIGNING_SEED_ARN }}
+  FEED_SIGNING_SEED_ARN: ${{ secrets.FEED_SIGNING_SEED_ARN }}
   NATIVE_INSTALLERS_ACCEPTED: ${{ vars.NATIVE_INSTALLERS_ACCEPTED }}
   NATIVE_INSTALLERS_MACOS_ARM64_ONLY: ${{ vars.NATIVE_INSTALLERS_MACOS_ARM64_ONLY }}
 
@@ -42,13 +42,13 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - name: Require the feed variables
+      - name: Require the private feed configuration
         # A fork or a misconfigured repository must fail here, before it tries
         # to assume a role it cannot assume (Plan 160).
         run: |
           for name in FEED_BUCKET FEED_ROLE FEED_SIGNING_SEED_ARN; do
             if [ -z "${!name}" ]; then
-              echo "repository variable $name is empty; set it in repository settings (docs/operations.md)"; exit 1
+              echo "private release configuration $name is empty; set the matching GitHub Actions secret (docs/operations.md)"; exit 1
             fi
           done
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -137,6 +137,7 @@ jobs:
           role-to-assume: ${{ env.FEED_ROLE }}
           role-session-name: router-native-build
           aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
       - name: Retain packages in private build storage
         run: aws s3 cp native-artifacts/ "s3://${{ env.FEED_BUCKET }}/native-builds/${{ github.sha }}/${{ github.run_id }}/" --recursive --only-show-errors
 
@@ -167,6 +168,7 @@ jobs:
           role-to-assume: ${{ env.FEED_ROLE }}
           role-session-name: router-feed-publish
           aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
       - name: Resolve the feed distribution
         run: |
           DIST_ID="$(aws cloudformation describe-stacks --stack-name "$FEED_STACK" \
@@ -175,6 +177,7 @@ jobs:
           if [ -z "$DIST_ID" ] || [ "$DIST_ID" = "None" ]; then
             echo "no DistributionId output on $FEED_STACK"; exit 1
           fi
+          echo "::add-mask::$DIST_ID"
           echo "FEED_DISTRIBUTION_ID=$DIST_ID" >> "$GITHUB_ENV"
       - name: Read verified native builds
         run: aws s3 cp "s3://$FEED_BUCKET/native-builds/$GITHUB_SHA/$GITHUB_RUN_ID/" native-artifacts/ --recursive --only-show-errors

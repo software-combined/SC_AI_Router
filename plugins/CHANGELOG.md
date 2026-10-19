@@ -1,5 +1,11 @@
 # Changelog
 
+## scg-prototypes 0.1.5 and scg-subagents 0.6.1 (2026-10-19)
+
+- Remove environment-specific cloud and finance account details from the
+  public plugins. Prototype publishing now requires a separate private channel
+  config and fails closed when the bundled blank template is selected.
+
 ## scg-review 0.6.1 (2026-10-17)
 
 - Export a sanitized review record for the current committed tree, including

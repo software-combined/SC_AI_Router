@@ -128,18 +128,18 @@ class RedactionTests(unittest.TestCase):
     def test_spaced_paths_and_unc_shares_are_fully_redacted(self):
         from ai_router import errors
         for text, hidden, kept in (
-                ('/Users/Cyril Allart/.codex/openrouter.key is empty',
-                 'Cyril', 'is empty'),
-                (r'C:\Users\Cyril Allart\.codex\openrouter.key is empty',
-                 'Cyril', 'is empty'),
+                ('/Users/Example User/.codex/openrouter.key is empty',
+                 'Example', 'is empty'),
+                (r'C:\Users\Example User\.codex\openrouter.key is empty',
+                 'Example', 'is empty'),
                 (r'\\server\share\keys\openrouter.key is empty',
                  'server', 'is empty'),
                 (r'\\fileserver\Team Share\cyril\.codex\openrouter.key is empty',
                  'fileserver', 'is empty'),
                 (r'\\my server\share\keys\openrouter.key is empty',
                  'server', 'is empty'),
-                (r'\\?\C:\Users\Cyril Allart\.codex\openrouter.key is empty',
-                 'Cyril', 'is empty'),
+                (r'\\?\C:\Users\Example User\.codex\openrouter.key is empty',
+                 'Example', 'is empty'),
                 ('//fileserver/Team Share/cyril/.local/share/opencode/auth.json '
                  'has no openrouter api key', 'fileserver',
                  'has no openrouter api key')):

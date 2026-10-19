@@ -159,8 +159,7 @@ external users have no guaranteed response or service level.
 Include what you tried and the error message. For diagnostics, use the redacted
 support bundle described in that guide, never raw state, logs or credentials.
 
-Report a suspected vulnerability privately to
-<cyril@softwarecombined.com>, as described in [SECURITY.md](SECURITY.md).
+Report a suspected vulnerability by contacting the repository maintainers through an established private channel, as described in [SECURITY.md](SECURITY.md).
 
 ## For maintainers
 
@@ -194,5 +193,4 @@ requires.
 - Third-party material: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 - Official licence text: <https://www.apache.org/licenses/LICENSE-2.0>
 
-Copyright 2026 Software Combined Pty Ltd. Maintained by Cyril Allart
-(<cyril@softwarecombined.com>) at [Software Combined](https://www.softwarecombined.com).
+Copyright 2026 Software Combined Pty Ltd. Maintained by Cyril Allart at [Software Combined](https://www.softwarecombined.com).

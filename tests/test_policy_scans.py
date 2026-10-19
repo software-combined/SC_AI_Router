@@ -24,6 +24,8 @@ CAP_CHECK = 'check_' + 'request' + '_cap'
 # file too, and a literal here would (correctly) fail its own gate.
 ACCOUNT_PROBE = (b'arn:aws:iam::' + b'1' * 12 + b':role/publisher')
 BUCKET_PROBE = b'scg-router-feed-' + b'2' * 12 + b'-apse2'
+BUCKET_END_PROBE = b'scg-prototypes-' + b'3' * 12
+UUID_PROBE = b'-'.join((b'4' * 8, b'4' * 4, b'4' * 4, b'4' * 4, b'4' * 12))
 
 
 class ProviderKeyIgnoreTests(unittest.TestCase):
@@ -129,7 +131,7 @@ class PolicyScanTests(unittest.TestCase):
         # Non-vacuous: an account id inside an ARN, and one inside a
         # bucket-shaped name, each fail the scan on a tree that is otherwise
         # clean (Plan 160).
-        for probe in (ACCOUNT_PROBE, BUCKET_PROBE):
+        for probe in (ACCOUNT_PROBE, BUCKET_PROBE, BUCKET_END_PROBE):
             with self.subTest(probe=probe[:10]):
                 root = self._tree()
                 (root / 'infra').mkdir(exist_ok=True)
@@ -137,6 +139,11 @@ class PolicyScanTests(unittest.TestCase):
                     b'BucketName: ' + probe + b'\n')
                 module = _load(root)
                 self.assertFalse(module.check_publication_identifiers())
+
+    def test_uuid_tail_is_not_an_account_bucket(self):
+        root = self._tree()
+        (root / 'ai_router' / 'identity.py').write_bytes(b'identity = client-' + UUID_PROBE + b'\n')
+        self.assertTrue(_load(root).check_publication_identifiers())
 
     def test_cap_token_outside_the_old_directories_is_caught(self):
         root = self._tree()

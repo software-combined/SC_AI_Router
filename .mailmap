@@ -1,3 +1,1 @@
-# Canonical author identities for `git shortlog` and `git log --use-mailmap`.
-Cyril Allart <cyril@softwarecombined.com> SC-Cyril <cyril@softwarecombined.com>
-Cyril Allart <cyril@softwarecombined.com> <cyril@softwarecombined.com.au>
+# Add canonical public author identities here when maintainers provide them.

@@ -91,12 +91,12 @@ class PublishWorkflowTests(unittest.TestCase):
         self.assertLess(publish, release,
                         'the feed must serve before a host is told about it')
 
-    def test_the_workflow_requires_the_feed_variables(self):
-        # Plan 160: an empty variable must fail before a role is assumed, so a
+    def test_the_workflow_requires_private_feed_configuration(self):
+        # Plan 160: an empty value must fail before a role is assumed, so a
         # fork or a misconfigured repository cannot publish to our bucket.
         text = RELEASE_WORKFLOW.read_text()
-        self.assertIn('Require the feed variables', text)
-        guard = text.index('Require the feed variables')
+        self.assertIn('Require the private feed configuration', text)
+        guard = text.index('Require the private feed configuration')
         credentials = text.index('configure-aws-credentials')
         self.assertLess(guard, credentials, 'the guard must run before assuming the role')
         for name in ('FEED_BUCKET', 'FEED_ROLE', 'FEED_SIGNING_SEED_ARN'):
