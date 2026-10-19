@@ -58,7 +58,7 @@ No subscription confirmation step is left for the reader route. The per-write
 email is retired; the reader now sits on the central SCG AWS notification
 service, which watches the same `bundles/` prefix with its own EventBridge
 rule and reports each write as a branded publication. That route belongs to
-`SC_Infrastructure`, so its subscription list and source-stack alarms are the
+the private infrastructure repository, so its subscription list and source-stack alarms are the
 delivery checks.
 
 The local formatter, topic, queue and narrow failure alarm stay as the rollback
@@ -78,14 +78,19 @@ that re-creates the subscription.
 
 The template carries no account-bearing default, and the tree carries no
 account id, bucket name or role ARN. The release workflow reads three
-**repository variables** (repository settings, not the tree; never written
-down here):
+**GitHub Actions secrets** (repository Actions settings, not the tree; never
+written down here):
 
-| Variable | What it is | What uses it |
+| Secret | What it is | What uses it |
 |---|---|---|
 | `FEED_BUCKET` | the feed bucket the publisher writes to | `tools/publish_feed.py --bucket`, the deploy override above |
 | `FEED_ROLE` | the publisher role the release workflow assumes by OIDC | the workflow's AWS credentials step |
 | `FEED_SIGNING_SEED_ARN` | the Secrets Manager secret holding the feed signing seed | the workflow's publish step, and the template's `SigningSeedArn` |
+
+The repository owner sets and rotates these values through the trusted GitHub
+Actions secret interface without printing them. GitHub masks their values in
+workflow logs. The release preflight checks all three and fails closed before
+checkout if any value is empty.
 
 `FEED_STACK` stays a literal in the workflow: a stack name carries no account
 id. Both publishers now require `--bucket`, so a fork that runs them with no
@@ -104,7 +109,7 @@ from the private deployment configuration; the templates have no identifying
 defaults. Existing stack updates retain their parameter values unless the
 deployer explicitly overrides them. Publication retains this repository and
 publisher identity; public forks receive no publishing grants or copied
-repository variables. The role may read any object in the feed bucket and
+GitHub Actions secrets. The role may read any object in the feed bucket and
 write only release objects: `bundles/*`, `native-builds/*`, `installers/*`,
 `install/*` and each channel's `latest.json`, `latest.json.sig` and `models.json`.
 Native first-install publication remains acceptance-gated. The role can also list the

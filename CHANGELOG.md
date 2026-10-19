@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.3.5
+
+- Remove private environment identifiers and contact details from bundled
+  plugins, examples and public package metadata.
+- Keep private prototype publishing settings in an external configuration
+  file. The bundled template is blank and fails closed.
+- Mask private release infrastructure identifiers in GitHub Actions logs,
+  including AWS account and derived distribution details.
+
 ## 1.3.4
 
 - Resolve the Windows Store Claude subscription profile from its current-user

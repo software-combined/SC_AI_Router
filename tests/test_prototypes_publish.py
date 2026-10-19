@@ -33,13 +33,13 @@ def load_tests(loader, tests, pattern):
     return tests
 
 CONFIG = {
-    "account": "852138521410",
-    "archiveRepository": "software-combined/SC_Prototypes",
-    "bucket": "scg-prototypes-852138521410",
-    "distributionId": "E1234567890ABC",
-    "domain": "prototypes.softwarecombined.com",
+    "account": "000000000000",
+    "archiveRepository": "example/prototype-archive",
+    "bucket": "synthetic-prototype-bucket",
+    "distributionId": "ESYNTHETIC000000",
+    "domain": "prototypes.example.invalid",
     "expiryDays": 30,
-    "profile": "scg-prototypes",
+    "profile": "synthetic-prototypes",
 }
 class RecordingRunner:
     def __init__(self, status=" M prototypes.json\n"):
@@ -81,7 +81,7 @@ class PrototypeTest(unittest.TestCase):
         (self.site / "assets").mkdir(parents=True)
         (self.site / "index.html").write_text('<!doctype html><link rel="stylesheet" href="assets/app.css"><h1>checkout</h1>\n')
         (self.site / "assets" / "app.css").write_text("body{color:#111}\n")
-        self.repo = self.root / "SC_Prototypes"
+        self.repo = self.root / "prototype-archive"
         (self.repo / ".git").mkdir(parents=True)
         self.previous_pin_path = prototypes.GITLEAKS_PIN_PATH
         prototypes.GITLEAKS_PIN_PATH = self.root / "hook-config.json"
@@ -208,7 +208,7 @@ class PrototypeTest(unittest.TestCase):
     def test_registry_entry_records_the_public_url_and_expiry(self):
         published_at = datetime(2026, 9, 12, 10, 30, tzinfo=timezone.utc)
         entry = prototypes.entry_for("checkout-v2-7f3a", "Checkout v2", CONFIG, published_at, "brent")
-        self.assertEqual(entry["url"], "https://prototypes.softwarecombined.com/checkout-v2-7f3a/")
+        self.assertEqual(entry["url"], "https://prototypes.example.invalid/checkout-v2-7f3a/")
         self.assertEqual(entry["expiresAt"], (published_at + timedelta(days=30)).isoformat(timespec="seconds"))
         registry = {"prototypes": {"checkout-v2-7f3a": entry}}
         prototypes.save_registry(self.repo, registry)
@@ -226,7 +226,7 @@ class PrototypeTest(unittest.TestCase):
         )
         self.assertTrue(result["dryRun"])
         self.assertTrue(all("detect" in command for command in runner.commands), runner.joined())
-        self.assertIn("https://prototypes.softwarecombined.com/checkout-v2-7f3a/", " ".join(printed))
+        self.assertIn("https://prototypes.example.invalid/checkout-v2-7f3a/", " ".join(printed))
         self.assertFalse((self.repo / "prototypes").exists())
         self.assertFalse((self.repo / "prototypes.json").exists())
 
@@ -243,14 +243,14 @@ class PrototypeTest(unittest.TestCase):
         archived = self.repo / "prototypes" / "checkout-v2-7f3a" / "site"
         self.assertTrue((archived / "index.html").is_file())
         self.assertTrue((archived / "assets" / "app.css").is_file())
-        self.assertEqual(result["url"], "https://prototypes.softwarecombined.com/checkout-v2-7f3a/")
+        self.assertEqual(result["url"], "https://prototypes.example.invalid/checkout-v2-7f3a/")
         registry = json.loads((self.repo / "prototypes.json").read_text())
         self.assertEqual(registry["prototypes"]["checkout-v2-7f3a"]["title"], "Checkout v2")
         commands = runner.joined()
         self.assertTrue(any(command.startswith("git -C") and "commit" in command for command in commands))
-        self.assertTrue(any(command.startswith("aws s3 rm --recursive s3://scg-prototypes-852138521410/prototypes/checkout-v2-7f3a/") for command in commands))
+        self.assertTrue(any(command.startswith("aws s3 rm --recursive s3://synthetic-prototype-bucket/prototypes/checkout-v2-7f3a/") for command in commands))
         self.assertTrue(any("cloudfront create-invalidation" in command and "/checkout-v2-7f3a/*" in command for command in commands))
-        self.assertIn("Published https://prototypes.softwarecombined.com/checkout-v2-7f3a/", printed[-1])
+        self.assertIn("Published https://prototypes.example.invalid/checkout-v2-7f3a/", printed[-1])
 
     def test_publish_refuses_an_existing_slug_unless_update_is_requested(self):
         prototypes.save_registry(self.repo, {"prototypes": {"checkout-v2-7f3a": prototypes.entry_for(

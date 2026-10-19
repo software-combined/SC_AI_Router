@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Publish, list and unpublish Software Combined frontend prototypes.
 
-The channel is a private S3 bucket served by CloudFront at
+The configured channel stores each artifact privately and serves it at
 https://prototypes.softwarecombined.com/<slug>/. Publishing copies the artifact
-into the SC_Prototypes archive repository first, so every live URL is
-reproducible from git, then syncs that archived copy to S3 and invalidates the
-slug's CloudFront path.
+into the configured archive first, then uploads that copy and refreshes the
+slug's public path.
 
 Only the standard library is used; AWS and git work is delegated to their CLIs.
 """
@@ -59,20 +58,21 @@ def load_config(path=None) -> dict:
         raise ChannelError(f"channel config not found: {config_path}") from error
     except json.JSONDecodeError as error:
         raise ChannelError(f"channel config is not valid JSON: {config_path}: {error}") from error
-    for key in ("account", "bucket", "distributionId", "domain", "profile", "archiveRepository", "expiryDays"):
+    required = ("account", "bucket", "distributionId", "domain", "profile", "archiveRepository", "expiryDays")
+    for key in required:
         if key not in config:
             raise ChannelError(f"channel config is missing {key}: {config_path}")
-    if not config["distributionId"]:
+    if any(not isinstance(config[key], str) or not config[key].strip() for key in required[:-1]):
         raise ChannelError(
-            "the prototype channel is not deployed yet: channel.json has no distributionId. "
-            "Ask the foundation owner to deploy SC_Infrastructure web-edge-prototype-channel first.",
+            "the prototype channel is not configured; select a complete private config "
+            "with --config or PROTOTYPE_CHANNEL_CONFIG",
         )
     return config
 
 
 def resolve_repo_dir(config: dict, override=None) -> Path:
     configured = override or os.environ.get("PROTOTYPE_CHANNEL_REPO_DIR")
-    return Path(configured).expanduser() if configured else Path.home() / "Documents" / "Github" / "SC_Prototypes"
+    return Path(configured).expanduser() if configured else Path.home() / "Documents" / "Github" / "prototype-archive"
 
 
 def slugify(value: str) -> str:
@@ -190,10 +190,7 @@ def aws(config: dict, args, run=run_command) -> str:
 def assert_account(config: dict, run=run_command) -> None:
     identity = json.loads(aws(config, ["sts", "get-caller-identity"], run=run) or "{}")
     if str(identity.get("Account")) != str(config["account"]):
-        raise ChannelError(
-            f"profile {config['profile']} resolves to account {identity.get('Account')}, "
-            f"expected {config['account']}",
-        )
+        raise ChannelError("the selected AWS profile does not match the configured account")
 
 
 def load_gitleaks_pin():
@@ -493,8 +490,8 @@ def list_prototypes(args, config: dict, out=print, now=None) -> list[dict]:
 
 def parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--config", help="channel config path (default: references/channel.json)")
-    parser.add_argument("--repo-dir", help="local SC_Prototypes clone (default: ~/Documents/Github/SC_Prototypes)")
+    parser.add_argument("--config", help="private channel config path")
+    parser.add_argument("--repo-dir", help="local archive repository clone")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     publish_parser = subparsers.add_parser("publish", help="publish a built static directory")

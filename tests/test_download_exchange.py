@@ -48,7 +48,7 @@ class ExchangeTests(unittest.TestCase):
 
     def test_member_and_explicitly_assigned_resource_tenant_guest_receive_scoped_cookies(self):
         for claims in ({}, {'acct': '1', 'idp': 'https://sts.windows.net/guest-home-tenant/',
-                           'email': 'approved@portfolio.example'}):
+                           'email': 'employee@example.invalid'}):
             with self.subTest(claims=claims):
                 response = exchange.handler(event(**claims), None)
                 self.assertEqual(response['statusCode'], 200)
@@ -85,7 +85,7 @@ class ExchangeTests(unittest.TestCase):
         self.kms.sign.assert_not_called()
 
     def test_email_domain_or_guest_membership_without_role_never_grants_access(self):
-        for claims in ({'email': 'person@softwarecombined.com', 'roles': []},
+        for claims in ({'email': 'employee@example.invalid', 'roles': []},
                        {'acct': '1', 'idp': 'guest-home-tenant', 'roles': []}):
             self.assertEqual(exchange.handler(event(**claims), None)['statusCode'], 403)
         self.kms.sign.assert_not_called()
@@ -134,7 +134,7 @@ class ExchangeTests(unittest.TestCase):
         self.kms.sign.side_effect = RuntimeError('private-debug-payload')
         output = io.StringIO()
         with redirect_stdout(output), redirect_stderr(output):
-            response = exchange.handler(event(email='private-person@example.test'), None)
+            response = exchange.handler(event(email='employee@example.invalid'), None)
         self.assertEqual(response['statusCode'], 503)
         self.assertNotIn('cookies', response)
         self.assertEqual(output.getvalue(), '')
