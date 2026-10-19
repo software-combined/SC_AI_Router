@@ -28,7 +28,7 @@ function execute(browser, name) {vm.runInContext(fs.readFileSync(path.join(root,
 const settled = () => new Promise(resolve => setImmediate(resolve));
 
 (async () => {
-  const template = fs.readFileSync(path.join(__dirname, '../infra/feed.yaml'), 'utf8');
+  const template = fs.readFileSync(path.join(__dirname, '../infra/feed.yaml'), 'utf8').replace(/\r\n/g, '\n');
   const guard = template.split('      FunctionCode: |\n')[1].split('\n  InstallPageHeaders:')[0];
   const edge = vm.createContext({});
   vm.runInContext(guard, edge);

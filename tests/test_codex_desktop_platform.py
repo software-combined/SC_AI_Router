@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
@@ -38,6 +39,7 @@ class SharedPlatformTests(unittest.TestCase):
         self.root = Path(temp.name)
 
     def test_codex_is_found_quit_and_reopened_by_its_own_bundle_id(self):
+        self.enterContext(mock.patch.object(os, 'getuid', return_value=501, create=True))
         app = bundle(self.root / 'ChatGPT.app')
         commands = []
 

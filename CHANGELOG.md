@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Accept canonical local file URLs during Windows source and native setup,
+  including spaces, Unicode and percent signs in the download folder.
+- Recognize Windows client-disconnect errors without treating them as an
+  upstream fault. Preserve hash-pinned runtime notices across Windows checkouts.
+- Preserve model labels and bundled instructions on Windows by reading them
+  as UTF-8, including refreshed model caches.
+- Stop asking for a key again when setup reports that a key is already stored.
+- Treat closing the Windows key window as Cancel; submit only with Save and connect.
+- Keep the native Windows migration fixture alive through slow Task Scheduler
+  calls, and verify the updater process survives independently of its task.
+- Make macOS identity mocks, exact-line-ending expectations and synthetic
+  credential fixtures portable; skip symlink cases only when Windows denies
+  the required privilege.
+- Read source-size checks as UTF-8 so contributor verification works on
+  Windows with its default non-UTF-8 encoding.
+
 ## 1.3.2
 
 - Publish the common setup and repair page independently of native-installer

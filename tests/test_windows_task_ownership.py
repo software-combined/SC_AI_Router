@@ -203,8 +203,10 @@ $null = $s.GetFolder('\').RegisterTaskDefinition($r.name, $d, 4, $r.sid, $null, 
                 mock.patch.object(backend, '_post_shutdown', return_value=False):
             home = Path(tmp)
             _state_file(home)
+            children = []
             for script in ('router_launch.py', 'update_launch.py', 'express_launch.py'):
-                write_launcher(home, script, 180)
+                # Fresh PowerShell processes can make the migration exceed three minutes.
+                write_launcher(home, script, 600)
             service.install_task_launcher(home, Path(__file__).resolve().parents[1])
             def task(name, operation='query', **kwargs):
                 return obj._task_state(name, home, operation, **kwargs)
@@ -227,6 +229,9 @@ $null = $s.GetFolder('\').RegisterTaskDefinition($r.name, $d, 4, $r.sid, $null, 
                         task(name, 'complete', legacy=True)
                 router = task(names[0], legacy=True)['instances']
                 parent = task(names[1], 'disable', legacy=True)['instances']
+                parent_child = NativeChild.capture(home / 'update_launch.alive')
+                children.append(parent_child)
+                parent_child.assert_alive('before-migration')
                 run = obj._run
                 def failed_registration(cmd, **kwargs):
                     request = json.loads(kwargs.get('input', '{}'))
@@ -252,6 +257,7 @@ $null = $s.GetFolder('\').RegisterTaskDefinition($r.name, $d, 4, $r.sid, $null, 
                     self.assertFalse(task(names[1])['pending'])
                     self.assertTrue(task(names[2])['enabled'])
                     self.assertFalse(task(names[2])['pending'])
+                    parent_child.assert_alive('after-migration')
                     self.assertFalse(task(names[1], legacy=True)['enabled'])
                     self.assertEqual(task(names[1], legacy=True)['instances'], parent)
                     heartbeat = home / 'update_launch.alive'
@@ -268,4 +274,4 @@ $null = $s.GetFolder('\').RegisterTaskDefinition($r.name, $d, 4, $r.sid, $null, 
                 obj._run = subprocess.run
                 for gate in home.glob('*.gate'):
                     gate.unlink(missing_ok=True)
-                cleanup(obj._call, names + [name + '-' + sid for name in names])
+                cleanup(obj._call, names + [name + '-' + sid for name in names], children)

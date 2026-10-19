@@ -26,6 +26,10 @@ python3.14 tools/check_policy_scans.py
 All tests run offline; nothing in `tests/` may reach the network or touch a
 real router home.
 
+On Windows, run the checks with Python's `-X utf8` option so repository
+documentation fixtures use their UTF-8 encoding. The Windows encoding
+regressions explicitly disable UTF-8 mode to cover the default runtime.
+
 ## Branches and pull requests
 
 - Fork the repository, branch from `development`, and target `development` for normal

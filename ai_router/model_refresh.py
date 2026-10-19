@@ -42,7 +42,7 @@ def validate(text):
 
 def _read(path):
     try:
-        return Path(path).read_text()
+        return Path(path).read_text(encoding='utf-8')
     except OSError:
         return None
 

@@ -9,13 +9,13 @@ here instead. Plan 158 adds the exact-set and index gates: every page under
 """
 import importlib.util
 import json
-import os
 import re
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+from tests._platform import symlink_or_skip
 from tests.install_fixtures import _patch_attrs, install_mod
 
 
@@ -106,7 +106,7 @@ class HomeReadmeTests(unittest.TestCase):
             home.mkdir()
             victim = Path(tmp) / 'victim.key'
             victim.write_text('key material\n')
-            os.symlink(victim, home / 'README.md.tmp')
+            symlink_or_skip(victim, home / 'README.md.tmp')
             self._install(home, root)
             self.assertEqual(victim.read_text(), 'key material\n')
             self.assertFalse((home / 'README.md.tmp').is_symlink())

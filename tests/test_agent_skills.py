@@ -52,8 +52,8 @@ class AgentSkillsTest(unittest.TestCase):
         self.home = Path(self.tmp.name) / 'home'
         self.enterContext(patch.object(Path, 'home', return_value=self.home))
         self.enterContext(patch.dict('os.environ', {'XDG_CONFIG_HOME': ''}))
-        self.plist = (self.home / 'Library' / 'LaunchAgents' /
-                      (skills.GIT_UPDATER_LABEL + '.plist'))
+        self.enterContext(patch.object(skills.os, 'getuid', return_value=501, create=True))
+        self.plist = self.home / 'Library/LaunchAgents' / (skills.GIT_UPDATER_LABEL + '.plist')
         self.plist.parent.mkdir(parents=True)
         self.plist.write_text('stale schedule')
         self.base = Path(self.tmp.name) / 'scg-agent-plugins'

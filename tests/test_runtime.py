@@ -181,7 +181,7 @@ class LoadStateTests(unittest.TestCase):
             (home / 'openrouter.key').write_text('sk-or\n')
             os.chmod(home / 'openrouter.key', 0o600)
             with mock.patch.dict(os.environ, clear=True), \
-                    mock.patch('ai_router.runtime.ROUTER_HOME', home):
+                    mock.patch('ai_router.runtime.ROUTER_HOME', home), mock.patch('ai_router.winacl.check'):
                 # One provider resolves, so the router boots.
                 self.assertEqual(load_state(Path(path))['token'], TOKEN)
                 # The keyless provider is named, and its own request fails closed.

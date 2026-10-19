@@ -1,0 +1,2 @@
+# Preserve the bytes verified by the runtime component inventory on every OS.
+packaging/RUNTIME-NOTICES.txt text eol=lf

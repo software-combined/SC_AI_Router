@@ -65,7 +65,7 @@ class FeedTests(unittest.TestCase):
             (Path(tmp) / 'ai-router-1.0.0.tar.gz').write_bytes(b'bundle')
             self.assertEqual(
                 svc.sibling_bundle('file://' + str(feed), GITHUB_BUNDLE),
-                'file://' + str(Path(tmp) / 'ai-router-1.0.0.tar.gz'))
+                (Path(tmp) / 'ai-router-1.0.0.tar.gz').as_uri())
             # No sibling: the document's own URL stands, and the origin
             # guard decides it like any other unattended URL.
             other = GITHUB_BUNDLE.replace('1.0.0', '2.0.0')

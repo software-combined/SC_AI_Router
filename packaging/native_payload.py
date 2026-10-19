@@ -110,7 +110,7 @@ def install_arguments(resources, home, state=None, *, choose=False, key=False, r
     doc = metadata(resources)
     python = resources / 'runtime' / doc['runtime_exec']
     source = load('native_controller').launcher_source(home, resources / 'router')
-    feed = ('file://' + str(resources / 'payload/latest.json') if not repair else
+    feed = ((resources / 'payload/latest.json').absolute().as_uri() if not repair else
             load('feed').FEED_URL.replace('/stable/', '/' + load('update_status').channel(home) + '/'))
     args = [str(python), str(source / 'packaging' / 'install.py'),
             '--python', str(python), '--home', str(home),

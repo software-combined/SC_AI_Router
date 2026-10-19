@@ -46,7 +46,7 @@ class AtomicWriteTests(unittest.TestCase):
         with self.assertRaises(mod.ConcurrentChange):
             mod.remove(target, expected='{}\n')
         self.assertTrue(target.exists())
-        mod.remove(target, expected=target.read_text())
+        mod.remove(target, expected=target.read_bytes().decode('utf-8'))
         self.assertFalse(target.exists())
 
     def test_windows_sharing_retry_rechecks_concurrent_changes(self):

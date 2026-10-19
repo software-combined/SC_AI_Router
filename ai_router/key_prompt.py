@@ -123,10 +123,12 @@ def run_window(url, tool_path=None, platform_name=None, which=None, run=None,
             key_dialog.message(tool_path, _confirm_text(payload, clients),
                                platform_name=platform_name, run=run)
             return 0
-        key_dialog.message(tool_path,
-                           payload.get('error') or 'setup failed (%s)' % status,
+        error = payload.get('error') or 'setup failed (%s)' % status
+        if status == 409:
+            error = 'A key is already saved on this computer. Open SCG Router and choose Check setup.'
+        key_dialog.message(tool_path, error,
                            platform_name=platform_name, run=run)
-        if status == 404:
+        if status in (404, 409):
             return 1
 
 

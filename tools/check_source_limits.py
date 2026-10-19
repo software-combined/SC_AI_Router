@@ -20,12 +20,13 @@ HARD = {'ai_router': 400, 'tools': 700, 'tests': 500, 'packaging': 700}
 
 def problems(root):
     """(checked, failures) for one repository root."""
-    baseline = json.loads((root / 'config' / 'source-limits-baseline.json').read_text())
+    baseline = json.loads((root / 'config' / 'source-limits-baseline.json').read_text(encoding='utf-8'))
     checked, failures, over_soft = 0, [], set()
     for area in SOFT:
         for path in sorted((root / area).rglob('*.py')):
             rel = path.relative_to(root).as_posix()
-            count = sum(1 for _ in open(path))
+            with path.open(encoding='utf-8') as source:
+                count = sum(1 for _ in source)
             checked += 1
             if count <= SOFT[area]:
                 continue

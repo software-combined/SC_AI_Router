@@ -214,7 +214,7 @@ class RequestEvidenceTests(unittest.TestCase):
         self.assertEqual((len(sends), facts['outcome']), (1, outcome.CANCELLED))
         attempt, = facts['attempt_evidence']
         self.assertEqual(attempt['failure_phase'], 'write')
-        self.assertEqual(attempt['error_type'], 'BrokenPipeError')
+        self.assertIn(attempt['error_type'], ('BrokenPipeError', 'ConnectionResetError', 'ConnectionAbortedError'))
         self.assertTrue(attempt['committed'], 'Response headers had already reached the client')
         self.assertNotIn(CANARY, json.dumps(logs))
 

@@ -61,10 +61,10 @@ def sibling_bundle(feed, url):
     document's sha256 still verifies it.
     """
     if str(feed).startswith('file://'):
-        candidate = (Path(str(feed)[len('file://'):]).parent
+        candidate = (_file_path(feed).parent
                      / str(url).rsplit('/', 1)[-1])
         if candidate.is_file():
-            return 'file://' + str(candidate)
+            return candidate.absolute().as_uri()
     return url
 
 
@@ -147,6 +147,13 @@ def feed_source(feed_url):
     return 'https'
 
 
+def _file_path(url):
+    path = str(url)[len('file://'):]
+    if str(url).startswith('file:///'):
+        path = urllib.request.url2pathname(path)
+    return Path(path)
+
+
 def fetch(url):
     """Single network entry point; tests inject a fake.
 
@@ -156,7 +163,7 @@ def fetch(url):
     seam and any `service.fetch` patch still resolve.
     """
     if url.startswith('file://'):
-        return Path(url[len('file://'):]).read_bytes()
+        return _file_path(url).read_bytes()
     if not trusted_origin(url):
         raise SystemExit('refusing untrusted feed URL: %s' % _safe_url(url))
     try:
