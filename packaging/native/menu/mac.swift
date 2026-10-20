@@ -10,6 +10,7 @@ func emit(_ action: String) {
 
 final class RouterMenu: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem!
+    var menuOpen = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -93,13 +94,18 @@ final class RouterMenu: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let state = doc["status"] as? String ?? "Status unknown"
         statusItem.button?.toolTip = "SCG Router: " + state
         statusItem.button?.setAccessibilityLabel("SCG Router: " + state)
+        if doc["open_menu"] as? Bool == true && !menuOpen {
+            NSApp.activate(ignoringOtherApps: true)
+            statusItem.button?.performClick(nil)
+        }
     }
 
     @objc func selected(_ sender: NSMenuItem) {
         if let action = sender.representedObject as? String { emit(action) }
     }
 
-    func menuWillOpen(_ menu: NSMenu) { emit("refresh") }
+    func menuWillOpen(_ menu: NSMenu) { menuOpen = true; emit("refresh") }
+    func menuDidClose(_ menu: NSMenu) { menuOpen = false }
 }
 
 let app = NSApplication.shared
