@@ -140,6 +140,21 @@ def _key(resources, home, replace=False, run=subprocess.run):
         raise ValueError('The key window could not finish. Open SCG Router to try again.')
 
 
+def _claude_on_openrouter(home, dialog):
+    """Claude reaches OpenRouter only through Switch Claude, which asks first,
+    restarts Claude and shares saved tasks; it does nothing when already there."""
+    owner = load('claude_desktop_switch')
+    try:
+        if owner.switch(home, target='3p') is not None:
+            return True
+        dialog.message('Claude stays on your Claude subscription. To use OpenRouter models, '
+                       'choose Claude, then OpenRouter, in the SCG Router menu.')
+    except Exception as exc:
+        dialog.message(str(exc) if isinstance(exc, owner.SwitchError)
+                       else 'Claude could not be switched safely. Try again.')
+    return False
+
+
 def _check(resources, home, dialog):
     facts = status(resources, home)
     pending = facts['onboarding']['clients']
@@ -151,7 +166,8 @@ def _check(resources, home, dialog):
         dialog.message('SCG Router is running, but updates need attention.\n\n'
             'Running version: %s\nLatest known for this channel: %s\nLast successful check: %s\n\n'
             'Choose Update or repair to continue.' % (facts.get('running_version') or 'Unknown',
-            update.get('latest_known_version') or 'Unknown', update.get('last_successful_check_at') or 'Unknown'))
+            update.get('latest_known_version') or 'Unknown',
+            load('update_status').display_time(update.get('last_successful_check_at'))))
         return
     if 'claude-desktop' in pending and _missing_assistant(
             ['--clients', 'none', '--desktop'], dialog):
@@ -165,11 +181,15 @@ def _check(resources, home, dialog):
             continue
         label = {'codex': 'Codex', 'claude': 'Claude Code',
                  'claude-desktop': 'Claude desktop'}[client]
+        if client == 'claude-desktop' and not _claude_on_openrouter(home, dialog):
+            return
         if not dialog.confirm(
-                'To finish setup for %s:\n\nQuit and reopen it, then start a new chat. '
+                'To finish setup for %s:\n\n%s'
                 'Choose an OpenRouter model and send a greeting. Use an enabled SC tool, '
                 'such as SC documentation.\n\n'
-                'Choose Continue only after you receive a reply and the SC tool works.' % label):
+                'Choose Continue only after you receive a reply and the SC tool works.'
+                % (label, 'Choose Code and start a new task. ' if client == 'claude-desktop'
+                   else 'Quit and reopen it, then start a new chat. ')):
             return
         if not load('native_readiness').successful_reply(home, progress['started'], client):
             dialog.message('A successful reply has not reached SCG Router yet. '
@@ -202,6 +222,11 @@ def onboard(resources, home, action=None):
         return 0
     doc = metadata(resources)
     if action == 'remove':
+        try:  # Before anything closes: removal refuses while Codex is switched.
+            load('codex_switch_config').refuse_switched(home)
+        except SystemExit as exc:
+            dialog.message(str(exc))
+            return 0
         if not dialog.confirm('Remove SCG Router and restore your assistant settings? '
                               'Your key and saved setup files will remain on this computer.'):
             return 0

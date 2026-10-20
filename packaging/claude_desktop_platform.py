@@ -42,12 +42,14 @@ CLAUDE = App(BUNDLE_ID, ('claude', 'claude-desktop', 'claude.exe'))
 
 
 def dialog_script(message, confirm=False, labels=('Continue', 'Cancel')):
+    # The last label is the safe action; a confirmation's action is the default.
     quote = lambda value: json.dumps(str(value), ensure_ascii=False)
-    buttons = '{%s, %s}' % (quote(labels[1]), quote(labels[0])) if confirm else '{"Cancel"}'
-    safe = quote(labels[1]) if confirm else '"Cancel"'
+    safe = quote(labels[-1])
+    default = quote(labels[0]) if confirm else safe
+    buttons = '{%s, %s}' % (safe, default) if confirm else '{%s}' % safe
     return ('display dialog %s with title %s buttons %s default button %s '
             'cancel button %s with icon (POSIX file %s)'
-            % (quote(message), quote(TITLE), buttons, safe, safe, quote(ICON)))
+            % (quote(message), quote(TITLE), buttons, default, safe, quote(ICON)))
 
 
 def _ps(value):
@@ -75,7 +77,7 @@ def _windows_dialog(message, confirm, labels=('Continue', 'Cancel')):
         % (_ps(ICON), _ps(message), (
             "$b=New-Object System.Windows.Forms.Button;$b.Text=%s;"
             "$b.AutoSize=$true;$b.DialogResult='OK';$r.Controls.Add($b);"
-        ) % _ps(labels[0]) if confirm else '', _ps(labels[1] if confirm else 'Cancel')))
+        ) % _ps(labels[0]) if confirm else '', _ps(labels[-1])))
 
 
 def _run(command, run, timeout=5):
@@ -92,7 +94,7 @@ def _dialog(message, platform_name, confirm, run, tool_path=None, detailed=False
         argv = [tool_path or _dialogs.tool(platform_name) or 'zenity',
                 '--title', TITLE, '--window-icon', str(ICON),
                 '--question' if confirm else '--info', '--text', str(message),
-                '--ok-label', labels[0] if confirm else 'Cancel']
+                '--ok-label', labels[0] if confirm else labels[-1]]
         if confirm:
             argv += ['--cancel-label', labels[1]]
     answer = _run(argv, run, 120)
@@ -107,7 +109,7 @@ def confirm(message, platform_name, run=subprocess.run):
 
 
 def show_message(message, platform_name, run=subprocess.run):
-    return _dialog(message, platform_name, False, run)
+    return _dialog(message, platform_name, False, run, labels=('OK',))
 
 
 def policy_disabled(platform_name, run=subprocess.run, *, profile=None):

@@ -248,8 +248,9 @@ def saved_profile(home, receipts):
 def attach(home, state, receipts, data_dir_override=None, env=None, *, python=None, refresh=False):
     """Attach the desktop gateway without touching first-party state.
 
-    Merges only the four owned entry values and sets the third-party
-    profile's deploymentMode to 3p on first attachment. An owned profile keeps
+    Merges only the four owned entry values. deploymentMode is left alone:
+    without it Claude keeps running on the subscription, and only Switch
+    Claude selects OpenRouter, after sharing saved tasks. An owned profile keeps
     its selected mode on later runs; conflicting effective overrides refuse
     with a redacted message. Records the attachment in the versioned
     receipt. Returns the applied entry path written.
@@ -268,10 +269,8 @@ def attach(home, state, receipts, data_dir_override=None, env=None, *, python=No
         if not same:
             raise SystemExit('Claude is connected using a different profile. '
                              'Detach that connection before choosing another profile.')
-    # Refuse before writing anything: a mode conflict must leave both the
-    # entry and the desktop config untouched.
-    cfg, cfg_path = read_desktop_config(data_dir)
-    previous_mode = cfg.get('deploymentMode')
+    # Refuse before writing anything: a mode conflict must leave the entry untouched.
+    previous_mode = read_desktop_config(data_dir)[0].get('deploymentMode')
     owned = _owned_snapshot(home, data_dir, state, receipts)
     if state.get('claude_mode', 'subscription') == 'none' and not (refresh and owned is not None):
         raise SystemExit('claude_mode is none: re-run with --claude-mode subscription '
@@ -289,10 +288,6 @@ def attach(home, state, receipts, data_dir_override=None, env=None, *, python=No
     entry_path = applied_entry_path(data_dir)
     doc, _, previous = merge_entry(state, entry_path)
     write_json(entry_path, doc)
-    if previous_mode is None:
-        cfg['deploymentMode'] = '3p'
-        write_json(cfg_path if cfg_path is not None
-                   else data_dir / 'claude_desktop_config.json', cfg)
     if owned is not None:
         # Mode switching does not change attachment or the restore authority.
         previous = owned
@@ -325,7 +320,7 @@ def attach_current(args, receipts, write_state, *, python=None):
         state['claude_mode'] = args.claude_mode
         write_state(home, state)
     attach(home, state, receipts, python=python)
-    print('Claude desktop connected; quit and reopen Claude, then choose Code and a model.')
+    print('Claude desktop connected; switch Claude to OpenRouter in the SCG Router menu to use the router.')
     return 0
 
 

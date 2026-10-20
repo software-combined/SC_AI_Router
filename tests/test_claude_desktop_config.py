@@ -137,15 +137,13 @@ class DesktopMergeTests(unittest.TestCase):
             self.assertEqual(out, data_dir / 'configLibrary' / '11111111-2222-4333-8444-555555555555.json')
             self.assertIn('127.0.0.1:1/test-token',
                           _entry(data_dir)['inferenceGatewayBaseUrl'])
-            self.assertEqual(
-                json.loads((data_dir / 'claude_desktop_config.json').read_text()),
-                {'deploymentMode': '3p'})
+            # Claude stays on the subscription until Switch Claude selects OpenRouter.
+            self.assertFalse((data_dir / 'claude_desktop_config.json').exists())
             receipt = json.loads((home / 'activation.json').read_text())
             self.assertIn('claude-desktop', receipt['clients'])
             desktop_config.detach(home, install_mod._codex_config, data_dir_override=data_dir)
             self.assertEqual(_entry(data_dir), {})
-            # The old receipt proves the mode value, not ownership of the file.
-            self.assertEqual(json.loads((data_dir / 'claude_desktop_config.json').read_text()), {})
+            self.assertFalse((data_dir / 'claude_desktop_config.json').exists())
             # Last attachment out removes the receipt itself.
             self.assertFalse((home / 'activation.json').exists())
 

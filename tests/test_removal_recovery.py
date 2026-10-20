@@ -71,7 +71,7 @@ class RemovalRecoveryTests(unittest.TestCase):
         (self.home / 'activation.json').write_text(json.dumps(doc))
         before = self.settings.read_bytes()
         restore = mock.Mock()
-        with self.assertRaisesRegex(SystemExit, 'Open Switch Codex'):
+        with self.assertRaisesRegex(SystemExit, 'switched to OpenRouter only'):
             module('client_removal').remove_all(self.home, self.owner, restore)
         restore.assert_not_called()
         self.assertEqual(self.settings.read_bytes(), before)
@@ -164,6 +164,7 @@ class RemovalRecoveryTests(unittest.TestCase):
         profile = _profile(self.root)
         self.install._desktop_config.attach(self.home, self.state, self.owner, data_dir_override=profile)
         config = profile / 'claude_desktop_config.json'
+        config.write_text('{"deploymentMode":"3p"}')  # Switch Claude selected OpenRouter.
         removal, load = module('client_removal'), self.install._delivery._load
         real = removal._atomic.replace_text
         def fail_mode(path, *args, **kwargs):

@@ -101,7 +101,7 @@ class DesktopManagementTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             with service.install_lock(home), mock.patch.object(control, 'load', side_effect=modules.__getitem__):
-                with self.assertRaisesRegex(RuntimeError, 'operation is in progress'):
+                with self.assertRaisesRegex(RuntimeError, 'SCG Router is busy'):
                     control.execute(home, home, 'codex.open')
             owner._platform.open_app.assert_not_called()
 

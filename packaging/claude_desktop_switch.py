@@ -57,10 +57,11 @@ def attached_profile(home):
             raise ValueError('gateway was changed')
         if entry.get('bootstrapUrl'):
             raise ValueError('managed setup')
-        doc, config = _desktop.read_desktop_config(profile)
-        if config is None or doc.get('deploymentMode') not in DESTINATIONS:
+        doc, _ = _desktop.read_desktop_config(profile)
+        # Without a selection Claude runs on the subscription; attachment leaves it unset.
+        if doc.setdefault('deploymentMode', '1p') not in DESTINATIONS:
             raise ValueError('unknown selection')
-        return config, doc
+        return profile / 'claude_desktop_config.json', doc
     except (OSError, ValueError, TypeError, KeyError, SystemExit) as exc:
         raise SwitchError('Claude is not connected to SCG Router. Run setup again.') from exc
 
@@ -97,14 +98,18 @@ def _initialized(sync, roots):
 def _setup_only(context, current_mode):
     """True when sharing is not set up yet, so a switch may change only the mode.
 
-    Refuses instead when switching away from the subscription while tasks are saved.
+    Refuses instead when switching away from an unidentified subscription while
+    tasks are saved.
     """
-    initialization_only = not _initialized(context[0], context[2])
+    sync, _, roots = context
+    initialization_only = not _initialized(sync, roots)
     # Only the subscription profile can record the sharing binding, so a gateway
     # user must be able to reach it; a subscription user opens a Code task first.
-    if initialization_only and current_mode == '1p' and any(
-            context[0]._records.record_paths(root / store, include_irregular=True)
-            for root in context[2] for store in context[0].STORES):
+    # Claude creates the gateway identity on its first OpenRouter launch, so a
+    # gateway profile that was never opened is set up by switching to it.
+    if (initialization_only and current_mode == '1p' and not _initialized(sync, roots[:1])
+            and any(sync._records.record_paths(root / store, include_irregular=True)
+                    for root in roots for store in sync.STORES)):
         raise SwitchError('Open a Code task in Claude, then try again.')
     return initialization_only
 
@@ -175,8 +180,11 @@ def _run_action(home, *, run, policy_check, action, sync, platform_ops, profile_
         context = _sync_context(home, config.parent, profile_env)
         if policy_check() is not False:
             raise SwitchError('Your organization manages how Claude connects. Contact your administrator.')
-        _setup_only(context, current_mode)  # Refuse while Claude is still open.
-        prompt = 'Switch Claude to %s? Claude will restart after sharing your saved tasks.'
+        setup_only = _setup_only(context, current_mode)  # Refuse while Claude is still open.
+        # The subscription side is identified, so only Claude's first OpenRouter launch is missing.
+        first_gateway = setup_only and mode == '3p' and _initialized(context[0], context[2][:1])
+        prompt = ('Switch Claude to %s? Claude will restart.' if setup_only else
+                  'Switch Claude to %s? Claude will restart after sharing your saved tasks.')
         if not platform_ops.confirm(prompt % DESTINATIONS[mode], sys.platform, run=run):
             return None
         if platform_ops.request_stop(sys.platform, run=run) is not True:
@@ -199,7 +207,11 @@ def _run_action(home, *, run, policy_check, action, sync, platform_ops, profile_
     except (OSError, subprocess.SubprocessError) as exc:
         raise SwitchError('Claude is ready in %s. Open Claude to continue.'
                           % DESTINATIONS[mode]) from exc
-    if initialization_only:
+    if initialization_only and first_gateway:
+        _notice('Claude opened on OpenRouter for the first time, so your saved Code tasks '
+                'were not shared yet. To bring them here, switch Claude to your Claude '
+                'subscription and back.', platform_ops, run)
+    elif initialization_only:
         _notice('Claude opened for setup only. No tasks were shared. Finish '
                 'signing in and open a Code task before switching again.',
                 platform_ops, run)

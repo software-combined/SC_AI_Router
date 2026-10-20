@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## 1.3.6
+
+- Keep Claude desktop on the Claude subscription when you connect it, so the
+  menu shows the connection Claude is really using. Setup then offers Switch
+  Claude, which restarts Claude on OpenRouter. The first switch sets up the
+  OpenRouter profile instead of asking for a Code task that could not help;
+  switching back and forth once more shares your saved Code tasks.
+  Before, connecting selected OpenRouter for the next launch, the menu ticked
+  OpenRouter while Claude still ran on the subscription, and a plain reopen
+  skipped task sharing.
+- Make Continue the default button in confirmation dialogs. Notices that need
+  no decision now show a single OK button instead of Cancel.
+- Keep the Codex and Claude rows in the menu when one status check fails.
+- Stop Remove Router before it closes any app while Codex uses OpenRouter only,
+  and say how to switch back in the menu.
+- Explain an offline update check or a busy router in plain words instead of
+  asking for a repair.
+- Simplify the control window: it lists each assistant's current connection,
+  offers only real changes, and merges duplicate actions. The menu drops the
+  fine-print row, shows the running version only when it differs, offers
+  Restart Router to use the installed version, and shows times without long
+  Windows zone names.
+
 ## 1.3.5
 
 - Remove private environment identifiers and contact details from bundled

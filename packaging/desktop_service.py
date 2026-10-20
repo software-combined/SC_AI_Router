@@ -20,6 +20,6 @@ def restart(args, service, backend):
     # health after TERM alone could accept the process that is still draining.
     backend.install(python, home, state, release, None)
     if not service.wait_version(state, service.current_version(home)):
-        raise SystemExit('SCG Router did not restart. Choose Set up or repair.')
+        raise SystemExit('SCG Router did not restart. Choose Update or repair.')
     print('SCG Router restarted')
     return 0

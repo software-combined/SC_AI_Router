@@ -249,10 +249,10 @@ class SwitchedRefusalTests(unittest.TestCase):
 
             _patch_attrs(self, run=recording)
             with mock.patch.dict(os.environ, fakehome):
-                with self.assertRaisesRegex(SystemExit, 'Open Switch Codex'):
+                with self.assertRaisesRegex(SystemExit, 'switched to OpenRouter only'):
                     install_mod.do_uninstall(
                         install_mod.build_parser().parse_args(['--home', str(home)]))
-                with self.assertRaisesRegex(SystemExit, 'Open Switch Codex'):
+                with self.assertRaisesRegex(SystemExit, 'switched to OpenRouter only'):
                     install_mod.do_install(install_mod.build_parser().parse_args(
                         ['--home', str(home), '--version', '1.0.0']))
             self.assertFalse([cmd for cmd in calls if 'disable.py' in ' '.join(cmd)
@@ -271,7 +271,7 @@ class SwitchedRefusalTests(unittest.TestCase):
             out = io.StringIO()
             with mock.patch.dict(os.environ, dict(fakehome, OPENROUTER_API_KEY='k',
                                                   ROUTER_NO_KEY_WINDOW='1')):
-                with self.assertRaisesRegex(SystemExit, 'Open Switch Codex') as conflict:
+                with self.assertRaisesRegex(SystemExit, 'switched to OpenRouter only') as conflict:
                     with contextlib.redirect_stdout(out):
                         install_mod.do_install(args, _fetch=_static_fetch(latest, blob))
             self.assertIn(switch.SWITCHED_REFUSAL, str(conflict.exception))

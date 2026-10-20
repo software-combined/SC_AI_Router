@@ -148,8 +148,9 @@ router installation, quit Claude normally, paste the [installed-tool path block]
 ```
 
 This attaches only Claude desktop and keeps other attached assistants in place.
-Reopen Claude, choose **Code**, a folder and an OpenRouter model. Send a short greeting
-and check that it replies. Re-running setup preserves an existing connection choice;
+Claude stays on your Claude subscription until you choose **SCG Router → Claude →
+OpenRouter**. Claude then restarts on OpenRouter. The first switch sets up the OpenRouter profile; switch back and forth once to bring your saved Code tasks. Choose **Code**,
+a folder and an OpenRouter model. Send a short greeting and check that it replies. Re-running setup preserves an existing connection choice;
 it does not toggle between subscription and OpenRouter.
 
 **Windows switching is an IT pilot, not a verified staff rollout.** Setup does

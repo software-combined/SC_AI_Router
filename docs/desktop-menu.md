@@ -16,8 +16,10 @@ Choose a destination in that assistant's section:
 | Claude | Claude subscription; OpenRouter |
 
 The checkmark identifies the selected connection. Selecting it again does nothing.
+Connecting Claude leaves it on your Claude subscription, which it is already using.
+Choose **OpenRouter** to switch; setup offers the same switch when you connect Claude.
 Before a change, SCG Router explains the required assistant restart.
-Choose **Cancel** to leave the connection unchanged.
+**Continue** is the default button. Choose **Cancel** to leave the connection unchanged.
 Finish any work the assistant asks you to save before it closes.
 
 SCG Router waits for the assistant to close safely, then changes its connection.
@@ -34,11 +36,13 @@ The tray does not switch named human accounts or sign either subscription out.
 **Running** means the router answered its health check.
 It does not prove that a model has replied in your selected assistant connection.
 Send a new message after switching and check the reply before relying on that connection.
-**Switching…** and **Updating…** identify work in progress.
+**Switching…**, **Opening…**, **Updating…** and **Working…** identify work in progress.
+If a status check fails, the menu shows **Needs attention** and keeps the last known
+connections, so you can still switch or open an assistant.
 Repeated clicks cannot start another menu action while that work runs.
 
 Menu delivery and routing have separate status. A failed menu update keeps the
-previous menu available; use **Set up or repair** to retry delivery.
+previous menu available; use **Update or repair** to retry delivery.
 
 ## Manage the router
 
@@ -48,6 +52,8 @@ Restart lets running replies finish before checking that the service has restart
 Removal restores owned assistant settings before removing the sign-in startup entry.
 
 Use **Updates** to check the available version and install it.
+If the router still runs an older version after an update, choose
+**Restart Router to use version …** to start the installed one.
 Use **Help** for troubleshooting and a redacted support bundle.
 The support command opens the folder containing the bundle so you can locate it.
 
@@ -57,10 +63,15 @@ Repair and updates preserve your choice.
 Open **SCG Router** again to restore access.
 The existing Mac Switch Codex and Switch Claude shortcuts remain recovery entry points.
 
+## Control window
+
+Opening SCG Router while its menu is already running shows a control window.
+Linux desktops without a tray host show the same window.
+It lists each assistant's current connection, then only the changes you can make,
+such as **Claude: switch to OpenRouter**, with the same management actions.
+
 ## Linux desktops without a tray
 
-Opening SCG Router shows a control window when no actual tray host is available.
-It includes the same connection choices and management actions.
 An automatic sign-in start stays quiet when the host is absent.
 Open SCG Router when you need the control window.
 The tray helper retries registration when the host returns.

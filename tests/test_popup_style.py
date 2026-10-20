@@ -7,6 +7,7 @@ pins their shared title, icon and vocabulary.
 import importlib.util
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from ai_router import key_dialog
 
@@ -202,6 +203,24 @@ class PopupStyleTests(unittest.TestCase):
                 for words in ('the chatgpt app (codex)', 'chatgpt subscription',
                               'openrouter models'):
                     self.assertIn(words, message)
+
+    def test_confirmations_default_to_the_action_and_notices_offer_ok(self):
+        spec = importlib.util.spec_from_file_location(
+            'router_claude_desktop_platform', _ROOT / 'packaging' / 'claude_desktop_platform.py')
+        platform = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(platform)
+        self.assertIn('buttons {"Cancel", "Continue"} default button "Continue" cancel button "Cancel"',
+                      platform.dialog_script('Switch Claude to OpenRouter?', True))
+        # Setup progress keeps Cancel: it is the only way to stop setup.
+        self.assertIn('buttons {"Cancel"}', platform.dialog_script('Setting up SCG Router.'))
+        calls = []
+        run = lambda argv, **_: calls.append(argv) or SimpleNamespace(returncode=0, stdout='', stderr='')
+        for name in ('darwin', 'win32', 'linux'):
+            platform.show_message('SCG Router is up to date.', name, run=run)
+        self.assertIn('buttons {"OK"} default button "OK"', calls[0][-1])
+        self.assertIn("$c.Text='OK'", calls[1][-1])
+        self.assertEqual(calls[2][calls[2].index('--ok-label') + 1], 'OK')
+        self.assertNotIn('Cancel', ' '.join(calls[0] + calls[2]))
 
     def test_windows_chooser_lays_every_control_out(self):
         dialog = _dialog()

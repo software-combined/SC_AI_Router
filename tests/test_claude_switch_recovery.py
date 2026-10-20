@@ -1,6 +1,7 @@
 """A gateway user can always reach the subscription, and a refused switch reopens Claude."""
 import itertools
 import json
+import shutil
 import subprocess
 import unittest
 from types import SimpleNamespace
@@ -22,7 +23,11 @@ RUNNING = '10 1 501 Mon Sep 28 10:00:00 2026 S ' + EXE  # ps: pid, parent, user,
 class Platform(launch.FakePlatform):
     def __init__(self, events, opens=True, stopped=True):
         super().__init__(events, stopped=stopped)
-        self.opens, self.messages = opens, []
+        self.opens, self.messages, self.prompts = opens, [], []
+
+    def confirm(self, message, _platform, run=None):
+        self.prompts.append(message)
+        return super().confirm(message, _platform, run)
 
     def open_app(self, _platform, run=None):
         self.events.append('open')
@@ -96,6 +101,28 @@ class SwitchRecoveryTests(unittest.TestCase):
                                     r'^Open a Code task in Claude, then try again\.$'):
             self.switch(Platform(self.events), mock.Mock())
         self.assertEqual((self.mode(), self.events), ('1p', []))
+
+    def test_first_switch_opens_a_never_opened_gateway_profile_for_setup(self):
+        # Found 20/10/2026: once connecting stopped selecting OpenRouter, a subscription
+        # user with saved tasks was told to open a Code task, which could never help:
+        # only Claude's first OpenRouter launch creates the gateway identity.
+        root = fixtures.profile(desktop_config.profile_root(self.env), 'Claude', A1, O1)
+        fixtures.record(root, CODE, A1, O1, 'subscription-task')
+        self.initialized.side_effect = lambda _sync, roots: len(roots) == 1
+        self.config.write_text(json.dumps({'deploymentMode': '1p'}))
+        platform, sync = Platform(self.events), mock.Mock()
+        self.assertEqual(self.switch(platform, sync), '3p')
+        sync.assert_not_called()
+        self.assertEqual((self.mode(), self.events), ('3p', ['confirm', 'stop', 'open']))
+        self.assertNotIn('sharing', platform.prompts[0])  # nothing is shared on this switch
+        self.assertIn('first time', platform.messages[0])
+        # An unidentified subscription with no saved tasks still needs a Code task first.
+        shutil.rmtree(root / CODE)
+        self.initialized.side_effect = lambda _sync, roots: False
+        self.config.write_text(json.dumps({'deploymentMode': '1p'}))
+        platform = Platform(self.events)
+        self.assertEqual(self.switch(platform, sync), '3p')
+        self.assertIn('open a Code task', platform.messages[0])
 
     def test_claude_that_did_not_close_in_time_is_reopened_unchanged(self):
         for opens, suffix in ((True, ''), (False, ' Open Claude to continue.')):

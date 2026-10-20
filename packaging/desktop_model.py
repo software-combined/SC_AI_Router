@@ -46,25 +46,34 @@ def menu(facts, *, busy=None, available=None, checked_update=None):
                         enabled=changing and choice.get('enabled', True),
                         checked=choice['id'] == client['selected'])
                    for choice in client['choices']]
-        options += [item('Selected connection; replies are checked separately', enabled=False),
-                    item('Open ' + client['label'], client['id'] + '.open', enabled=changing)]
+        options += [item('Open ' + client['label'], client['id'] + '.open', enabled=changing)]
         selected = next((c['label'] for c in client['choices']
                          if c['id'] == client['selected']), 'Check setup')
         rows.append(item(client['label'] + ' — ' + selected, children=options))
+    version, running = facts.get('version', 'Unknown'), facts.get('running_version', 'Unknown')
+    updates = [item('Installed version ' + version, enabled=False)]
+    if running != version:
+        # An update the service has not started yet; a restart starts it.
+        updates.append(item('Running version ' + running, enabled=False))
+        if not repair and version != 'Unknown':
+            updates.append(item('Restart Router to use version ' + version + '…', 'router.restart',
+                                enabled=changing))
+    if repair or latest != version:
+        updates.append(item('Latest known ' + update.get('channel', 'stable') + ' version ' + latest,
+                            enabled=False))
+    updates += [
+        item('Last successful check ' + (checked['at'] if checked else update.get('last_successful_check', 'Unknown')), enabled=False)]
+    if repair:
+        updates.append(item('Repair now…', 'setup.resume', enabled=changing))
+    updates.append(item('Check for updates…', 'updates.check', enabled=changing))
+    if available and not repair:
+        updates.append(item('Install update ' + available + '…', 'updates.install', enabled=changing))
     rows += [item(''), item('Manage Router', children=[
         item(label, action, enabled=changing) for action, label in (
             ('setup.status', 'Check setup…'), ('setup.resume', 'Update or repair…'),
             ('setup.add', 'Connect another assistant…'), ('setup.key', 'Replace model key…'),
             ('router.restart', 'Restart Router…'), ('setup.remove', 'Remove Router…'))]),
-        item('Updates', children=[
-            item('Running version ' + facts.get('running_version', 'Unknown'), enabled=False),
-            item('Latest known ' + update.get('channel', 'stable') + ' version ' + latest, enabled=False),
-            item('Last successful check ' + (checked['at'] if checked else update.get('last_successful_check', 'Unknown')), enabled=False),
-            item('Repair now…', 'setup.resume', enabled=changing) if repair else
-            item('Installed version ' + facts.get('version', 'Unknown'), enabled=False),
-            item('Check for updates…', 'updates.check', enabled=changing),
-            item('Install update ' + available + '…' if available else 'No update checked',
-                 'updates.install', enabled=changing and bool(available) and not repair)]),
+        item('Updates', children=updates),
         item('Help', children=[item('Troubleshooting…', 'help.guide', enabled=changing),
                                item('Create support bundle…', 'help.support', enabled=changing)]),
         item(''), item('Start at sign-in', 'startup.toggle', enabled=changing,
@@ -73,12 +82,27 @@ def menu(facts, *, busy=None, available=None, checked_update=None):
     return dict(schema=1, status=status, menu=rows)
 
 
-def actions(rows, prefix=''):
-    """Flatten a snapshot's enabled actions for a native chooser."""
-    result = []
+def chooser(rows):
+    """(details, actions) for the control window, which has no submenus.
+
+    A connection's current choice is a detail, not an action: choosing it does nothing.
+    An action offered twice keeps its first place and its later, more specific label.
+    """
+    details, options = [], {}
     for row in rows:
-        if row.get('children'):
-            result.extend(actions(row['children'], row['label'] + ': '))
-        elif row.get('action') and row.get('enabled'):
-            result.append((row['action'], prefix + ('✓ ' if row.get('checked') else '') + row['label']))
-    return result
+        children = row['children']
+        client = bool(children) and (children[0]['action'] or '').startswith(('codex.', 'claude.'))
+        if client:
+            details.append(row['label'].replace(' — ', ': ', 1))
+        for child in children or [row]:
+            action, label = child['action'], child['label']
+            if not action:
+                if label and not client:
+                    details.append(label)
+            elif child['enabled'] and action != 'menu.quit' and not (client and child['checked']):
+                if action == 'startup.toggle':
+                    label = 'Turn %s start at sign-in' % ('off' if child['checked'] else 'on')
+                elif client and not action.endswith('.open'):
+                    label = '%s: switch to %s' % (row['label'].split(' — ')[0], label.rstrip('…'))
+                options[action] = label
+    return details, list(options.items())

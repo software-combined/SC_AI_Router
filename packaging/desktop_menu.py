@@ -39,14 +39,9 @@ def fallback(home, resources):
             facts = control.snapshot(home)
         except (Exception, SystemExit):
             facts = dict(status='Status unknown', clients=[], version='Unknown')
-        rows = model.menu(facts, checked_update=checked_update)['menu']
-        options = model.actions(rows)
-        details = [row['label'] for row in rows
-                   if row['label'] and not row['children'] and not row['action']]
-        details += [child['label'] for row in rows if row['label'] == 'Updates'
-                    for child in row['children'] if not child['action']]
+        details, options = model.chooser(model.menu(facts, checked_update=checked_update)['menu'])
         action = load('native_dialog').choose('\n'.join(details), options)
-        if action is None or action == 'menu.quit':
+        if action is None:
             return dict(outcome='done')
         result = _control(home, resources, action)
         checked_update = result.get('checked_update', checked_update)
@@ -112,6 +107,9 @@ def run_menu(home, resources, *, autostart=False):
                             answer = job.result()
                             if busy:
                                 checked_update = answer.get('checked_update', checked_update)
+                            elif answer.get('outcome') == 'failed':
+                                # Keep the last known rows so connections stay reachable.
+                                facts['status'] = 'Needs attention'
                             else:
                                 facts = answer
                         except (Exception, SystemExit):
@@ -152,7 +150,8 @@ def run_menu(home, resources, *, autostart=False):
                     elif action == 'menu.quit' and not busy:
                         break
                     elif action in control.ACTIONS and not busy:
-                        busy = ('Switching…' if action.startswith(('codex.', 'claude.')) else
+                        busy = ('Opening…' if action.endswith('.open') else
+                                'Switching…' if action.startswith(('codex.', 'claude.')) else
                                 'Updating…' if action == 'updates.install' else 'Working…')
                         job = worker.submit(_control, home, resources, action)
             finally:
