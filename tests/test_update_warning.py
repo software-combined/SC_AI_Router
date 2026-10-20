@@ -224,7 +224,8 @@ class WarningMenuTests(unittest.TestCase):
         control = mock.Mock()
         control.snapshot.return_value = self.facts()
         dialog.choose.return_value = None
-        owners = dict(desktop_model=model, desktop_control=control, native_dialog=dialog)
+        owners = dict(desktop_model=model, desktop_control=control, native_dialog=dialog,
+                      native_shortcuts=module('native_shortcuts'))
         with mock.patch.object(menu, 'load', side_effect=owners.__getitem__):
             menu.fallback(Path('/synthetic/home'), Path('/synthetic/resources'))
         text, choices = dialog.choose.call_args.args

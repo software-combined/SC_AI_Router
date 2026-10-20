@@ -205,6 +205,39 @@ def _check(resources, home, dialog):
                    'Setup is saved. Open SCG Router and choose Check setup to finish.')
 
 
+def _remove(resources, home, dialog, doc):
+    try:  # Before anything closes: removal refuses while Codex is switched.
+        load('codex_switch_config').refuse_switched(home)
+    except SystemExit as exc:
+        dialog.message(str(exc))
+        return 0
+    if not dialog.confirm('Remove SCG Router and restore your assistant settings? '
+                          'Your key and saved settings will stay on this computer.'):
+        return 0
+    clients = load('codex_config').read_receipt(home).get('clients', {})
+    if not load('repair_ui').close_assistants(home, removing=True):
+        return 0
+    python = resources / 'runtime' / doc['runtime_exec']
+    source = load('native_controller').launcher_source(home, resources / 'router')
+    with dialog.Progress('Removing SCG Router. If an update is running, removal waits for it '
+                         'to finish. A message appears when removal is done.', button='OK'):
+        result = subprocess.run([str(python), str(source / 'packaging/install.py'), '--home', str(home),
+                                 '--uninstall'], capture_output=True, text=True, timeout=600,
+                                env=environment(resources))
+    if 'deferred:' in (result.stdout or ''):
+        dialog.message('SCG Router is still updating, so nothing was removed. '
+                       'Try again in a few minutes.')
+        return 1
+    if not _succeeded(result):
+        dialog.message('SCG Router could not be removed safely. Contact Software Combined IT.')
+        return result.returncode or 1
+    reopen = [label for name, label in (('codex', 'Codex'), ('claude', 'Claude Code')) if name in clients]
+    finish = ' Quit and reopen %s to finish.' % ' and '.join(reopen) if reopen else ''
+    dialog.message('SCG Router was removed.%s\n\nYour model key and settings stay in %s, so setting '
+                   'up SCG Router again keeps them. Delete that folder to remove them.' % (finish, home))
+    return 0
+
+
 def onboard(resources, home, action=None):
     dialog = load('native_dialog')
     existing = (home / 'current').exists() or (home / 'current').is_symlink()
@@ -222,25 +255,7 @@ def onboard(resources, home, action=None):
         return 0
     doc = metadata(resources)
     if action == 'remove':
-        try:  # Before anything closes: removal refuses while Codex is switched.
-            load('codex_switch_config').refuse_switched(home)
-        except SystemExit as exc:
-            dialog.message(str(exc))
-            return 0
-        if not dialog.confirm('Remove SCG Router and restore your assistant settings? '
-                              'Your key and saved setup files will remain on this computer.'):
-            return 0
-        python = resources / 'runtime' / doc['runtime_exec']
-        if not load('repair_ui').close_assistants(home, removing=True):
-            return 0
-        source = load('native_controller').launcher_source(home, resources / 'router')
-        result = subprocess.run([str(python), str(source / 'packaging/install.py'),
-                                 '--home', str(home), '--uninstall'], capture_output=True,
-                                timeout=300, env=environment(resources))
-        removed = _succeeded(result)
-        dialog.message('SCG Router was removed.' if removed else
-                       'SCG Router could not be removed safely. Contact Software Combined IT.')
-        return 0 if removed else result.returncode or 1
+        return _remove(resources, home, dialog, doc)
     flags = _select(dialog) if not existing or action == 'add' else ['--repair']
     if flags is None or ('--clients' in flags and _missing_assistant(flags, dialog)):
         return 0

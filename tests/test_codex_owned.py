@@ -227,7 +227,7 @@ class CodexOwnershipTests(unittest.TestCase):
                 mock.patch.object(install_mod._svc, 'run', invoke), \
                 mock.patch.object(install_mod, 'platform_backend', return_value=mock.Mock()), \
                 mock.patch.object(install_mod._delivery, '_load', side_effect=lambda name:
-                    mock.Mock() if name in ('desktop_startup', 'claude_profile_hook') else load(name)), \
+                    mock.Mock() if name in ('native_shortcuts', 'claude_profile_hook') else load(name)), \
                 mock.patch.dict(os.environ, HOME=str(self.root / 'user'), PATH='/usr/bin:/bin'), \
                 contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(install_mod.do_uninstall(args), 0)

@@ -49,7 +49,9 @@ previous menu available; use **Update or repair** to retry delivery.
 **Manage Router** provides setup checks, repair, assistant attachment, key replacement,
 safe restart and removal. These commands use the same owners as the existing setup tools.
 Restart lets running replies finish before checking that the service has restarted.
-Removal restores owned assistant settings before removing the sign-in startup entry.
+Removal restores owned assistant settings, then closes the menu and removes its
+sign-in entry. See [uninstall](operations.md#uninstall) for what stays open and
+what stays on the computer. After removal, opening SCG Router shows setup again.
 
 Use **Updates** to check the available version and install it.
 If the router still runs an older version after an update, choose

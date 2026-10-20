@@ -44,7 +44,7 @@ class RemovalRecoveryTests(unittest.TestCase):
             self.addCleanup(patcher.stop)
         load = self.install._delivery._load
         patcher = mock.patch.object(self.install._delivery, '_load', side_effect=lambda name:
-            mock.Mock() if name in ('desktop_startup', 'claude_profile_hook') else load(name))
+            mock.Mock() if name in ('native_shortcuts', 'claude_profile_hook') else load(name))
         patcher.start()
         self.addCleanup(patcher.stop)
 

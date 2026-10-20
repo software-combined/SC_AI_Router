@@ -33,8 +33,9 @@ def _control(home, resources, action=None):
 def fallback(home, resources):
     """The same action IDs, including profile choices, when no tray host is available."""
     model, control = load('desktop_model'), load('desktop_control')
+    removed = Path(home) / load('native_shortcuts').REMOVED
     checked_update = None
-    while True:
+    while not removed.exists():
         try:
             facts = control.snapshot(home)
         except (Exception, SystemExit):
@@ -45,6 +46,7 @@ def fallback(home, resources):
             return dict(outcome='done')
         result = _control(home, resources, action)
         checked_update = result.get('checked_update', checked_update)
+    return dict(outcome='done')
 
 
 def _events(stream, events):
@@ -73,6 +75,9 @@ def session_lock():
 
 def run_menu(home, resources, *, autostart=False):
     control, model = load('desktop_control'), load('desktop_model')
+    removed = Path(home) / load('native_shortcuts').REMOVED
+    if removed.exists():
+        return 0
     helper = resources / 'control' / ('scg-router-menu.exe' if os.name == 'nt' else 'scg-router-menu')
     if not helper.is_file():
         if not autostart:
@@ -101,7 +106,8 @@ def run_menu(home, resources, *, autostart=False):
         last_doc, reload_menu, needs_fallback = None, False, False
         with ThreadPoolExecutor(max_workers=1) as worker:
             try:
-                while shell.poll() is None:
+                # A successful removal closes the menu, even mid-action or with a submenu open.
+                while shell.poll() is None and not removed.exists():
                     if job and job.done():
                         try:
                             answer = job.result()
