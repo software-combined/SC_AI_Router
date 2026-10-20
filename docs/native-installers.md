@@ -28,9 +28,8 @@ The publisher uploads immutable packages and signed `SHA256SUMS` first.
 It changes the channel's download list last. It refuses a distribution without
 public access for both installer files and download lists.
 
-Share the download address `https://hub.softwarecombined.com/router`.
-It redirects to the page at `https://dist.softwarecombined.com/install/`,
-where the installer files and setup scripts stay.
+The permanent download address is `https://dist.softwarecombined.com/install/`.
+Share the short link `https://hub.softwarecombined.com/router`, which redirects here.
 The page uses Apple, Microsoft and Linux logos with clear platform labels.
 Each platform shows its published processor alternatives, or says no installer is ready.
 Setup scripts appear only in the page's advanced section for IT.

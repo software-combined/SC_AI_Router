@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 1.3.8
+
+- Update the warning-window test fixture for the shared window lock, so native
+  installer checks exercise the same controls as the released app.
+
+## 1.3.7
+
+- Reopen the existing Mac menu when SCG Router is already running, instead of
+  opening another control window. Control windows now run one action and close,
+  use Run action and Close buttons, and fit Mac choices to their labels.
+- Keep one control window per session on every platform. Fit Windows action
+  lists to their labels and show more choices without scrolling. Check setup
+  now asks before entering the setup wizard, which may restart assistants.
+  Keep the working control window available if a menu update is incomplete.
+
+- Point the setup and repair links in the README, guides and router skill to
+  the short link `https://hub.softwarecombined.com/router`. It opens the same
+  setup page.
+
 ## 1.3.6
 
 - Keep Claude desktop on the Claude subscription when you connect it, so the

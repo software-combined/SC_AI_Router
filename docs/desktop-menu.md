@@ -2,6 +2,8 @@
 
 Open **SCG Router** from your applications to access its permanent controls.
 On Mac, select its menu bar icon. On Windows and Linux, select its tray icon.
+Reopening the Mac app opens its existing menu without creating another window.
+If a menu update is incomplete, the control window stays available instead.
 Windows decides whether the icon sits directly on the taskbar or in its overflow area.
 You can change that choice in Windows settings.
 
@@ -67,10 +69,16 @@ The existing Mac Switch Codex and Switch Claude shortcuts remain recovery entry 
 
 ## Control window
 
-Opening SCG Router while its menu is already running shows a control window.
+On Windows and Linux, opening SCG Router while its menu is running shows a control window.
 Linux desktops without a tray host show the same window.
 It lists each assistant's current connection, then only the changes you can make,
 such as **Claude: switch to OpenRouter**, with the same management actions.
+Choose **Run action** to run the selected action once, or **Close** to leave.
+The window closes after the action; reopen SCG Router for another action.
+Only one control window opens per session. Windows sizes the window and list to
+fit their content; unusually long choices can also scroll horizontally.
+**Check setup** reports when setup is complete. If setup is unfinished, it offers
+**Finish setup** or **Cancel** before starting the wizard or restarting an assistant.
 
 ## Linux desktops without a tray
 
