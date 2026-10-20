@@ -27,9 +27,9 @@
 <p id="status" class="status" role="status" aria-live="polite">Checking available downloads…</p>
 <div id="downloads">
 <div id="packages">
-<section class="system"><img src="apple.svg" alt="" width="30" height="30"><h3>macOS</h3><a class="package script" href="/install/bootstrap.sh" download aria-label="Download setup script for macOS">Setup and repair script</a></section>
-<section class="system"><img src="microsoft.svg" alt="" width="30" height="30"><h3>Windows</h3><a class="package script" href="/install/bootstrap.ps1" download aria-label="Download setup script for Windows">Setup and repair script</a></section>
-<section class="system"><img src="linux.svg" alt="" width="30" height="30"><h3>Linux</h3><a class="package script" href="/install/bootstrap.sh" download aria-label="Download setup script for Linux">Setup and repair script</a></section>
+<section class="system"><img src="apple.svg" alt="" width="30" height="30"><h3>macOS</h3><span class="package script pending">Checking…</span></section>
+<section class="system"><img src="microsoft.svg" alt="" width="30" height="30"><h3>Windows</h3><span class="package script pending">Checking…</span></section>
+<section class="system"><img src="linux.svg" alt="" width="30" height="30"><h3>Linux</h3><span class="package script pending">Checking…</span></section>
 </div>
 <p id="recommendation" class="version"></p>
 <p id="verification" class="verification" hidden><a id="checksums">Checksums</a><span aria-hidden="true"> · </span><a id="signature">Signature</a></p>
@@ -48,8 +48,8 @@
 </section>
 <div class="support">
 <details><summary>Already have SCG Router?</summary><p>Run the current setup once and choose <strong>Update or repair</strong>. Your key, settings and tools stay in place. You can delete the download after setup.</p></details>
-<details><summary>Other setup options</summary><p>For a platform without a listed installer, or an older installation needing repair, use the current setup script: <a href="/install/bootstrap.ps1" download>Windows</a> or <a href="/install/bootstrap.sh" download>macOS and Linux</a>.</p><p>These scripts use the stable release for a new installation. An existing installation keeps its chosen update channel.</p></details>
-<details><summary>If your device blocks the installer</summary><p>The installer is unsigned. Download it only from this page and follow your organisation’s device policy.</p><p>On a Mac, open the DMG and then <strong>Install SCG Router</strong>. If macOS blocks it, use System Settings → Privacy &amp; Security to approve the app. Contact IT if your device does not allow this.</p><p>On Windows, open the installer. Contact IT if an unknown-publisher warning or device policy blocks it. Do not turn off device protection.</p></details>
+<details><summary>Advanced: setup scripts for IT</summary><p>For a platform without a listed installer, or an older installation needing repair, IT can use the current setup script: <a href="/install/bootstrap.ps1" download>Windows</a> or <a href="/install/bootstrap.sh" download>macOS and Linux</a>.</p><p>These scripts use the stable release for a new installation. An existing installation keeps its chosen update channel.</p></details>
+<details><summary>If your device blocks the installer</summary><p>The installers are not signed yet, so your computer asks once before opening them. Download them only from this page, follow your organisation’s device policy and never turn off device protection.</p><p><strong>Mac:</strong> open the DMG, then <strong>Install SCG Router</strong>. If macOS says it was not opened, choose <strong>Done</strong>. Open System Settings → Privacy &amp; Security, scroll down, choose <strong>Open Anyway</strong> next to SCG Router and enter your Mac password.</p><p><strong>Windows:</strong> if Windows shows “Windows protected your PC”, choose <strong>More info</strong>. Check that the file name starts with SCG-Router-Installer, then choose <strong>Run anyway</strong>.</p><p><strong>Linux:</strong> open the AppImage’s properties, allow it to run as a program, then open it.</p><p>Contact Software Combined IT if your device does not allow these steps.</p></details>
 </div>
 </main>
 <footer><span>Software Combined Group</span><span>Need a hand? Contact Software Combined IT.</span><a href="https://github.com/software-combined/SC_AI_Router">View source</a></footer>

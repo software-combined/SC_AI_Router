@@ -77,9 +77,19 @@ final class RouterMenu: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func update(_ doc: [String: Any]) {
         guard let rows = doc["menu"] as? [[String: Any]] else { return }
-        let menu = build(rows)
-        menu.delegate = self
-        statusItem.menu = menu
+        let fresh = build(rows)
+        if let menu = statusItem.menu {
+            // Replace the items in place: a menu opened before the refresh reply
+            // shows the new state at once instead of on the next opening.
+            menu.removeAllItems()
+            for item in fresh.items {
+                fresh.removeItem(item)
+                menu.addItem(item)
+            }
+        } else {
+            fresh.delegate = self
+            statusItem.menu = fresh
+        }
         let state = doc["status"] as? String ?? "Status unknown"
         statusItem.button?.toolTip = "SCG Router: " + state
         statusItem.button?.setAccessibilityLabel("SCG Router: " + state)

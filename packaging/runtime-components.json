@@ -6,7 +6,7 @@
     "sha256": "b739831dc701afa9b3f2de5f39c7ed82dd79859c3ff2c04c521d71ca279bf97a"
   },
   "notice_file": "packaging/RUNTIME-NOTICES.txt",
-  "notice_sha256": "9e9a45338f585c920496728f96a17427489f2afb7f39e7fa1b415a69d5eea7e7",
+  "notice_sha256": "588b035be5812ec9064614bd054e66513661074261635a5dac2cce8c4d748b03",
   "notice_sections": {
     "LICENSE.bdb.txt": "3bdff06e69991c94664f2ef5c5f8096f60b7dbec071756ea6cc26b445e06ec5b",
     "LICENSE.bzip2.txt": "1f38bbc7caacafd65169276d759c0d88c991b753b643ce35d0e45ea1971dd441",
@@ -1140,7 +1140,7 @@
   ],
   "release_conditions": {
     "linux_db_source": "Publish the clean application source companion and retain exact Berkeley DB, CPython and build source locations; unmodified upstream runtime.",
-    "windows_crt": "Unresolved distributor Microsoft licence eligibility; runtime binaries are outside the Python-free application bundle.",
+    "windows_crt": "Owner-accepted basis (20 October 2026): unmodified Visual C++ runtime DLLs ship only inside the runtime, under Visual Studio Community 2022 Distributable Code terms for this OSI-licensed project, with end users accepting protective terms on both install paths; see docs/runtime-licenses.md. Runtime binaries are outside the Python-free application bundle.",
     "scope": "Technical inventory and supplied notices; no assertion of universal legal clearance."
   }
 }

@@ -61,23 +61,28 @@ def confirm_result(text, home=None, run=subprocess.run, *, labels=('Continue', '
 
 
 class Progress:
-    """Keep Cancel available without terminating an in-progress service swap."""
-    def __init__(self):
+    """Keep Cancel available without terminating an in-progress service swap.
+
+    Removal passes an OK button instead: closing the window never stops removal.
+    """
+    def __init__(self, text=None, button='Cancel'):
         self.process = None
         self.cancelled = False
+        self.text = text or ('Setting up SCG Router. This can take a few minutes.\n\n'
+                             'Cancel closes setup after the current step finishes.')
+        self.button = button
 
     def __enter__(self):
-        text = ('Setting up SCG Router. This can take a few minutes.\n\n'
-                'Cancel closes setup after the current step finishes.')
+        text, labels = self.text, (self.button,)
         if sys.platform == 'darwin':
-            args = ['/usr/bin/osascript', '-e', platform.dialog_script(text)]
+            args = ['/usr/bin/osascript', '-e', platform.dialog_script(text, labels=labels)]
         elif sys.platform == 'win32':
             args = ['powershell', '-NoProfile', '-WindowStyle', 'Hidden',
-                    '-Command', platform._windows_dialog(text, False)]
+                    '-Command', platform._windows_dialog(text, False, labels)]
         else:
             args = [dialog.tool(), '--progress', '--pulsate', '--auto-close',
                     '--title=' + TITLE, '--window-icon=' + str(ICON),
-                    '--text=' + text, '--cancel-label=Cancel']
+                    '--text=' + text, '--cancel-label=' + self.button]
         self.process = subprocess.Popen(args, stdout=subprocess.DEVNULL,
                                         stderr=subprocess.DEVNULL, stdin=subprocess.PIPE)
         return self

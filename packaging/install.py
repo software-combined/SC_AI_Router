@@ -570,7 +570,7 @@ def do_uninstall(args):
     if _codex_config.read_receipt(home).get('clients'):
         raise SystemExit('Attachments remain; services left running. Retry removal.')
     backend.uninstall(home)
-    _delivery._load('desktop_startup').remove(home)
+    _delivery._load('native_shortcuts').remove(home)  # also closes the menu
     print(f'uninstalled services; {home} left in place for the operator to delete')
     return 0
 
@@ -680,13 +680,12 @@ def main(argv=None):
     # Before the lock: a host with no service manager must be refused
     # without leaving a router home behind.
     backend.check(home)
-    with install_lock(home) as held:
+    with install_lock(home, wait=_svc.UNINSTALL_WAIT_S if args.uninstall else 0) as held:
         if not held:
-            # A scheduled pass and a manual run can fire at the same moment,
-            # and both would swap `current`, rewrite both plists and reload
-            # the same service. Second one out: the winner has this covered.
+            # A scheduled pass and a manual run can fire together; the winner has this
+            # covered. Removal waits for it instead, and fails if it is still running.
             print('deferred: another router operation is in progress')
-            return 0
+            return 1 if args.uninstall else 0
         require_live_home(home, 'this action')
         rc = action(args)
         if rc == 0 and action is do_install:

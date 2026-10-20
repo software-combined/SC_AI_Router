@@ -93,6 +93,7 @@ def windows(resources, out, version, *, iscc='ISCC.exe'):
             '@OUTPUT@': str(tmp.resolve()),
             '@VERSION@': version,
             '@ICON@': str((resources / 'router-icon.ico').resolve()),
+            '@TERMS@': str((HERE / 'windows-runtime-terms.txt').resolve()),
         }
         for token, value in fields.items():
             if '"' in value or '\n' in value:

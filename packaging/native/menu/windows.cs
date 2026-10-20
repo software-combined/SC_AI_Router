@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Web.Script.Serialization;
@@ -24,8 +25,13 @@ internal sealed class RouterMenu : ApplicationContext {
         icon.Text = "SCG Router";
         icon.Visible = true;
         icon.MouseClick += (s, e) => {
-            if (e.Button == MouseButtons.Left && icon.ContextMenuStrip != null)
-                icon.ContextMenuStrip.Show(Cursor.Position);
+            if (e.Button != MouseButtons.Left || icon.ContextMenuStrip == null) return;
+            // Take the right-click path: NotifyIcon makes its window the foreground
+            // first, so clicking elsewhere or pressing Escape dismisses the menu.
+            var show = typeof(NotifyIcon).GetMethod("ShowContextMenu",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            if (show != null) show.Invoke(icon, null);
+            else icon.ContextMenuStrip.Show(Cursor.Position);
         };
         SystemEvents.UserPreferenceChanged += PreferencesChanged;
         var reader = new Thread(ReadInput) { IsBackground = true };
@@ -99,18 +105,28 @@ internal sealed class RouterMenu : ApplicationContext {
     }
 
     void Update(Dictionary<string, object> doc) {
-        var menu = new ContextMenuStrip();
+        var menu = icon.ContextMenuStrip;
+        if (menu == null) {
+            menu = new ContextMenuStrip();
+            menu.Opening += (s, e) => Emit("refresh");
+            icon.ContextMenuStrip = menu;
+        }
+        // One strip for the helper's lifetime, refreshed in place: an open menu shows
+        // the new state at once, and no popup is disposed while it is showing.
+        var previous = new ToolStripItem[menu.Items.Count];
+        menu.Items.CopyTo(previous, 0);
+        menu.SuspendLayout();
+        menu.Items.Clear();
         menu.Items.AddRange(Build((object[])doc["menu"]));
-        menu.Opening += (s, e) => Emit("refresh");
-        var previous = icon.ContextMenuStrip;
-        icon.ContextMenuStrip = menu;
-        if (previous != null) previous.Dispose();
+        menu.ResumeLayout();
+        foreach (var item in previous) item.Dispose();
         string text = "SCG Router: " + Convert.ToString(doc["status"]);
         icon.Text = text.Substring(0, Math.Min(text.Length, 63));
     }
 
     protected override void ExitThreadCore() {
         SystemEvents.UserPreferenceChanged -= PreferencesChanged;
+        if (icon.ContextMenuStrip != null) icon.ContextMenuStrip.Close();
         icon.Visible = false;
         icon.Dispose();
         dispatcher.Dispose();

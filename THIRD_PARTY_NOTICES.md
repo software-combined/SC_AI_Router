@@ -79,5 +79,5 @@ verifies all five exact archives and includes additional native notices in
 [RUNTIME-NOTICES.txt](packaging/RUNTIME-NOTICES.txt), with component licences,
 source locations and hashes in [the native inventory](packaging/runtime-components.json).
 See [runtime licences](docs/runtime-licenses.md) for the Linux source-companion
-requirement and the unresolved Windows distributor licence condition.
+requirement and the Windows Visual C++ runtime basis.
 The application bundle does not contain runtime binaries.

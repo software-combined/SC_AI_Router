@@ -24,6 +24,21 @@
   fine-print row, shows the running version only when it differs, offers
   Restart Router to use the installed version, and shows times without long
   Windows zone names.
+- Make removal finish cleanly. Settings → Apps and the Start menu now list
+  SCG Router with an Uninstall action on Windows. Removal waits for a running
+  update instead of reporting success without removing anything, keeps Codex
+  and terminals open, closes Claude only while it uses OpenRouter, then closes
+  the SCG Router menu and removes its sign-in and Start menu entries. The final
+  message says which assistant to reopen and that the key and settings stay.
+- Dismiss the Windows tray menu when you click elsewhere or press Escape, and
+  never leave a stale popup behind when the menu updates or closes.
+- Offer the macOS, Windows and Linux installers as the download, with clear
+  steps for the one-time unsigned-app prompt. When no installer is ready for
+  the current release, say so; setup scripts stay in an IT section.
+- Ask Windows users to accept short terms for Microsoft's Visual C++ runtime
+  files before they are installed, in both the installer and the setup script,
+  as Microsoft's licence requires. Record the owner-approved terms and the
+  basis for shipping those files so the Windows installer can be published.
 
 ## 1.3.5
 

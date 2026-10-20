@@ -84,6 +84,7 @@ LABEL = _launchd.LABEL
 UPDATE_LABEL = _launchd.UPDATE_LABEL
 FEED_URL = _feed.FEED_URL
 MIN_PYTHON = (3, 14)
+UNINSTALL_WAIT_S = 300  # the longest removal waits for a running update
 
 # Feed routing lives in feed.py; these are the names its callers read here.
 trusted_origin = _feed.trusted_origin
@@ -290,14 +291,13 @@ def require_live_home(home, action):
 
 
 @contextlib.contextmanager
-def install_lock(home, name='install.lock'):
-    """Serialise installs on one router home. Yields False when one is running.
+def install_lock(home, name='install.lock', wait=0):
+    """Serialise installs on one router home. Yields False when one is still
+    running after `wait` seconds (removal waits for a running update).
 
-    The scheduled updater and a manual run fire independently, and both swap
-    `current`, rewrite both plists and reload the same launchd label. The lock
-    is advisory and held on an open descriptor, so the OS releases it when the
-    holder exits and a killed installer never leaves one behind for an
-    operator to clear.
+    The scheduled updater and a manual run both swap `current`, rewrite both
+    plists and reload the same launchd label. The lock is advisory and held on
+    an open descriptor, so the OS releases it when the holder exits.
     """
     path = Path(home)
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -309,14 +309,17 @@ def install_lock(home, name='install.lock'):
         return
     handle = os.open(path / name, os.O_RDWR | os.O_CREAT, 0o600)
     try:
-        try:
-            if fcntl is not None:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            else:
-                msvcrt.locking(handle, msvcrt.LK_NBLCK, 1)
-        except OSError:
-            yield False
-            return
+        deadline = time.monotonic() + wait
+        while True:
+            try:
+                (fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB) if fcntl is not None
+                 else msvcrt.locking(handle, msvcrt.LK_NBLCK, 1))
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    yield False
+                    return
+                time.sleep(1)
         yield True
     finally:
         os.close(handle)

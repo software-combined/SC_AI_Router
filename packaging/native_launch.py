@@ -12,7 +12,8 @@ if not name or Path(name).name != name or (home / 'setup' / name).is_symlink():
 resources = home / 'setup' / name
 entry_name = 'native_setup.py'
 helper = resources / 'control' / ('scg-router-menu.exe' if sys.platform == 'win32' else 'scg-router-menu')
-if helper.is_file() and not sys.argv[1:]:
+# native_shortcuts.REMOVED: after removal, SCG Router opens setup instead of the menu.
+if helper.is_file() and not sys.argv[1:] and not (home / '.router-removed').exists():
     entry_name = 'desktop_menu.py'
 source = resources / 'router'
 try:
