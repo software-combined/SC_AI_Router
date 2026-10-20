@@ -29,6 +29,7 @@ It changes the channel's download list last. It refuses a distribution without
 public access for both installer files and download lists.
 
 The permanent download address is `https://dist.softwarecombined.com/install/`.
+Share the short link `https://hub.softwarecombined.com/router`, which redirects here.
 The page uses Apple, Microsoft and Linux logos with clear platform labels.
 Each platform shows its published processor alternatives, or says no installer is ready.
 Setup scripts appear only in the page's advanced section for IT.
@@ -54,6 +55,8 @@ release publishes all five installers and switches the download page to them, so
 the page always offers the current release. Keep it unset until the native
 acceptance matrix passes. Without it, the page says the installers are not ready
 and keeps the setup scripts in its IT section.
+The owner turned it on on 20 October 2026, before the device checks ran;
+release 1.3.6 was the first to publish all five installers.
 After Mac verification, `NATIVE_INSTALLERS_MACOS_ARM64_ONLY=true` can publish
 the Mac arm64 stable package while the other native packages remain private.
 This platform-specific publication does not assert acceptance of the other

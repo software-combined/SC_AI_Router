@@ -149,6 +149,7 @@ class SetupHandOffTests(unittest.TestCase):
                 owner, dialog = mock.Mock(SwitchError=refused), mock.Mock()
                 owner.switch.side_effect = [outcome]
                 dialog.confirm.return_value = False
+                dialog.confirm_result.return_value = True
                 with mock.patch.object(setup, 'status', return_value=facts), \
                         mock.patch.object(setup, '_missing_assistant', return_value=False), \
                         mock.patch.object(setup, 'load', return_value=owner):

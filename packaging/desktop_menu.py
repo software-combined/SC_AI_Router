@@ -32,20 +32,31 @@ def _control(home, resources, action=None):
 
 def fallback(home, resources):
     """The same action IDs, including profile choices, when no tray host is available."""
+    with load('service').install_lock(home, session_lock() + '.window') as held:
+        if held:
+            return _control_window(home, resources)
+    return dict(outcome='done')
+
+
+def _control_window(home, resources):
     model, control = load('desktop_model'), load('desktop_control')
     removed = Path(home) / load('native_shortcuts').REMOVED
-    checked_update = None
-    while not removed.exists():
+    if not removed.exists():
         try:
             facts = control.snapshot(home)
         except (Exception, SystemExit):
             facts = dict(status='Status unknown', clients=[], version='Unknown')
-        details, options = model.chooser(model.menu(facts, checked_update=checked_update)['menu'])
-        action = load('native_dialog').choose('\n'.join(details), options)
+        details, options = model.chooser(model.menu(facts)['menu'])
+        dialog = load('native_dialog')
+        action = dialog.choose('\n'.join(details), options, labels=('Run action', 'Close'))
         if action is None:
             return dict(outcome='done')
         result = _control(home, resources, action)
-        checked_update = result.get('checked_update', checked_update)
+        if result.get('outcome') == 'done' and action in (
+                'router.restart', 'startup.toggle', 'codex.subscription', 'codex.openrouter',
+                'claude.subscription', 'claude.openrouter', 'codex.open', 'claude.open'):
+            dialog.message(dict(options)[action].rstrip('…') + ' completed.')
+        return result
     return dict(outcome='done')
 
 
@@ -73,6 +84,15 @@ def session_lock():
     return '.desktop-menu-' + hashlib.sha256(session.encode()).hexdigest()[:16] + '.lock'
 
 
+def mac_reopen_available(resources):
+    # A retained controller can be newer than the native helper after a partial update.
+    try:
+        version = json.loads((resources / 'installer.json').read_text())['version']
+        return tuple(map(int, version.split('.'))) >= (1, 3, 7)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
 def run_menu(home, resources, *, autostart=False):
     control, model = load('desktop_control'), load('desktop_model')
     removed = Path(home) / load('native_shortcuts').REMOVED
@@ -83,12 +103,35 @@ def run_menu(home, resources, *, autostart=False):
         if not autostart:
             fallback(home, resources)
         return 1
+    mac_reopen = sys.platform == 'darwin' and mac_reopen_available(resources)
+    if sys.platform == 'darwin' and not mac_reopen and not autostart:
+        fallback(home, resources)
+        return 0
     service = load('service')
+    request = home / (session_lock() + '.open')
     with service.install_lock(home, session_lock()) as held:
         if not held:
             if not autostart:
-                fallback(home, resources)
+                if sys.platform == 'darwin':
+                    request.touch(mode=0o600)
+                    deadline = time.monotonic() + 2
+                    while request.exists() and time.monotonic() < deadline:
+                        time.sleep(0.1)
+                    try:
+                        request.unlink()  # An older resident controller did not consume the request.
+                    except FileNotFoundError:
+                        pass
+                    else:
+                        fallback(home, resources)
+                else:
+                    fallback(home, resources)
             return 0
+        try:
+            if time.time() - request.stat().st_mtime > 3:
+                request.unlink(missing_ok=True)
+        except FileNotFoundError:
+            pass
+        open_menu = mac_reopen and not autostart
         events = queue.Queue(maxsize=32)
         icon = resources / 'router/packaging/assets/router-icon.png'
         try:
@@ -127,7 +170,19 @@ def run_menu(home, resources, *, autostart=False):
                         needs_fallback, fallback_shown = False, True
                         job = worker.submit(fallback, home, resources)
                         busy = 'Control window open…'
-                    doc = json.dumps(model.menu(facts, busy=busy, checked_update=checked_update))
+                    document = model.menu(facts, busy=busy, checked_update=checked_update)
+                    if mac_reopen:
+                        try:
+                            request.unlink()
+                        except FileNotFoundError:
+                            pass
+                        else:
+                            open_menu = True
+                        if open_menu:
+                            document['open_menu'] = True
+                            open_menu = False
+                            last_doc = None  # A second reopen request must be delivered too.
+                    doc = json.dumps(document)
                     if doc != last_doc:
                         shell.stdin.write(doc + '\n')
                         shell.stdin.flush()

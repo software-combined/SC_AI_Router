@@ -1,4 +1,5 @@
 """Failure warnings persist independently of routing and use one daily dialog."""
+import contextlib
 import json
 import os
 import tempfile
@@ -224,8 +225,10 @@ class WarningMenuTests(unittest.TestCase):
         control = mock.Mock()
         control.snapshot.return_value = self.facts()
         dialog.choose.return_value = None
+        service = mock.Mock()
+        service.install_lock.return_value = contextlib.nullcontext(True)
         owners = dict(desktop_model=model, desktop_control=control, native_dialog=dialog,
-                      native_shortcuts=module('native_shortcuts'))
+                      native_shortcuts=module('native_shortcuts'), service=service)
         with mock.patch.object(menu, 'load', side_effect=owners.__getitem__):
             menu.fallback(Path('/synthetic/home'), Path('/synthetic/resources'))
         text, choices = dialog.choose.call_args.args
