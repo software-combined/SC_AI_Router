@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.3.8
+
+- Update the warning-window test fixture for the shared window lock, so native
+  installer checks exercise the same controls as the released app.
+
 ## 1.3.7
 
 - Reopen the existing Mac menu when SCG Router is already running, instead of
