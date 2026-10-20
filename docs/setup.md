@@ -26,7 +26,7 @@ assistant settings and adds a background service and automatic update jobs.
 ## Setup for Software Combined staff
 
 The native download route is prepared at
-`https://dist.softwarecombined.com/install/`. It becomes the staff route after
+`https://hub.softwarecombined.com/router`. It becomes the staff route after
 the [native installer acceptance gate](native-installers.md) passes. Until then,
 use the existing setup script from a maintainer.
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Point the setup and repair links in the README, guides and router skill to
+  the short link `https://hub.softwarecombined.com/router`. It opens the same
+  setup page.
+
 ## 1.3.6
 
 - Keep Claude desktop on the Claude subscription when you connect it, so the
