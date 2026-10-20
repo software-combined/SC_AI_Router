@@ -1,5 +1,7 @@
 """Run the complete Claude profile transition on the native runner's filesystem."""
 import json
+import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -56,6 +58,32 @@ class DesktopProfileTransitionTests(fixtures.SyncFixture):
         self.assertEqual(self.platform.request_stop.call_count, 2)
         self.assertEqual(self.platform.open_app.call_count, 2)
 
+    def test_first_attachment_keeps_subscription_until_openrouter_runs_the_switch(self):
+        # Reproduced 20/10/2026: connecting Claude while it ran on the subscription
+        # selected OpenRouter in its settings. The menu then ticked OpenRouter, and
+        # choosing it skipped the restart and task sharing.
+        state = json.loads((self.home / 'mixed-router-state.json').read_text())
+        self.owner._desktop.detach(self.home, self.owner._receipts)
+        self.config.write_text('{"keep":"setting"}')
+        self.owner._desktop.attach(self.home, state, self.owner._receipts, data_dir_override=self.third)
+        self.assertEqual(json.loads(self.config.read_bytes()), {'keep': 'setting'})
+        control = module('desktop_control')
+        installer = mock.Mock()
+        installer._diag._status_document.return_value = dict(clients={'claude-desktop': {}})
+        owners = dict(install=installer, claude_desktop_switch=self.owner, update_status=module('update_status'),
+                      desktop_startup=SimpleNamespace(enabled=lambda home: False))
+        with mock.patch.object(control, 'load', side_effect=owners.__getitem__):
+            self.assertEqual(control.snapshot(self.home)['clients'][0]['selected'], 'subscription')
+        doc = json.loads((self.first / 'config.json').read_bytes())
+        fixtures.record(self.first, 'claude-code-sessions', doc['lastKnownAccountUuid'],
+                        doc['lastKnownOrganizationUuid'], 'saved-first', title='subscription task',
+                        cli='session-first', transcript='subscription task')
+        self.assertEqual(self.transition('3p'), '3p')
+        self.platform.confirm.assert_called_once()
+        self.platform.open_app.assert_called_once()
+        self.assertEqual(json.loads(self.config.read_bytes()), {'keep': 'setting', 'deploymentMode': '3p'})
+        self.assertIn('saved-first', fixtures.sync._records.group_records(self.third / 'claude-code-sessions'))
+
     def test_cancel_and_failed_shutdown_leave_mode_and_saved_work_unchanged(self):
         before = fixtures.fingerprint(self.third)
         self.platform.confirm.return_value = False
@@ -107,3 +135,30 @@ class NativeProfileRecoveryTests(fixtures.PairFixture):
         self.assertEqual(self.transaction.recover_store(self.store), 1)
         self.assertEqual((self.record.read_bytes(), (self.bundle / 'outputs/old.txt').read_bytes()), before)
         self.assertFalse(manifest.exists())
+
+
+class SetupHandOffTests(unittest.TestCase):
+    def test_setup_reaches_openrouter_only_through_switch_claude(self):
+        setup, refused = module('native_setup'), type('SwitchError', (Exception,), {})
+        facts = dict(serving=True, update={}, onboarding=dict(ready=False, clients={'claude-desktop': dict(
+            plugins_available=True, fresh_session_confirmed=False, reply_seen=False)}))
+        for outcome, message in ((None, 'stays on your Claude subscription'),
+                                 (refused('Open a Code task in Claude, then try again.'), 'Open a Code task'),
+                                 ('3p', None)):
+            with self.subTest(outcome=outcome):
+                owner, dialog = mock.Mock(SwitchError=refused), mock.Mock()
+                owner.switch.side_effect = [outcome]
+                dialog.confirm.return_value = False
+                with mock.patch.object(setup, 'status', return_value=facts), \
+                        mock.patch.object(setup, '_missing_assistant', return_value=False), \
+                        mock.patch.object(setup, 'load', return_value=owner):
+                    setup._check(Path('/resources'), Path('/home'), dialog)
+                owner.switch.assert_called_once_with(Path('/home'), target='3p')
+                if message:
+                    self.assertIn(message, dialog.message.call_args.args[0])
+                    dialog.confirm.assert_not_called()
+                else:
+                    dialog.message.assert_not_called()
+                    prompt = dialog.confirm.call_args.args[0]
+                    self.assertIn('Choose Code and start a new task', prompt)
+                    self.assertNotIn('Quit and reopen', prompt)

@@ -37,7 +37,12 @@ def seconds(value):
 
 def display_time(value):
     moment = seconds(value)
-    return time.strftime('%d %b %Y %I:%M %p %Z', time.localtime(moment)) if moment is not None else 'Unknown'
+    if moment is None:
+        return 'Unknown'
+    local = time.localtime(moment)
+    # Windows spells the zone out ("AUS Eastern Daylight Time"); keep only short names.
+    zone = time.strftime('%Z', local)
+    return time.strftime('%d %b %Y %I:%M %p', local) + (' ' + zone if len(zone) <= 5 else '')
 
 
 def channel(home):

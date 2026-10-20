@@ -71,12 +71,12 @@ class DesktopManagementTests(unittest.TestCase):
             root = Path(temporary)
             source, home = resources(root / 'Resources'), root / 'home'
             home.mkdir()
-            dialog = mock.Mock()
+            dialog = mock.MagicMock()
             controller = SimpleNamespace(launcher_source=lambda home, source: source)
             with mock.patch.object(setup, 'load', side_effect=lambda name:
                     controller if name == 'native_controller' else dialog), \
                     mock.patch.object(setup.subprocess, 'run', return_value=SimpleNamespace(
-                        returncode=0, stdout=b'deferred: another router operation is in progress\n')):
+                        returncode=0, stdout='deferred: another router operation is in progress\n')):
                 self.assertNotEqual(setup.onboard(source, home, 'remove'), 0)
             self.assertNotIn('SCG Router was removed.', [call.args[0] for call in dialog.message.call_args_list])
 
@@ -101,7 +101,7 @@ class DesktopManagementTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             with service.install_lock(home), mock.patch.object(control, 'load', side_effect=modules.__getitem__):
-                with self.assertRaisesRegex(RuntimeError, 'operation is in progress'):
+                with self.assertRaisesRegex(RuntimeError, 'SCG Router is busy'):
                     control.execute(home, home, 'codex.open')
             owner._platform.open_app.assert_not_called()
 

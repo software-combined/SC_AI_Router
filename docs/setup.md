@@ -40,7 +40,7 @@ The SCG Router app saves setup in your user account. After setup, you can
 delete the download or eject the disk image. Reopen SCG Router to check setup,
 repair it, connect another assistant, replace your key, renew download sign-in
 or remove the router. Reopening preserves the existing channel and settings.
-With the same or an older download, **Set up or repair** restores the service
+With the same or an older download, **Update or repair** restores the service
 using its installed release. **Connect another assistant** adds your selection
 while preserving existing connections.
 
@@ -75,7 +75,9 @@ From a source checkout, with Python 3.14, use the command for your intended setu
 A bootstrap install needs no checkout. Re-run the current setup script with
 `--choose-clients` (Windows: `-ChooseClients`), or use the
 [installed interpreter and installer](claude-code.md#setup).
-For Claude desktop, quit and reopen Claude, then choose Code, a folder and a
+For Claude desktop, choose **Claude**, then **OpenRouter**, in the SCG Router menu.
+Claude restarts on OpenRouter. The first switch sets up the OpenRouter profile; switch back and forth once to bring your saved Code tasks.
+Then choose Code, a folder and a
 model. All gateway rows bill OpenRouter. [Claude setup](claude-code.md) explains
 its separate profile and unfinished task-sharing checks.
 

@@ -309,9 +309,16 @@ With the router already installed, run this once from the router checkout:
 python3.14 packaging/install.py --desktop
 ```
 
-Quit and reopen Claude, choose **Code**, select your folder, then choose a
-model and type your task. No key copying or Developer-menu configuration is
-needed. Attachment also runs when there is no newer router release.
+Attachment leaves Claude on your Claude subscription, the connection it is
+already using. Choose **Claude**, then **OpenRouter**, in the
+[SCG Router menu](desktop-menu.md), or open **Switch Claude** on Mac. Without
+the menu, run `python3.14 packaging/claude_desktop_switch.py --to 3p`. Claude
+restarts on OpenRouter. Claude creates that profile's identity on its first
+OpenRouter launch, so the first switch only sets it up; switch back and forth
+once to bring your saved Code tasks. Then choose **Code**,
+select your folder, choose a model and type your task. No key copying or
+Developer-menu configuration is needed. Attachment also runs when there is no
+newer router release.
 
 The task-sharing candidate detects the signed-in account and workspace when
 you open a Code task. On macOS, setup installs that background callback
@@ -407,9 +414,11 @@ Ambiguous recovery files remain in place for inspection, and prevent switching.
 The target account and organization must be positively identified. When they
 cannot be resolved, no tasks are shared. Switching from OpenRouter to your
 subscription still works and changes only the connection, so you can sign in
-there. Switching away from the subscription while tasks are saved asks you,
-before Claude closes, to open a Code task in Claude first; that establishes
-the automatic binding. Existing hooks are preserved, and removing the desktop
+there. Switching away from an unidentified subscription while tasks are saved
+asks you, before Claude closes, to open a Code task in Claude first; that
+establishes the automatic binding. A first switch to an OpenRouter profile that
+Claude has never opened changes only the connection; switch back and forth once
+to share tasks. Existing hooks are preserved, and removing the desktop
 attachment removes only the callback installed by the router. If any other
 required history cannot be copied safely, switching stops, the original profile
 remains selected and Claude reopens on it. No transcript is silently discarded

@@ -30,7 +30,8 @@ public access for both installer files and download lists.
 
 The permanent download address is `https://dist.softwarecombined.com/install/`.
 The page uses Apple, Microsoft and Linux logos with clear platform labels.
-Each platform shows its published processor alternatives or a labelled setup script.
+Each platform shows its published processor alternatives, or says no installer is ready.
+Setup scripts appear only in the page's advanced section for IT.
 The page offers stable downloads only. Installer lists,
 packages, update feeds, bundles, runtimes and model catalogues are public.
 Microsoft download sign-in is not required. Model-provider credentials remain
@@ -48,14 +49,18 @@ Release builds no longer consume `DOWNLOAD_AUTH_CONFIG` or
 Stale generated `dist/download-auth.json` is removed when building a release;
 installed users' authentication files are preserved and ignored by public transport.
 
-Keep `NATIVE_INSTALLERS_ACCEPTED` unset until the native acceptance matrix passes.
+With the repository variable `NATIVE_INSTALLERS_ACCEPTED` set to `true`, every stable
+release publishes all five installers and switches the download page to them, so
+the page always offers the current release. Keep it unset until the native
+acceptance matrix passes. Without it, the page says the installers are not ready
+and keeps the setup scripts in its IT section.
 After Mac verification, `NATIVE_INSTALLERS_MACOS_ARM64_ONLY=true` can publish
 the Mac arm64 stable package while the other native packages remain private.
 This platform-specific publication does not assert acceptance of the other
 platforms or the complete matrix. Beta update feeds remain separate from the
 stable-only download page. Full native publication requires the
-existing five-platform checks and Windows runtime licence evidence in
-[runtime licences](runtime-licenses.md).
+existing five-platform checks. The Windows runtime's Visual C++ files follow
+the basis recorded in [runtime licences](runtime-licenses.md).
 Use a new release version when adding native platforms to a published version.
 Its signed checksum inventory is immutable.
 

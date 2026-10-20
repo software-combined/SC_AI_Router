@@ -471,9 +471,24 @@ it; the next unpinned update records the channel's own serial. Installs from
 
 ## Uninstall
 
+On Windows, open Settings → Apps → Installed apps, choose **SCG Router**, then
+**Uninstall**. The Start menu also has **Uninstall SCG Router**. On every platform,
+the SCG Router menu offers **Manage Router → Remove Router…**. Each asks first;
+**Cancel** changes nothing.
+
+Removal leaves Codex and terminal sessions open and restores their settings in place.
+It asks to close Claude desktop only while Claude uses OpenRouter, because that
+connection is switched back while Claude is closed. If an update is running,
+removal waits up to five minutes for it, then reports that nothing was removed.
+A successful removal closes the SCG Router menu and removes its sign-in entry.
+On Windows it also removes the Start menu entries and the Settings → Apps entry.
+The final message names any assistant to reopen.
+
 From the source checkout or installed release directory, run
 `python3.14 packaging/install.py --uninstall`. This stops and removes the
 service and update schedule after restoring all verified client settings.
+It exits with an error, and removes nothing, while another router operation
+is still running after that wait.
 Every assistant is checked before any detach. Changed connection values or
 damaged ownership records refuse with a conflict and keep the service running.
 If a later write fails, the result names completed and remaining attachments.
@@ -496,7 +511,9 @@ and specific conflict reasons. It reads the same evidence as repair and removal;
 it changes no settings and makes no model or download requests.
 
 The state directory, key file and loopback token remain in place for you to
-delete separately. Uninstall does not remove them.
+delete separately. Uninstall does not remove them, so setting up again later is
+a reinstall that keeps your key and choices. Test a first installation on a fresh
+account or computer, not after removal.
 
 ## Operator surface
 

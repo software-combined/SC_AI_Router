@@ -170,7 +170,7 @@ class WarningMenuTests(unittest.TestCase):
         for label in ('Running version 1.2.6.174', 'Latest known beta version 1.3.2.185',
                       'Updates need repair', 'Assistant connections need repair', 'Router controls need repair'):
             self.assertIn(label, text)
-        actions = dict(model.actions(doc['menu']))
+        actions = dict(model.chooser(doc['menu'])[1])
         self.assertIn('Repair now', actions['setup.resume'])
         self.assertNotIn('updates.install', actions)
         facts = self.facts()
@@ -196,7 +196,7 @@ class WarningMenuTests(unittest.TestCase):
         checked = dict(installed=facts['version'], channel='beta', source='a' * 64,
                        latest='1.3.2.185', checked_at=NOW, at='Old manual check')
         doc = model.menu(facts, checked_update=checked)
-        self.assertIn('Install update 1.3.2.186', dict(model.actions(doc['menu']))['updates.install'])
+        self.assertIn('Install update 1.3.2.186', dict(model.chooser(doc['menu'])[1])['updates.install'])
         self.assertIn('Last successful check Later scheduled check', json.dumps(doc))
         self.assertNotIn('Old manual check', json.dumps(doc))
         # A later verified check also supersedes a cache advertising a higher version.
@@ -224,7 +224,8 @@ class WarningMenuTests(unittest.TestCase):
         control = mock.Mock()
         control.snapshot.return_value = self.facts()
         dialog.choose.return_value = None
-        owners = dict(desktop_model=model, desktop_control=control, native_dialog=dialog)
+        owners = dict(desktop_model=model, desktop_control=control, native_dialog=dialog,
+                      native_shortcuts=module('native_shortcuts'))
         with mock.patch.object(menu, 'load', side_effect=owners.__getitem__):
             menu.fallback(Path('/synthetic/home'), Path('/synthetic/resources'))
         text, choices = dialog.choose.call_args.args

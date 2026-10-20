@@ -26,6 +26,9 @@ function browser(fetch) {
 }
 function execute(browser, name) {vm.runInContext(fs.readFileSync(path.join(root, name), 'utf8'), browser.context);}
 const settled = () => new Promise(resolve => setImmediate(resolve));
+// Without a published installer a tile says so; it never offers a script as the ordinary path.
+const notReady = app => assert.deepEqual(Array.from(app.element('packages').children,
+  tile => [tile.children[2].textContent, tile.children[2].href]), Array(3).fill(['Not available yet', undefined]));
 
 (async () => {
   const template = fs.readFileSync(path.join(__dirname, '../infra/feed.yaml'), 'utf8').replace(/\r\n/g, '\n');
@@ -51,7 +54,7 @@ const settled = () => new Promise(resolve => setImmediate(resolve));
     await settled();
     if (wrongOrigin) {
       assert.match(app.element('status').textContent, /needs attention/);
-      assert.equal(app.element('packages').children, undefined);
+      notReady(app);
     } else {
       const tiles = app.element('packages').children;
       assert.equal(tiles.length, 3);
@@ -65,13 +68,14 @@ const settled = () => new Promise(resolve => setImmediate(resolve));
   execute(unavailable, 'downloads.js');
   await settled();
   assert.equal(unavailable.element('downloads').hidden, false);
-  assert.match(unavailable.element('status').textContent, /setup and repair scripts/);
+  assert.match(unavailable.element('status').textContent, /not ready yet/);
+  notReady(unavailable);
   const stale = browser(async url => ({ok: true, status: 200,
     json: async () => url === 'stable.json' ? manifest() : {version: '1.2.3.5', channel: 'stable'}}));
   execute(stale, 'downloads.js');
   await settled();
-  assert.equal(stale.element('packages').children, undefined);
-  assert.match(stale.element('status').textContent, /setup and repair scripts/);
+  notReady(stale);
+  assert.match(stale.element('status').textContent, /not ready yet/);
   for (const target of ['darwin/arm64', 'windows/x86_64']) {
     const data = manifest();
     data.scope = 'macos-arm64';
@@ -83,8 +87,10 @@ const settled = () => new Promise(resolve => setImmediate(resolve));
       const tiles = scoped.element('packages').children;
       assert.equal(tiles.length, 3);
       assert.match(tiles[0].children[2].href, /\/installers\//);
-      assert.equal(tiles[1].children[2].href, '/install/bootstrap.ps1');
-      assert.equal(tiles[2].children[2].href, '/install/bootstrap.sh');
+      for (const tile of tiles.slice(1)) {
+        assert.equal(tile.children[2].textContent, 'Not available yet');
+        assert.equal(tile.children[2].href, undefined);
+      }
       assert.match(scoped.element('recommendation').textContent, /Stable/);
     } else assert.match(scoped.element('status').textContent, /needs attention/);
   }
@@ -97,12 +103,12 @@ const settled = () => new Promise(resolve => setImmediate(resolve));
   execute(redacted, 'downloads.js');
   await settled();
   assert.doesNotMatch(redacted.element('status').textContent, /private token/);
-  assert.match(redacted.element('status').textContent, /setup and repair scripts/);
+  assert.match(redacted.element('status').textContent, /not ready yet/);
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   assert.doesNotMatch(html, /signin.js|id="signin"|Sign in with Microsoft/);
   assert.doesNotMatch(html, /id="channel"|Beta —|early access/);
-  assert.match(html, /bootstrap.ps1/);
-  assert.match(html, /bootstrap.sh/);
+  assert.match(html, /Advanced: setup scripts for IT[^]*bootstrap.ps1[^]*bootstrap.sh/);
+  assert.doesNotMatch(html.split('<div id="packages">')[1].split('</div>')[0], /bootstrap/);
   assert.doesNotMatch(html, /id="downloads" hidden/);
   assert.equal((html.match(/class="system"/g) || []).length, 3);
   process.stdout.write('Browser contracts passed\n');

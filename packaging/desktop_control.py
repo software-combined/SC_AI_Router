@@ -20,6 +20,11 @@ MAINTENANCE = ('setup.status', 'setup.resume', 'setup.add', 'setup.key', 'setup.
                'help.guide', 'help.support', 'startup.toggle')
 ACTIONS = MAINTENANCE + tuple(client + '.' + action for client in DESTINATIONS
                              for action in ('subscription', 'openrouter', 'open'))
+BUSY = 'SCG Router is busy. Try again shortly.'
+
+
+class Notice(RuntimeError):
+    """A plain message safe to show as it is."""
 
 
 def version(value):
@@ -104,7 +109,7 @@ def execute(home, resources, action, run=subprocess.run):
             if target == 'open':
                 with load('service').install_lock(home) as held:
                     if not held:
-                        raise RuntimeError('Another router operation is in progress')
+                        raise Notice(BUSY)
                     owner._platform.open_app(sys.platform, app=owner.CODEX)
                 result = True
             else:
@@ -120,7 +125,7 @@ def execute(home, resources, action, run=subprocess.run):
         startup = load('desktop_startup')
         with load('service').install_lock(home) as held:
             if not held:
-                raise RuntimeError('Another router operation is in progress')
+                raise Notice(BUSY)
             startup.configure(home, resources, not startup.enabled(home))
         return dict(outcome='done')
     if action == 'help.guide':
@@ -142,6 +147,9 @@ def execute(home, resources, action, run=subprocess.run):
              'updates.check': ['--check-update', '--json'], 'help.support': ['--support']}[action]
     result = _installer(home, flags, run)
     if result.returncode:
+        if action == 'updates.check':
+            raise Notice('SCG Router could not check for updates. '
+                         'Check your internet connection, then try again.')
         raise RuntimeError('Router action failed')
     if action == 'updates.check':
         checked = json.loads(result.stdout)
@@ -186,7 +194,7 @@ def main(argv=None):
         return 0
     except (Exception, SystemExit) as exc:
         if args.action:
-            safe = str(exc) if type(exc).__name__ == 'SwitchError' else (
+            safe = str(exc) if isinstance(exc, Notice) or type(exc).__name__ == 'SwitchError' else (
                 'SCG Router could not finish. Choose Update or repair, then try again.')
             try:
                 load('native_dialog').message(safe)

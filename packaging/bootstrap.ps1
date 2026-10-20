@@ -4,8 +4,8 @@
 # runtime from runtimes.json, verifies every download by SHA-256, then runs
 # the verified bundle installer. The feed is public: no token is needed.
 # Usage:
-#   .\bootstrap.ps1 [-Channel beta] [-ChooseClients]
-param([string]$Channel = 'stable', [switch]$ChooseClients)
+#   .\bootstrap.ps1 [-Channel beta] [-ChooseClients] [-AcceptMicrosoftRuntimeTerms]
+param([string]$Channel = 'stable', [switch]$ChooseClients, [switch]$AcceptMicrosoftRuntimeTerms)
 $ErrorActionPreference = 'Stop'
 $homeDir = if ($env:ROUTER_HOME) { $env:ROUTER_HOME } else { Join-Path $HOME '.codex\mixed-model-router' }
 $homeDir = [IO.Path]::GetFullPath($homeDir)
@@ -40,6 +40,37 @@ function Test-RouterPython([string]$candidate) {
   } catch { return $false }
 }
 if (-not (Test-RouterPython $py)) {
+  # Microsoft's licence requires users to accept these before receiving its runtime
+  # files. Same text as packaging/native/windows-runtime-terms.txt (a test pins it).
+  Write-Host @'
+SCG Router for Windows: terms for Microsoft runtime files
+
+SCG Router for Windows includes Python, which contains two Microsoft Visual
+C++ runtime files: vcruntime140.dll and vcruntime140_1.dll (the "Microsoft
+files"). Software Combined distributes them unmodified under Microsoft's
+Visual Studio licence terms. To install SCG Router, you agree that:
+
+1. You will use the Microsoft files only as part of SCG Router.
+2. You will not modify, reverse engineer, decompile or disassemble them,
+   except where the law allows it despite this term.
+3. You will not distribute them separately from SCG Router. If you pass
+   SCG Router on to anyone else, they must agree to these terms first.
+4. You will not remove or change any copyright or other notice in them.
+5. You will comply with the export laws that apply to them.
+6. The Microsoft files are provided "as is", without any warranty from
+   Microsoft or Software Combined. To the extent the law allows, neither is
+   liable for any loss or damage they cause.
+7. Microsoft and its suppliers keep all rights in the Microsoft files that
+   these terms do not expressly grant. These terms also apply to the
+   Microsoft files in later versions of SCG Router.
+
+SCG Router itself is open-source software under the Apache License 2.0.
+Other third-party notices are in RUNTIME-NOTICES.txt.
+'@
+  if (-not $AcceptMicrosoftRuntimeTerms -and (Read-Host 'Type ACCEPT to agree and continue') -ne 'ACCEPT') {
+    Write-Error -ErrorAction Continue 'SCG Router was not installed because the terms were not accepted.'
+    exit 1
+  }
   Invoke-WebRequest -Uri "$feedOrigin/$mirrorUrl" -OutFile (Join-Path $homeDir 'runtime.tar.gz')
   $hash = (Get-FileHash (Join-Path $homeDir 'runtime.tar.gz') -Algorithm SHA256).Hash.ToLower()
   if ($hash -ne $rt.sha256.ToLower()) { Write-Error -ErrorAction Continue 'runtime checksum mismatch'; exit 1 }

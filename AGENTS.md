@@ -63,7 +63,8 @@ window, and anything added later) follows one style:
   both) in the wording and the action. Never tell a Claude-only user to
   reopen Codex, and never offer a restart the machine cannot perform;
 - at most two actions, and the safe one is always available ("Later" or
-  "Cancel" never disappears);
+  "Cancel" never disappears from a question). The offered action is the
+  default button. A notice with nothing to decide has one "OK" button;
 - dialog-only: a missing dialog tool leaves the notice pending and never
   opens a browser or sends a separate notification; no popup ever blocks or
   fails an install.

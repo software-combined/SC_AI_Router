@@ -66,17 +66,36 @@ class DesktopControlsTests(unittest.TestCase):
         self.assertEqual(json.loads(out.getvalue())['status'], 'Needs attention')
         load.assert_not_called()
 
-    def test_fallback_has_every_profile_and_management_action(self):
+    def test_control_window_reads_plainly_and_offers_only_real_changes(self):
+        # Seen on Windows 20/10/2026: each row repeated its section and selection, long
+        # rows were cut off, and the current connection was offered as a change.
         model = module('desktop_model')
-        facts = dict(clients=[dict(id='codex', label='Codex', selected='subscription', choices=[
-            dict(id='subscription', label='ChatGPT + OpenRouter'),
-            dict(id='openrouter', label='OpenRouter only')])])
-        actions = dict(model.actions(model.menu(facts, available='1.3.1')['menu']))
-        for action in ('codex.subscription', 'codex.openrouter', 'setup.add', 'setup.remove',
-                       'router.restart', 'updates.install', 'help.support', 'startup.toggle'):
-            self.assertIn(action, actions)
-        self.assertEqual(model.actions(model.menu(facts, busy='Switching…')['menu']), [])
-        self.assertNotIn('claude.subscription', actions)
+        facts = dict(status='Running', version='1.3.5.190', running_version='1.3.4.1', autostart=True,
+                     update=dict(channel='stable', latest_known_version='1.3.5.190'), clients=[
+                         dict(id='codex', label='Codex', selected='subscription', choices=[
+                             dict(id='subscription', label='ChatGPT + OpenRouter'),
+                             dict(id='openrouter', label='OpenRouter only')]),
+                         dict(id='claude', label='Claude', selected='subscription', choices=[
+                             dict(id='subscription', label='Claude subscription'),
+                             dict(id='openrouter', label='OpenRouter')])])
+        details, options = model.chooser(model.menu(facts, available='1.3.6')['menu'])
+        self.assertEqual(details[:3], ['SCG Router — Running', 'Codex: ChatGPT + OpenRouter',
+                                       'Claude: Claude subscription'])
+        self.assertIn('Running version 1.3.4.1', details)
+        labels = dict(options)
+        self.assertEqual((labels['codex.openrouter'], labels['claude.openrouter'], labels['claude.open']),
+                         ('Codex: switch to OpenRouter only', 'Claude: switch to OpenRouter', 'Open Claude'))
+        self.assertEqual(labels['router.restart'], 'Restart Router to use version 1.3.5.190…')
+        self.assertEqual(labels['startup.toggle'], 'Turn off start at sign-in')
+        for action in ('setup.add', 'setup.remove', 'updates.install', 'help.support'):
+            self.assertIn(action, labels)
+        for action in ('codex.subscription', 'claude.subscription', 'menu.quit'):
+            self.assertNotIn(action, labels)
+        self.assertEqual(model.chooser(model.menu(facts, busy='Switching…')['menu'])[1], [])
+        rows = {row['label']: [child['label'] for child in row['children']] for row in model.menu(facts)['menu']}
+        self.assertEqual(rows['Codex — ChatGPT + OpenRouter'],
+                         ['ChatGPT + OpenRouter', 'OpenRouter only…', 'Open Codex'])
+        self.assertEqual(rows['Updates'][-1], 'Check for updates…')
 
     def test_menu_ignores_repeated_clicks_and_leaves_service_running(self):
         menu = module('desktop_menu')
@@ -110,6 +129,66 @@ class DesktopControlsTests(unittest.TestCase):
                 self.assertEqual(menu.run_menu(home, home), 0)
         self.assertEqual(calls, ['codex.openrouter'])
         self.assertTrue(any(doc['status'] == 'Switching…' for doc in documents))
+
+    def test_a_failed_status_check_keeps_the_connection_rows(self):
+        menu = module('desktop_menu')
+        documents, running, failed = [], threading.Event(), threading.Event()
+        class Input(io.StringIO):
+            def write(self, text):
+                documents.append(json.loads(text))
+                (running if documents[-1]['status'] == 'Running' else failed
+                 if documents[-1]['status'] == 'Needs attention' else threading.Event()).set()
+                return len(text)
+        shell = SimpleNamespace(stdin=Input(), stdout=io.StringIO(), poll=lambda: None,
+                                wait=lambda **kwargs: 0)
+        def events(stream, queue):
+            running.wait(5)
+            queue.put({'action': 'refresh'})
+            failed.wait(5)
+            queue.put({'closed': True})
+        client = dict(id='claude', label='Claude', selected='subscription', choices=[
+            dict(id='subscription', label='Claude subscription'), dict(id='openrouter', label='OpenRouter')])
+        answers = iter([dict(status='Running', clients=[client]), dict(outcome='failed', status='Needs attention')])
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            (home / 'control').mkdir()
+            (home / 'control' / ('scg-router-menu.exe' if os.name == 'nt' else 'scg-router-menu')).touch()
+            with mock.patch.object(menu, '_events', side_effect=events), \
+                    mock.patch.object(menu, '_control', side_effect=lambda *args: next(answers)), \
+                    mock.patch.object(menu.subprocess, 'Popen', return_value=shell):
+                self.assertEqual(menu.run_menu(home, home), 0)
+        self.assertEqual(documents[-1]['status'], 'Needs attention')
+        self.assertIn('Claude — Claude subscription', [row['label'] for row in documents[-1]['menu']])
+
+    def test_offline_update_check_and_busy_router_explain_themselves(self):
+        control, dialog = module('desktop_control'), mock.Mock()
+        with mock.patch.object(control, 'load', return_value=dialog), \
+                mock.patch.object(control, '_installer', return_value=SimpleNamespace(returncode=1)), \
+                redirect_stdout(io.StringIO()):
+            self.assertEqual(control.main(['--home', '/home', '--resources', '/resources',
+                                           '--action', 'updates.check']), 1)
+        self.assertIn('Check your internet connection', dialog.message.call_args.args[0])
+
+    def test_remove_refuses_before_closing_assistants_while_codex_is_switched(self):
+        setup, dialog, switch = module('native_setup'), mock.Mock(), mock.Mock()
+        switch.refuse_switched.side_effect = SystemExit(module('codex_switch_config').SWITCHED_REFUSAL)
+        owners = dict(native_dialog=dialog, codex_switch_config=switch)
+        with mock.patch.object(setup, 'load', side_effect=owners.__getitem__), \
+                mock.patch.object(setup, 'metadata', return_value={}):
+            self.assertEqual(setup.onboard(Path('/resources'), Path('/home'), 'remove'), 0)
+        self.assertIn('SCG Router menu', dialog.message.call_args.args[0])
+        dialog.confirm.assert_not_called()
+
+    def test_check_setup_shows_the_last_update_check_in_local_time(self):
+        setup, dialog = module('native_setup'), mock.Mock()
+        facts = dict(serving=True, onboarding=dict(clients={}), update=dict(
+            required_action='update', last_successful_check_at='2026-10-20T03:14:00Z'))
+        with mock.patch.object(setup, 'status', return_value=facts):
+            setup._check(Path('/resources'), Path('/home'), dialog)
+        text = dialog.message.call_args.args[0]
+        self.assertIn('Last successful check: ' + module('update_status').display_time(
+            '2026-10-20T03:14:00Z'), text)
+        self.assertNotIn('T03:14:00Z', text)
 
     def test_restart_requires_a_completed_service_handover_before_health(self):
         restart = module('desktop_service')
@@ -167,7 +246,7 @@ class StartupTests(unittest.TestCase):
                     startup.remove(home, platform_name='darwin', user_home=root / 'user')
             self.assertFalse(startup.enabled(home))
             with startup.load('service').install_lock(home):
-                with self.assertRaisesRegex(RuntimeError, 'operation is in progress'):
+                with self.assertRaisesRegex(RuntimeError, 'SCG Router is busy'):
                     module('desktop_control').execute(home, source, 'startup.toggle')
             self.assertFalse(startup.enabled(home))
 

@@ -123,6 +123,6 @@ or live provider acceptance. `docs/compatibility.md` records fresh installed-cli
 checks against local synthetic upstreams, with external network access
 blocked. Native OAuth and paid provider acceptance still require separately
 authorized live checks before a production support claim. Windows runtime
-redistribution needs the licence evidence described in `runtime-licenses.md`.
+redistribution follows the Visual C++ runtime basis recorded in `runtime-licenses.md`.
 See repository verification and review gates before committing or integrating
 the candidate.

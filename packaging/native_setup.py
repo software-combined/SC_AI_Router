@@ -140,6 +140,21 @@ def _key(resources, home, replace=False, run=subprocess.run):
         raise ValueError('The key window could not finish. Open SCG Router to try again.')
 
 
+def _claude_on_openrouter(home, dialog):
+    """Claude reaches OpenRouter only through Switch Claude, which asks first,
+    restarts Claude and shares saved tasks; it does nothing when already there."""
+    owner = load('claude_desktop_switch')
+    try:
+        if owner.switch(home, target='3p') is not None:
+            return True
+        dialog.message('Claude stays on your Claude subscription. To use OpenRouter models, '
+                       'choose Claude, then OpenRouter, in the SCG Router menu.')
+    except Exception as exc:
+        dialog.message(str(exc) if isinstance(exc, owner.SwitchError)
+                       else 'Claude could not be switched safely. Try again.')
+    return False
+
+
 def _check(resources, home, dialog):
     facts = status(resources, home)
     pending = facts['onboarding']['clients']
@@ -151,7 +166,8 @@ def _check(resources, home, dialog):
         dialog.message('SCG Router is running, but updates need attention.\n\n'
             'Running version: %s\nLatest known for this channel: %s\nLast successful check: %s\n\n'
             'Choose Update or repair to continue.' % (facts.get('running_version') or 'Unknown',
-            update.get('latest_known_version') or 'Unknown', update.get('last_successful_check_at') or 'Unknown'))
+            update.get('latest_known_version') or 'Unknown',
+            load('update_status').display_time(update.get('last_successful_check_at'))))
         return
     if 'claude-desktop' in pending and _missing_assistant(
             ['--clients', 'none', '--desktop'], dialog):
@@ -165,11 +181,15 @@ def _check(resources, home, dialog):
             continue
         label = {'codex': 'Codex', 'claude': 'Claude Code',
                  'claude-desktop': 'Claude desktop'}[client]
+        if client == 'claude-desktop' and not _claude_on_openrouter(home, dialog):
+            return
         if not dialog.confirm(
-                'To finish setup for %s:\n\nQuit and reopen it, then start a new chat. '
+                'To finish setup for %s:\n\n%s'
                 'Choose an OpenRouter model and send a greeting. Use an enabled SC tool, '
                 'such as SC documentation.\n\n'
-                'Choose Continue only after you receive a reply and the SC tool works.' % label):
+                'Choose Continue only after you receive a reply and the SC tool works.'
+                % (label, 'Choose Code and start a new task. ' if client == 'claude-desktop'
+                   else 'Quit and reopen it, then start a new chat. ')):
             return
         if not load('native_readiness').successful_reply(home, progress['started'], client):
             dialog.message('A successful reply has not reached SCG Router yet. '
@@ -183,6 +203,39 @@ def _check(resources, home, dialog):
     dialog.message('Ready. Your assistants are connected and updates are automatic.'
                    if facts['onboarding']['ready'] else
                    'Setup is saved. Open SCG Router and choose Check setup to finish.')
+
+
+def _remove(resources, home, dialog, doc):
+    try:  # Before anything closes: removal refuses while Codex is switched.
+        load('codex_switch_config').refuse_switched(home)
+    except SystemExit as exc:
+        dialog.message(str(exc))
+        return 0
+    if not dialog.confirm('Remove SCG Router and restore your assistant settings? '
+                          'Your key and saved settings will stay on this computer.'):
+        return 0
+    clients = load('codex_config').read_receipt(home).get('clients', {})
+    if not load('repair_ui').close_assistants(home, removing=True):
+        return 0
+    python = resources / 'runtime' / doc['runtime_exec']
+    source = load('native_controller').launcher_source(home, resources / 'router')
+    with dialog.Progress('Removing SCG Router. If an update is running, removal waits for it '
+                         'to finish. A message appears when removal is done.', button='OK'):
+        result = subprocess.run([str(python), str(source / 'packaging/install.py'), '--home', str(home),
+                                 '--uninstall'], capture_output=True, text=True, timeout=600,
+                                env=environment(resources))
+    if 'deferred:' in (result.stdout or ''):
+        dialog.message('SCG Router is still updating, so nothing was removed. '
+                       'Try again in a few minutes.')
+        return 1
+    if not _succeeded(result):
+        dialog.message('SCG Router could not be removed safely. Contact Software Combined IT.')
+        return result.returncode or 1
+    reopen = [label for name, label in (('codex', 'Codex'), ('claude', 'Claude Code')) if name in clients]
+    finish = ' Quit and reopen %s to finish.' % ' and '.join(reopen) if reopen else ''
+    dialog.message('SCG Router was removed.%s\n\nYour model key and settings stay in %s, so setting '
+                   'up SCG Router again keeps them. Delete that folder to remove them.' % (finish, home))
+    return 0
 
 
 def onboard(resources, home, action=None):
@@ -202,20 +255,7 @@ def onboard(resources, home, action=None):
         return 0
     doc = metadata(resources)
     if action == 'remove':
-        if not dialog.confirm('Remove SCG Router and restore your assistant settings? '
-                              'Your key and saved setup files will remain on this computer.'):
-            return 0
-        python = resources / 'runtime' / doc['runtime_exec']
-        if not load('repair_ui').close_assistants(home, removing=True):
-            return 0
-        source = load('native_controller').launcher_source(home, resources / 'router')
-        result = subprocess.run([str(python), str(source / 'packaging/install.py'),
-                                 '--home', str(home), '--uninstall'], capture_output=True,
-                                timeout=300, env=environment(resources))
-        removed = _succeeded(result)
-        dialog.message('SCG Router was removed.' if removed else
-                       'SCG Router could not be removed safely. Contact Software Combined IT.')
-        return 0 if removed else result.returncode or 1
+        return _remove(resources, home, dialog, doc)
     flags = _select(dialog) if not existing or action == 'add' else ['--repair']
     if flags is None or ('--clients' in flags and _missing_assistant(flags, dialog)):
         return 0

@@ -30,7 +30,7 @@ _app = _load('codex_switch_app')
 
 _RESTART = {'Codex': 'quit and reopen Codex',
             'Claude Code': 'restart Claude Code',
-            'Claude desktop': 'quit and reopen Claude'}
+            'Claude desktop': 'switch Claude to OpenRouter in the SCG Router menu'}
 
 
 maybe_ask = _dialog.maybe_ask

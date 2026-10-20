@@ -51,9 +51,12 @@ see [setup options](docs/setup.md).
 2. Run setup and choose the assistant you use. Enter your key only in the
    setup window when prompted; never paste it into a chat or support ticket.
    On Microsoft Windows 11 x64, use the supplied `bootstrap.ps1` in PowerShell.
+   It asks you to accept short terms for Microsoft's runtime files first.
    You do not need to install Python. If Windows blocks the script, contact IT.
 3. Quit and reopen your assistant, select a model labelled `· OpenRouter`,
-   and send a short greeting. Claude desktop uses its separate gateway profile.
+   and send a short greeting. For Claude desktop, setup offers to switch Claude
+   to OpenRouter instead. Claude restarts on OpenRouter. The first switch sets
+   up that profile; switch back and forth once to bring your saved Code tasks.
 
 You should see the model in the picker and receive a reply. Installation alone
 does not confirm that the assistant works. See [setup options](docs/setup.md)

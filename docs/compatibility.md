@@ -1,5 +1,36 @@
 # Compatibility
 
+## Release 1.3.6 compatibility check, 20 October 2026 AEDT
+
+The ChatGPT app (Codex desktop) moved to `26.1013.40934`, bundled CLI
+`0.163.0-alpha.10.2`, since the last record, so AGENTS.md section 7 applied.
+Claude Code was unchanged at `2.1.283`. The legs ran against the installed
+router `1.3.5.189`: release 1.3.6 changes no routing code (`ai_router/` is
+identical), so the request path under test is the release's. Every leg used
+synthetic data at low effort.
+
+| Leg | Model | Turns | Result |
+| --- | --- | ---: | --- |
+| Codex, OpenRouter | `z-ai/glm-5.3-flash` | n/a | passed: `userMessage`, `dynamicToolCall`, `agentMessage` |
+| Codex, ChatGPT subscription | `gpt-5.6-luna` | n/a | passed: same items plus `reasoning` |
+| Claude Code, OpenRouter | `z-ai/glm-5.3-flash` | 2 | passed, $0.10 client cap |
+| Claude Code, Claude subscription | `claude-sonnet-5-5` | 2 | passed; router logged `/v1/messages` to `anthropic`, 200 |
+
+The Codex legs used `tools/probe_codex_runtime.py --effort low`: OpenRouter
+through a scrubbed `--codex-home` and the router state, the subscription on
+`--live-home`. `gpt-6-luna` was tried first on the subscription leg. In two
+runs it made the correct single tool call and returned the exact marker, but
+wrapped in quotation marks, which fails the probe's exact-match check.
+`gpt-5.6-luna` passed on the same path, so this is that model's formatting,
+not a routing fault.
+
+The Claude Code OpenRouter leg used `tools/probe_claude_code.py` with one row
+and one leg. The subscription leg ran `claude -p` with a clean environment (no
+variables inherited from the calling Claude session), the owner's own sign-in,
+the router as `ANTHROPIC_BASE_URL`, user settings excluded
+(`--setting-sources project`), no MCP servers, at most three turns and a
+synthetic `probe.txt` marker. Served identity and effort were not exposed.
+
 ## Windows Claude checks, 19 October 2026 AEDT
 
 Microsoft Store package `Claude 2.42304.0.0` bundles Claude Code `2.1.299`.
