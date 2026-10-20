@@ -2,7 +2,7 @@
   "cpython": "3.14.7",
   "build": "20260814",
   "source": "astral-sh/python-build-standalone",
-  "note": "Exact install-only/full archive bytes, native component notices and pinned source locations verified for this runtime inventory. See runtime-notices.json, runtime-components.json and docs/runtime-licenses.md; publish the source companion and resolve Windows distributor licence eligibility before redistributing that runtime.",
+  "note": "Exact install-only/full archive bytes, native component notices and pinned source locations verified for this runtime inventory. See runtime-notices.json, runtime-components.json and docs/runtime-licenses.md; publish the source companion before redistributing the Linux runtimes; the Windows runtime follows the Visual C++ basis recorded in docs/runtime-licenses.md.",
   "targets": [
     {
       "os": "darwin",

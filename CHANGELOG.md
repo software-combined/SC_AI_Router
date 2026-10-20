@@ -35,6 +35,10 @@
 - Offer the macOS, Windows and Linux installers as the download, with clear
   steps for the one-time unsigned-app prompt. When no installer is ready for
   the current release, say so; setup scripts stay in an IT section.
+- Ask Windows users to accept short terms for Microsoft's Visual C++ runtime
+  files before they are installed, in both the installer and the setup script,
+  as Microsoft's licence requires. Record the basis for shipping those files so
+  the Windows installer can be published once the terms are approved.
 
 ## 1.3.5
 

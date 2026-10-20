@@ -47,19 +47,57 @@ Do not promote a binary distribution while its source companion is private
 or unavailable. Existing mirrors and downloads need a separate approved
 distribution change; local preparation does not repair them.
 
-## Windows runtime condition
+## Windows runtime basis
 
 The Windows archive contains `vcruntime140.dll` and `vcruntime140_1.dll`, both
-version 14.44.35211.0. Microsoft's [runtime redistribution guide](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files)
-and [2022 distributable list](https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution)
-make redistribution subject to applicable terms. The [Community licence](https://visualstudio.microsoft.com/license-terms/vs2022-ga-community/)
-includes organizational open-source eligibility and downstream distributor
-provisions; a newly purchased Visual Studio licence is not automatically
-required. Identify the accepted entitlement/terms or upstream permission chain
-covering these unmodified DLLs. That evidence has not yet been supplied.
-The Python-free application bundle contains neither DLL. Windows runtime
-mirroring/redistribution remains blocked until the owner supplies that
-evidence or approves a delivery path that does not redistribute those DLLs.
+version 14.44.35211.0. The Python-free application bundle contains neither DLL;
+the setup script, its runtime mirror and the Windows installer carry them
+inside the pinned runtime.
+
+On 20 October 2026 the repository owner accepted this basis for redistributing
+them, without a purchased Visual Studio licence:
+
+- SC AI Router is published as open source under Apache-2.0, an Open Source
+  Initiative (OSI) approved licence.
+- Clause 1.b.i of the [Visual Studio Community 2022 licence](https://visualstudio.microsoft.com/license-terms/vs2022-ga-community/)
+  lets any number of an organisation's users develop and test applications
+  released under OSI-approved licences.
+- Microsoft's [2022 distributable list](https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution)
+  lets a validly licensed Community 2022 user copy and distribute with a program
+  the unmodified files in `VC\redist`, subject to the licence terms.
+
+Section 4 of that licence, read on 20 October 2026, sets the distribution
+conditions. For any distributed file, the licensee must add significant primary
+functionality to it in its application (the router is that application), and
+must require distributors and external end users to agree to terms that protect
+the file at least as much as the licence. It may not distribute preview or beta
+components, use Microsoft's trademarks in an application's name, or bring the
+files under a licence that requires source disclosure.
+
+Both Windows install paths ask for that agreement before the files arrive. The
+installer shows [windows-runtime-terms.txt](../packaging/native/windows-runtime-terms.txt)
+as a page that must be accepted. `bootstrap.ps1` prints the same terms and
+downloads the runtime only after the user types ACCEPT, or when IT runs it with
+`-AcceptMicrosoftRuntimeTerms`. A silent installer run (`/SILENT` or
+`/VERYSILENT`) skips the page, so IT that deploys silently accepts on users'
+behalf, as with that switch. Installations that received the runtime before
+this step did not see the terms.
+
+The terms text awaits the owner's approval. Every stable release publishes
+`bootstrap.ps1`, and every release ships the notice, so approve the terms before
+this change merges; keep `NATIVE_INSTALLERS_ACCEPTED` unset until then.
+
+Keep these conditions while relying on it: ship the DLLs unmodified, exactly as
+in the checksum-pinned upstream archive; ship them only inside the router's
+runtime; keep the end-user terms on both install paths; keep the router under
+an OSI-approved licence; and keep the notice in
+[RUNTIME-NOTICES.txt](../packaging/RUNTIME-NOTICES.txt) that they remain
+Microsoft's software under Microsoft's terms.
+
+This is the owner's acceptance, not legal review. If the router stops being
+OSI-licensed, or legal advice differs, stop
+redistributing the DLLs: ship the runtime without them and have setup install
+Microsoft's Visual C++ Redistributable from Microsoft instead.
 
 The inventory and supplied notices close the technical inspection gap. They
 do not assert universal legal clearance, ownership of earlier removed text,

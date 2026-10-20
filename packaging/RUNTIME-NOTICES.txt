@@ -14,10 +14,12 @@ Its source-availability condition must be fulfilled for a runtime distribution.
 See packaging/runtime-components.json and docs/runtime-licenses.md for exact
 upstream source URLs/hashes and the companion application-source requirement.
 
-This file does not grant Microsoft Visual C++ redistribution rights. The
-Windows runtime contains vcruntime140.dll and vcruntime140_1.dll; distribution
-requires evidence of the distributor's applicable Microsoft licence rights.
-Do not describe Windows runtime redistribution as cleared by this notice.
+Microsoft Visual C++ runtime: the Windows runtime contains Microsoft's
+vcruntime140.dll and vcruntime140_1.dll, unmodified. They are distributed
+under the Distributable Code terms of Microsoft Visual Studio Community 2022
+for this open-source project (see docs/runtime-licenses.md). They remain
+Microsoft's software under Microsoft's terms: do not modify them or
+distribute them separately from this runtime.
 
 
 ============================================================================

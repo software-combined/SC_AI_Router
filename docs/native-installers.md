@@ -59,8 +59,8 @@ the Mac arm64 stable package while the other native packages remain private.
 This platform-specific publication does not assert acceptance of the other
 platforms or the complete matrix. Beta update feeds remain separate from the
 stable-only download page. Full native publication requires the
-existing five-platform checks and Windows runtime licence evidence in
-[runtime licences](runtime-licenses.md).
+existing five-platform checks. The Windows runtime's Visual C++ files follow
+the basis recorded in [runtime licences](runtime-licenses.md).
 Use a new release version when adding native platforms to a published version.
 Its signed checksum inventory is immutable.
 

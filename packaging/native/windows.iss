@@ -15,6 +15,8 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 SetupIconFile=@ICON@
+; Microsoft's licence requires users to accept terms protecting its runtime files.
+LicenseFile=@TERMS@
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 DisableReadyPage=yes

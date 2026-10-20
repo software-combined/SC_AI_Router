@@ -72,6 +72,46 @@ class NativePackageTests(unittest.TestCase):
         self.assertIn("WizardForm.Caption := 'SCG Router'", script)
         self.assertIn('SetupIconFile=@ICON@', script)
 
+    def test_both_windows_install_paths_require_accepting_the_runtime_terms(self):
+        # Microsoft's Visual Studio licence (section 4.b) requires end users to agree
+        # to terms protecting its runtime files before receiving them.
+        terms = (ROOT / 'packaging/native/windows-runtime-terms.txt').read_text()
+        rendered = []
+        def iscc(argv, **kwargs):
+            rendered.append(Path(argv[1]).read_text())
+        with mock.patch.object(build.sys, 'platform', 'win32'), \
+                mock.patch.object(build, '_make_ico'), mock.patch.object(build, 'run', side_effect=iscc):
+            with self.assertRaisesRegex(ValueError, 'did not produce an EXE'):
+                build.windows(self.resources, self.root, '1.3.6')
+        licence = re.search(r'^LicenseFile=(.+)$', rendered[0], re.M).group(1)
+        self.assertEqual(Path(licence).read_text(), terms)
+        script = (ROOT / 'packaging/bootstrap.ps1').read_text()
+        self.assertIn("Write-Host @'\n" + terms + "'@", script)
+        self.assertLess(script.index("Read-Host 'Type ACCEPT"), script.index('$mirrorUrl" -OutFile'))
+
+    @unittest.skipUnless(shutil.which('pwsh') or shutil.which('powershell'), 'needs PowerShell')
+    def test_setup_script_downloads_no_runtime_until_the_terms_are_accepted(self):
+        import functools, http.server, json, threading
+        feed = self.root / 'feed'
+        feed.mkdir()
+        (feed / 'runtimes.json').write_text(json.dumps({'targets': {'windows/x86_64': {
+            'mirror': 'runtimes/x.tar.gz', 'exec': 'python/python.exe', 'sha256': '0' * 64}}}))
+        requested = []
+        class Feed(http.server.SimpleHTTPRequestHandler):
+            def log_message(self, *args):
+                requested.append(self.path)
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(Feed, directory=feed))
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.shutdown)
+        shell = shutil.which('pwsh') or shutil.which('powershell')
+        env = dict(os.environ, ROUTER_HOME=str(self.root / 'home'),
+                   FEED_ORIGIN='http://127.0.0.1:%d' % server.server_port)
+        result = subprocess.run([shell, '-NoProfile', '-File', str(ROOT / 'packaging/bootstrap.ps1')],
+                                input='no\n', capture_output=True, text=True, timeout=120, env=env)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('terms were not accepted', result.stdout + result.stderr)
+        self.assertNotIn('/runtimes/x.tar.gz', requested)
+
     def test_uruntime_architecture_and_automatic_fallback(self):
         elf = bytearray(32)
         elf[:4] = b'\x7fELF'
