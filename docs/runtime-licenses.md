@@ -83,9 +83,10 @@ downloads the runtime only after the user types ACCEPT, or when IT runs it with
 behalf, as with that switch. Installations that received the runtime before
 this step did not see the terms.
 
-The terms text awaits the owner's approval. Every stable release publishes
-`bootstrap.ps1`, and every release ships the notice, so approve the terms before
-this change merges; keep `NATIVE_INSTALLERS_ACCEPTED` unset until then.
+The repository owner approved the terms text as written on 20 October 2026.
+Every stable release publishes `bootstrap.ps1`, and every release ships the
+notice, so any later change to the terms needs the owner's approval before it
+merges.
 
 Keep these conditions while relying on it: ship the DLLs unmodified, exactly as
 in the checksum-pinned upstream archive; ship them only inside the router's

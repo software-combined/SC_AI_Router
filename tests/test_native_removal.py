@@ -11,7 +11,6 @@ import subprocess
 import sys
 import tempfile
 import threading
-import time
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
