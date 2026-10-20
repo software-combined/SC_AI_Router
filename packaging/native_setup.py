@@ -169,6 +169,13 @@ def _check(resources, home, dialog):
             update.get('latest_known_version') or 'Unknown',
             load('update_status').display_time(update.get('last_successful_check_at'))))
         return
+    if facts['onboarding'].get('ready'):
+        dialog.message('Ready. Your assistants are connected and updates are automatic.')
+        return
+    if dialog.confirm_result('SCG Router is running. Setup is not finished.\n\n'
+            'Finish setup now? You may need to restart your assistants and send a test message.',
+            home, labels=('Finish setup', 'Cancel')) is not True:
+        return
     if 'claude-desktop' in pending and _missing_assistant(
             ['--clients', 'none', '--desktop'], dialog):
         return

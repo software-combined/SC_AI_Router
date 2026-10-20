@@ -49,6 +49,7 @@ class RemovedMenuTests(unittest.TestCase):
             home = Path(temporary)
             (home / 'control').mkdir()
             (home / 'control' / ('scg-router-menu.exe' if os.name == 'nt' else 'scg-router-menu')).touch()
+            (home / 'installer.json').write_text('{"version":"1.3.7"}')
             startup, real = mock.Mock(), shortcuts.load
             closed = []
             class Input(io.StringIO):

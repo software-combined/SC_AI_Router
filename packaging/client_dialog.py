@@ -75,7 +75,7 @@ def _labels(items):
     return [label for _key, label in items]
 
 
-def _macos_script(question, items):
+def _macos_script(question, items, labels):
     """A native popup menu keeps both questions to two action buttons."""
     return ('ObjC.import("AppKit");\n'
             'function run() {\n'
@@ -89,18 +89,19 @@ def _macos_script(question, items):
             '    var picker = $.NSPopUpButton.alloc.initWithFramePullsDown('
             '$.NSMakeRect(0, 0, 260, 26), false);\n'
             '    picker.addItemsWithTitles(%s);\n'
+            '    picker.sizeToFit;\n'
             '    picker.selectItemAtIndex(0);\n'
             '    alert.accessoryView = picker;\n'
-            '    alert.addButtonWithTitle("Continue");\n'
-            '    alert.addButtonWithTitle("Cancel").keyEquivalent = "\\u001b";\n'
+            '    alert.addButtonWithTitle(%s);\n'
+            '    alert.addButtonWithTitle(%s).keyEquivalent = "\\u001b";\n'
             '    app.activateIgnoringOtherApps(true);\n'
             '    if (alert.runModal !== $.NSAlertFirstButtonReturn) return "";\n'
             '    return ObjC.unwrap(picker.titleOfSelectedItem);\n'
             '}\n' % (_quote(TITLE), _quote(TITLE), _quote(question),
-                     _quote(str(ICON)), _quote(_labels(items))))
+                     _quote(str(ICON)), _quote(_labels(items)), *map(_quote, labels)))
 
 
-def _windows_script(question, items):
+def _windows_script(question, items, labels):
     """One PowerShell question: a small list with Continue and Cancel.
 
     Every control sits in a layout panel: WinForms gives a control added
@@ -115,22 +116,27 @@ def _windows_script(question, items):
                        for label in _labels(items))
     return ("Add-Type -AssemblyName System.Windows.Forms,System.Drawing; "
             "$f = New-Object System.Windows.Forms.Form; "
+            "$f.AutoSize = $true; $f.AutoSizeMode = 'GrowAndShrink'; $f.StartPosition = 'CenterScreen'; "
             "$f.Text = '%s'; %s"
             "$p = New-Object System.Windows.Forms.FlowLayoutPanel; "
             "$p.FlowDirection = 'TopDown'; $p.WrapContents = $false; "
             "$p.AutoSize = $true; $p.Dock = 'Fill'; "
             "$p.Padding = New-Object System.Windows.Forms.Padding(12); "
             "$l = New-Object System.Windows.Forms.Label; "
-            "$l.Text = '%s'; $l.AutoSize = $true; "
+            "$l.Text = '%s'; $l.AutoSize = $true; $l.MaximumSize = '640,0'; "
             "$b = New-Object System.Windows.Forms.ListBox; "
-            "$b.Size = '260,70'; @(%s) | ForEach-Object { [void]$b.Items.Add($_) }; "
+            "@(%s) | ForEach-Object { [void]$b.Items.Add($_) }; "
+            "$b.Width = [Math]::Min(640, [Math]::Max(260, (($b.Items | ForEach-Object { "
+            "[System.Windows.Forms.TextRenderer]::MeasureText([string]$_, $b.Font).Width "
+            "} | Measure-Object -Maximum).Maximum + 32))); "
+            "$b.Height = [Math]::Min(8, $b.Items.Count) * $b.ItemHeight + 6; $b.HorizontalScrollbar = $true; "
             "$b.SelectionMode = 'One'; $b.SelectedIndex = 0; "
             "$r = New-Object System.Windows.Forms.FlowLayoutPanel; "
             "$r.FlowDirection = 'LeftToRight'; $r.WrapContents = $false; "
             "$r.AutoSize = $true; "
-            "$ok = New-Object System.Windows.Forms.Button; $ok.Text = 'Continue'; "
+            "$ok = New-Object System.Windows.Forms.Button; $ok.Text = '%s'; "
             "$ok.AutoSize = $true; $ok.DialogResult = 'OK'; "
-            "$c = New-Object System.Windows.Forms.Button; $c.Text = 'Cancel'; "
+            "$c = New-Object System.Windows.Forms.Button; $c.Text = '%s'; "
             "$c.AutoSize = $true; $c.DialogResult = 'Cancel'; "
             "$r.Controls.Add($ok); $r.Controls.Add($c); "
             "$p.Controls.Add($l); $p.Controls.Add($b); $p.Controls.Add($r); "
@@ -138,13 +144,14 @@ def _windows_script(question, items):
             "$f.CancelButton = $c; "
             "if ($f.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) "
             "{ exit 2 }; Write-Output $b.SelectedItem"
-            % (TITLE, icon_line, question.replace("'", "''"), choices))
+            % (TITLE, icon_line, question.replace("'", "''"), choices,
+               *(label.replace("'", "''") for label in labels)))
 
 
-def _zenity_argv(tool_path, question, items):
+def _zenity_argv(tool_path, question, items, labels):
     argv = [tool_path, '--list', '--radiolist', '--title=' + TITLE,
             '--text=' + question, '--column=', '--column=', '--print-column=2',
-            '--ok-label=Continue', '--cancel-label=Cancel']
+            '--ok-label=' + labels[0], '--cancel-label=' + labels[1]]
     if _icon():
         argv.append('--window-icon=' + _icon())
     for index, label in enumerate(_labels(items)):
@@ -152,14 +159,14 @@ def _zenity_argv(tool_path, question, items):
     return argv
 
 
-def argv(tool_path, platform_name, question, items):
+def argv(tool_path, platform_name, question, items, *, labels=('Continue', 'Cancel')):
     """The command that asks one single-select question on this platform."""
     if platform_name == 'darwin':
-        return [tool_path, '-l', 'JavaScript', '-e', _macos_script(question, items)]
+        return [tool_path, '-l', 'JavaScript', '-e', _macos_script(question, items, labels)]
     if platform_name == 'win32':
         return [tool_path, '-NoProfile', '-WindowStyle', 'Hidden', '-Command',
-                _windows_script(question, items)]
-    return _zenity_argv(tool_path, question, items)
+                _windows_script(question, items, labels)]
+    return _zenity_argv(tool_path, question, items, labels)
 
 
 def answer(platform_name, stdout, items):

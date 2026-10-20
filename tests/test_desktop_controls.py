@@ -123,6 +123,7 @@ class DesktopControlsTests(unittest.TestCase):
             home = Path(temporary)
             (home / 'control').mkdir()
             (home / 'control' / ('scg-router-menu.exe' if os.name == 'nt' else 'scg-router-menu')).touch()
+            (home / 'installer.json').write_text('{"version":"1.3.7"}')
             with mock.patch.object(menu, '_events', side_effect=events), \
                     mock.patch.object(menu, '_control', side_effect=control), \
                     mock.patch.object(menu.subprocess, 'Popen', return_value=shell):
@@ -153,6 +154,7 @@ class DesktopControlsTests(unittest.TestCase):
             home = Path(temporary)
             (home / 'control').mkdir()
             (home / 'control' / ('scg-router-menu.exe' if os.name == 'nt' else 'scg-router-menu')).touch()
+            (home / 'installer.json').write_text('{"version":"1.3.7"}')
             with mock.patch.object(menu, '_events', side_effect=events), \
                     mock.patch.object(menu, '_control', side_effect=lambda *args: next(answers)), \
                     mock.patch.object(menu.subprocess, 'Popen', return_value=shell):

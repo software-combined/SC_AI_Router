@@ -742,6 +742,8 @@ It calls the existing client switchers, setup, support and update owners.
 `desktop_service.py` uses the platform service lifecycle for bounded restart.
 `desktop_model.py` gives native shells and the fallback window identical actions.
 `desktop_menu.py` runs one shell per installation and graphical session.
+On Mac, a session-scoped reopen request tells that shell to open its menu.
+Fallback windows run one selected action and then close.
 It serializes actions in a worker, while native menus stay responsive.
 `desktop_startup.py` owns per-user startup entries and the persistent preference.
 `desktop_launch.py` follows retained setup resources, independently of inference rollback.

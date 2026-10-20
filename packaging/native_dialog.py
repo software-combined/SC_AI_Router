@@ -20,11 +20,11 @@ platform = _load('claude_desktop_platform')
 TITLE, ICON = dialog.TITLE, dialog.ICON
 
 
-def choose(question, options, run=subprocess.run):
+def choose(question, options, run=subprocess.run, *, labels=('Continue', 'Cancel')):
     tool = dialog.tool()
     if not tool:
         raise OSError('The setup window is unavailable.')
-    result = run(dialog.argv(tool, sys.platform, question, options),
+    result = run(dialog.argv(tool, sys.platform, question, options, labels=labels),
                  capture_output=True, text=True, timeout=300)
     return dialog.answer(sys.platform, result.stdout, options) if result.returncode == 0 else None
 
