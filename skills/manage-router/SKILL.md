@@ -21,9 +21,8 @@ files, provider keys, subscription sign-in or assistant configuration.
    runtime's available application tools. The app offers setup, repair, status,
    another assistant, key replacement, download sign-in and removal.
 3. Otherwise direct the user to the approved staff route at
-   `https://hub.softwarecombined.com/router`. If private publication is still
-   pending, ask the maintainer for the existing setup script. Never substitute
-   an unverified package or a plugin-cache install.
+   `https://hub.softwarecombined.com/router`. Never substitute an unverified
+   package or a plugin-cache install.
 4. Let the user enter the IT-issued personal key in the secure window.
    Never ask for the key, subscription credentials or a setup URL in chat.
 5. Keep unfinished setup pending until a fresh assistant session produces a
