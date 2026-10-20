@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.3.9
+
+- Set the simulated platform before creating Mac reopen requests in tests, so
+  Linux release checks use the same session lock as the menu under test.
+
 ## 1.3.8
 
 - Update the warning-window test fixture for the shared window lock, so native
