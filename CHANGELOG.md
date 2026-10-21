@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.3.13
+
 - Point the setup-script links in the agent install prompt, the Claude Code
   guide and the operations guide at `https://dist.softwarecombined.com/install/`,
   where each release publishes the current scripts. The prompt named a folder
