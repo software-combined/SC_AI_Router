@@ -89,9 +89,13 @@ The menu preserves the connections needed to resume saved Codex chats in both mo
 Claude shares saved Code tasks using the existing account binding.
 Cowork tasks stay in their original profile.
 
-For **Claude without subscription access**, this repo currently rejects
-`--claude-mode none`. Use Codex's OpenRouter connection or contact IT about
-Claude access. An OpenRouter key alone does not establish that Claude setup works.
+For **Claude without subscription access**, choose **No subscription** for the
+Claude question in the key setup window. Claude Code in the terminal then needs
+no Claude sign-in: it starts on OpenAI GPT-6 Luna at max effort, and its Opus,
+Sonnet, Haiku and Fable choices use the matching Claude models on OpenRouter.
+Claude desktop opens on OpenRouter, and **Claude subscription** stays unavailable
+in the menu. Every reply charges your OpenRouter key. To add a subscription later,
+choose **Replace model key** and answer **I have one**.
 
 After either switch, select the intended model and send a short greeting.
 Check that you receive a reply. The existing Mac switch shortcuts remain available.

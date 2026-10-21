@@ -1,6 +1,7 @@
 """Claude Code activation adapter (Plan 112). Python 3.9-safe helper.
 
-Owns three public `env` settings merged into the user's settings.json, conflict
+Owns three public `env` settings merged into the user's settings.json (plus
+the sign-in, model and effort keys without a Claude subscription), conflict
 refusal on hand-edited owned values and on the tool-search hard switch, and
 activation receipt handling. Loaded through the installer's explicit
 file-import pattern and shipped in the release bundle. No runtime/protocol
@@ -34,6 +35,20 @@ FIRST_PARTY_KEY = '_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL'
 DISABLE_KEY = 'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS'
 OWNED_KEYS = (BASE_URL_KEY, DISCOVERY_KEY, TOOL_SEARCH_KEY)
 LEGACY_KEYS = (BASE_URL_KEY, DISCOVERY_KEY, FIRST_PARTY_KEY)
+# Owned only without a Claude subscription (claude_mode none), when every
+# request goes to OpenRouter through the router and nothing signs in.
+AUTH_KEY = 'ANTHROPIC_AUTH_TOKEN'
+# A placeholder, not a credential: it outranks a stored Claude login, and the
+# router builds fresh OpenRouter headers, so this value never leaves the machine.
+AUTH_PLACEHOLDER = 'scg-router'
+MODEL_KEY = 'ANTHROPIC_MODEL'
+# Claude Code 2.1.283 settings take effortLevel low to xhigh only and keep max
+# for one session, so the max default rides this variable on every request.
+EFFORT_KEY = 'CLAUDE_CODE_EFFORT_LEVEL'
+TIER_KEYS = (('opus', 'ANTHROPIC_DEFAULT_OPUS_MODEL'), ('sonnet', 'ANTHROPIC_DEFAULT_SONNET_MODEL'),
+             ('haiku', 'ANTHROPIC_DEFAULT_HAIKU_MODEL'), ('fable', 'ANTHROPIC_DEFAULT_FABLE_MODEL'))
+NONE_KEYS = (AUTH_KEY, MODEL_KEY, EFFORT_KEY) + tuple(key for _, key in TIER_KEYS)
+DEFAULT_MODEL, DEFAULT_EFFORT = 'openai/gpt-6-luna', 'max'
 
 
 def settings_path(env=None):
@@ -49,6 +64,30 @@ def desired_env(home, state):
     return {BASE_URL_KEY: 'http://127.0.0.1:%s/%s' % (state['port'], state['token']),
             DISCOVERY_KEY: 'true',
             TOOL_SEARCH_KEY: 'true'}
+
+
+def none_env(listing):
+    """The no-subscription keys, with model ids from the attach-time listing.
+
+    A missing tier, or a missing default model, uses the Sonnet row instead.
+    """
+    rows = listing.get('data') if isinstance(listing, dict) else None
+    if not isinstance(rows, list):
+        raise SystemExit('Claude Code could not read the OpenRouter model list. '
+                         'Run setup again.')
+    tiers, ids = {}, set()
+    for row in rows:
+        if isinstance(row, dict) and isinstance(row.get('id'), str):
+            ids.add(row['id'])
+            tiers.setdefault(row.get('anthropic_family_tier'), row['id'])
+    sonnet = tiers.get('sonnet')
+    if sonnet is None:
+        raise SystemExit('Claude Code without a Claude subscription needs Claude Sonnet '
+                         'on your OpenRouter key. Check the key, then run setup again.')
+    values = {AUTH_KEY: AUTH_PLACEHOLDER, EFFORT_KEY: DEFAULT_EFFORT,
+              MODEL_KEY: DEFAULT_MODEL if DEFAULT_MODEL in ids else sonnet}
+    values.update((key, tiers.get(tier, sonnet)) for tier, key in TIER_KEYS)
+    return values
 
 
 def _truthy(value):
@@ -99,15 +138,18 @@ def read_settings(path):
     return doc
 
 
-def merge_env(home, state, path=None, env=None, legacy_snapshot=None):
+def merge_env(home, state, path=None, env=None, legacy_snapshot=None, listing=None,
+              written=None):
     """Merge public keys; migrate only a receipt-proven private flag.
 
     Returns (doc, changed, previous_owned) where previous_owned maps each
-    owned key to its prior value (or None when absent) for the receipt.
+    key written now to its prior value (or None when absent) for the receipt.
     Conflicting effective overrides block activation with a redacted
     explanation: only values this installer wrote before may be replaced. A
     set tool-search hard switch blocks for the same reason and names its
-    source.
+    source. `written` is the receipt's last write: a no-subscription key
+    still holding it may change on update, and returns to its
+    `legacy_snapshot` value once a Claude subscription is chosen.
     """
     path = Path(path) if path is not None else settings_path(env)
     doc = read_settings(path)
@@ -122,7 +164,10 @@ def merge_env(home, state, path=None, env=None, legacy_snapshot=None):
             % (DISABLE_KEY, ' and '.join(blocked)))
     doc['env'] = owned
     want = desired_env(home, state)
-    previous = {key: owned.get(key) for key in OWNED_KEYS}
+    if state.get('claude_mode') == 'none':
+        want.update(none_env(listing))
+    earlier = written if isinstance(written, dict) else {}
+    previous = {key: owned.get(key) for key in want}
     legacy = owned.get(FIRST_PARTY_KEY)
     if legacy is not None and not (
             legacy == '1' and legacy_snapshot is not None
@@ -135,14 +180,25 @@ def merge_env(home, state, path=None, env=None, legacy_snapshot=None):
     if _truthy(effective.get(FIRST_PARTY_KEY)):
         raise SystemExit('Claude setting %s is managed outside this installer in '
                          'the environment; remove it, then re-run.' % FIRST_PARTY_KEY)
-    for key in OWNED_KEYS:
-        if previous[key] is not None and previous[key] != want[key]:
+    for key in want:
+        if previous[key] is not None and previous[key] != want[key] and not (
+                key in NONE_KEYS and previous[key] == earlier.get(key)):
             raise SystemExit(
                 'Claude setting env.%s is managed outside this installer; '
                 'remove or correct it by hand, then re-run.' % key)
-    changed = legacy is not None or any(previous[key] != want[key] for key in OWNED_KEYS)
+    # A value changed by hand since it was written belongs to the person.
+    dropped = [key for key in NONE_KEYS if key not in want
+               and key in earlier and owned.get(key) == earlier[key]]
+    changed = legacy is not None or bool(dropped) or any(
+        previous[key] != want[key] for key in want)
     owned.update(want)
     owned.pop(FIRST_PARTY_KEY, None)
+    for key in dropped:
+        old = (legacy_snapshot or {}).get(key)
+        if old is None:
+            owned.pop(key)
+        else:
+            owned[key] = old
     return doc, changed, previous
 
 
@@ -226,7 +282,7 @@ def attach(home, state, receipts, settings_path_override=None, env=None,
            listing=None):
     """Attach Claude Code without touching Codex settings or native login.
 
-    Merges three public keys and migrates an owned legacy flag; conflicts
+    Merges the owned keys and migrates an owned legacy flag; conflicts
     refuse with a redacted message. Records the claude attachment in the
     versioned receipt. Returns the settings path written.
     """
@@ -244,16 +300,25 @@ def attach(home, state, receipts, settings_path_override=None, env=None,
     snapshot = (_removal.saved_values(existing, OWNED_KEYS, LEGACY_KEYS)
                 if isinstance(existing, dict) and owned_path
                 and 'inserted_block' in existing else None)
-    doc, changed, previous = merge_env(home, state, path, env, snapshot)
+    earlier = existing.get('written') if isinstance(existing, dict) else None
+    doc, changed, previous = merge_env(home, state, path, env, snapshot, listing, earlier)
     write_settings(path, doc)
+    written = {key: doc['env'][key] for key in previous}
     if snapshot is not None and (not changed or
             previous[BASE_URL_KEY] == desired_env(home, state)[BASE_URL_KEY]):
         # Re-attach with identical values: keep the original pre-attach
         # snapshot so a later detach restores it instead of our own URL.
-        previous = dict(previous, **snapshot)
+        # A no-subscription key no longer written is no longer owned.
+        previous = dict(previous, **{key: value for key, value in snapshot.items()
+                                     if key in written or key not in NONE_KEYS})
+    if snapshot is not None and isinstance(earlier, dict):
+        # A key still holding, or missing, what this installer wrote keeps its
+        # original value, even after the base URL was removed by hand.
+        previous.update((key, snapshot[key]) for key in written if key in earlier
+                        and key in snapshot and previous[key] in (earlier[key], None))
     entry = {'config_path': str(path),
              'inserted_block': json.dumps(previous, sort_keys=True),
-             'written': desired_env(home, state),
+             'written': written,
              'claude_mode': state.get('claude_mode', 'subscription')}
     snapshot = _listing_snapshot(listing)
     if snapshot is not None:

@@ -39,7 +39,9 @@ class ClientRetentionTests(unittest.TestCase):
                              'CLAUDE_CONFIG_DIR': str(Path(tmp) / 'claude'),
                              'ROUTER_NO_KEY_WINDOW': '1', 'OPENROUTER_API_KEY': 'test-key'}), \
                 mock.patch.object(install_mod._operator, 'listing',
-                                  return_value={'data': [{'id': 'synthetic-update'}]}):
+                                  return_value={'data': [{'id': 'synthetic-update'}, {
+                                      'id': 'anthropic/claude-sonnet-5.5',
+                                      'anthropic_family_tier': 'sonnet'}]}):
             rc, out = fixture._check(home, blob, latest, [], run=run)
             self.assertIn('agent skills:', out)
             return rc
@@ -75,7 +77,10 @@ class ClientRetentionTests(unittest.TestCase):
                 state = install_mod.ensure_state(home)
                 state['clients'] = 'claude'  # Last selection is not the attachment union.
                 install_mod._write_state(home, state)
-                _, out, _, _ = _full_install(self, tmp, home, '1.0.1', [])
+                sonnet = {'id': 'anthropic/claude-sonnet-5.5', 'anthropic_family_tier': 'sonnet'}
+                with mock.patch.object(install_mod._operator, 'listing',
+                                       return_value={'data': [sonnet]}):
+                    _, out, _, _ = _full_install(self, tmp, home, '1.0.1', [])
                 self.assertIn('agent skills:', out)
                 self.assertEqual(set(install_mod._codex_config.read_receipt(home)['clients']),
                                  expected)
@@ -264,13 +269,21 @@ class CurrentModeTests(unittest.TestCase):
                 self.assertNotIn('connected', out.getvalue())
                 self.assertNotIn('nothing to attach', out.getvalue())
 
-    def test_canonical_none_requires_an_explicit_change(self):
+    def test_canonical_none_attaches_claude_code_to_openrouter(self):
         state = install_mod.ensure_state(self.home)
         state['anthropic_mode'] = 'none'
         install_mod._write_state(self.home, state)
-        with self.assertRaisesRegex(SystemExit, 'claude_mode is none'):
-            self.install()
+        sonnet = {'id': 'anthropic/claude-sonnet-5.5', 'anthropic_family_tier': 'sonnet'}
+        with mock.patch.object(install_mod._operator, 'listing', return_value={'data': [sonnet]}), \
+                mock.patch.object(install_mod._svc, 'wait_version', return_value=True), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.install(), 0)
+        entry = install_mod._codex_config.read_receipt(self.home)['clients']['claude']
+        self.assertEqual(entry['claude_mode'], 'none')
+        self.assertEqual(entry['written']['ANTHROPIC_MODEL'], sonnet['id'])
         self.assertEqual(install_mod.ensure_state(self.home)['anthropic_mode'], 'none')
         with mock.patch.object(install_mod._svc, 'wait_version', return_value=True):
             self.assertEqual(self.install('--claude-mode', 'subscription'), 0)
         self.assertEqual(install_mod.ensure_state(self.home)['anthropic_mode'], 'subscription')
+        entry = install_mod._codex_config.read_receipt(self.home)['clients']['claude']
+        self.assertEqual(set(entry['written']), set(install_mod._claude_config.OWNED_KEYS))

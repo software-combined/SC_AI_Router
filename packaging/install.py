@@ -360,7 +360,7 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
     if args.repair and not _delivery.close_assistants(home):
         args.repair_cancelled = True
         raise SystemExit('Repair cancelled; run setup again when your assistants are ready.')
-    client, clients, claude_mode, mode = _resolve_clients_and_modes(args, home, state, repair=repair)
+    client, clients, _, mode = _resolve_clients_and_modes(args, home, state, repair=repair)
     # First-run window: the router boots keyless on a single-use link and
     # the operator pastes one key there instead of into the terminal. TTL
     # mirrors ai_router.setup.SETUP_TTL_S; kept literal so the 3.9-compatible
@@ -434,8 +434,8 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
     # installs are a no-op); notice failures never surface.
     _svc.notice.record(home, previous, latest['version'], args.clients)
     previous_receipt = _codex_config.codex_attachment(home)
-    if setup_url is not None and os.environ.get('ROUTER_NO_KEY_WINDOW') != '1':
-        _open_key_window(python, home, setup_url, clients)
+    if setup_url is not None and os.environ.get('ROUTER_NO_KEY_WINDOW') != '1':  # desktop alone asks the Claude question
+        _open_key_window(python, home, setup_url, 'claude' if args.desktop and clients == 'none' else clients)
     saved = None if args.desktop or args.client == 'none' else _desktop_config.saved_profile(home, _codex_config)
     if clients == 'none':
         if args.desktop or saved:
@@ -455,12 +455,8 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
         backend.start_updates(home)
         print(f"installed {latest['version']}; health ok; {_client_choice.none_outcome(args, bool(saved))}")
         return 0
-    if claude_mode == 'none' and clients in ('claude', 'both') and (
-            'claude' not in _codex_config.read_receipt(home).get('clients', {})):
-        raise SystemExit('claude_mode is none: re-run with --claude-mode subscription '
-                         'to attach Claude Code, or select --clients codex')
     if clients in ('claude', 'both'): attach_claude(home, state, python=python)
-    if args.desktop or saved: _desktop_config.attach(home, state, _codex_config, saved, python=python, refresh=bool(saved))
+    if args.desktop or saved: _desktop_config.attach(home, state, _codex_config, saved, python=python)
     # Only explicit service-only installation or uninstall drops attachments.
     if clients == 'claude':
         # Claude-only: the shared service is up; Codex settings untouched.

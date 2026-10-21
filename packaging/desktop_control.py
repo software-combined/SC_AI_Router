@@ -51,7 +51,9 @@ def snapshot(home):
                 selected = ('openrouter' if owner.current(home) == owner.SWITCHED
                             or not subscription else 'subscription')
             else:
-                _, doc = load('claude_desktop_switch').attached_profile(home)
+                owner = load('claude_desktop_switch')
+                subscription = owner.subscription_chosen(home)
+                _, doc = owner.attached_profile(home)
                 selected = 'subscription' if doc['deploymentMode'] == '1p' else 'openrouter'
         except (Exception, SystemExit):
             selected = None
