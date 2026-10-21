@@ -30,9 +30,9 @@ a subscription model and an approved model billed to your own OpenRouter key.
 SC AI Router is independent software. OpenAI, Anthropic and OpenRouter do
 not endorse this release. Claude gateways retain the signed-in client's
 own authentication. Anthropic documents gateway configuration but does not
-endorse, maintain or audit third-party gateways. It does not support non-Claude
-models in Claude Code. Other Messages-compatible
-routes keep truthful vendor IDs and are outside that client support boundary.
+endorse, maintain or audit third-party gateways, and does not support non-Claude
+models in Claude Code. The router still offers other vendors' models to Claude
+under their real vendor IDs; using them is outside Anthropic's support.
 See [integration scope and data flows](docs/publication.md) for release decisions.
 
 ## Get started
@@ -113,8 +113,9 @@ Windows); read `<version>` from `<home>/current`.
 ## Use it
 
 - Switch models mid-thread from the picker to keep working in the same chat.
-  Codex offers subscription and OpenRouter models. Claude Code's supported
-  gateway scope is Claude-family models; other vendors remain unsupported.
+  Codex offers subscription and OpenRouter models. Claude desktop's OpenRouter
+  mode can offer other vendors' models too, though some desktop versions hide
+  them; Anthropic supports only Claude models there.
 - Claude desktop's gateway profile uses OpenRouter models. Its subscription
   remains in the signed-in profile; see [Claude setup](docs/claude-code.md).
 - Generate images on the originating chat's connection: native OpenAI chats
