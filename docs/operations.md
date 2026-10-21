@@ -425,6 +425,18 @@ never announced.
 
 ## How to test first
 
+If the release changes anything under `packaging/`, run the installer tests
+locally before you tag the beta:
+
+```sh
+SCG_RUN_INSTALLER_TESTS=1 python3.14 -m unittest discover -s tests -t .
+```
+
+The default discovery run skips them, and a beta does not wait for the `main`
+checks that run them. The release workflow's native packaging step runs them
+and stops the release when one fails. On 21 October 2026 AEDT this stopped
+`v1.3.12-beta` before it published anything.
+
 Merge the release candidate into `development` through its PR, then tag the
 resulting `development` commit `v<VERSION>-beta`. A beta waits only for that PR's
 checks, not the long `main` checks. The workflow publishes a pre-release to the

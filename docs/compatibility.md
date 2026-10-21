@@ -20,8 +20,13 @@ provider does not report the effort it applied. Claude Code printed an
 `unrecognized_model` notice for the Luna id and still sent the request. The
 owner's own Claude settings file was not changed. This machine has a stored
 Claude login, so the probe does not show the first-run screen on a machine
-with no login. Claude desktop's OpenRouter mode without a subscription needs
-an owner check, because switching modes restarts the running Claude app.
+with no login.
+
+The desktop slice needed an owner check, because switching modes restarts the
+running Claude app. On 21 October 2026 AEDT the owner reported that Claude
+desktop without a Claude subscription passed on beta `1.3.13.202`. That report
+gave no platform or Claude desktop version. Stable `1.3.13.203` then shipped
+the same router code.
 
 ## MiniMax M3.1 Flash onboarding, 21 October 2026 AEDT
 
