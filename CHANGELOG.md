@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.3.11
+
+- Add MiniMax M3.1 Flash (free) to both model pickers after real Codex and
+  Claude Code checks. Low is the default reasoning effort. OpenRouter retires
+  this free entry on 22 October at 23:00 AEDT; the paid entry needs separate
+  availability and onboarding checks before it can replace it.
+
 ## 1.3.10
 
 - Add StepFun Step 5 Preview to both model pickers after real Codex and
