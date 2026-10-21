@@ -1,5 +1,33 @@
 # Compatibility
 
+## Step 5 Preview onboarding, 21 October 2026 AEDT
+
+OpenRouter's exact `stepfun/step-5-preview` maps to
+`stepfun/step-5-preview-20261008`. The model supports text and image input,
+a 1,048,576-token context, 64,000 output tokens, and Low, Medium and High
+reasoning. Low is the default. No predecessor row was replaced.
+
+The isolated proof completed at 11:09:22 AEDT (10:09:22 AEST). It used Codex
+desktop `26.1013.40934`, bundled CLI `0.163.0-alpha.10.2`, and Claude Code
+`2.1.283`, with synthetic data and the existing twelve-attempt cap.
+Each request retained its 512 KiB input and 65,536-output-token limits.
+The probe retained its 750-second deadline and Claude's USD 0.25 client cap.
+
+| Client / route | Requested model / effort | Attempts | Result |
+| --- | --- | ---: | --- |
+| Codex / OpenRouter | `stepfun/step-5-preview` / low | 4 | Streamed tool, image and compaction passed |
+| Claude Code / OpenRouter | `stepfun/step-5-preview` / low | 3 | Two sequential Reads with paired results passed |
+
+Both routes reported the exact requested model. Codex reported Low effort;
+Claude did not expose served effort. These are provider reports, not independent
+model or reasoning-compute attestation. The acceptance ledger binds the proof
+to the capability row, Python runtime and both client versions.
+
+Release 1.3.10 changes no Python runtime or subscription path. The client
+versions match the 20 October compatibility check below, so those unchanged
+subscription paths reuse its evidence. Publication and installed picker
+delivery remain separate checks.
+
 ## Release 1.3.6 compatibility check, 20 October 2026 AEDT
 
 The ChatGPT app (Codex desktop) moved to `26.1013.40934`, bundled CLI

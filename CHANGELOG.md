@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.3.10
+
+- Add StepFun Step 5 Preview to both model pickers after real Codex and
+  Claude Code checks. Low remains the default reasoning effort.
+
 ## 1.3.9
 
 - Set the simulated platform before creating Mac reopen requests in tests, so
