@@ -531,7 +531,9 @@ it shares the current account's local tasks and changes the mode only when all
 required copies succeed. Open and Switch share one transition lock, held before
 reading the mode through reopening, so overlapping requests cannot use a stale
 source profile. The switch rechecks the attachment, managed policy and stopped
-app before changing the mode. Open Claude leaves histories alone. The stable
+app before changing the mode. When setup recorded no Claude subscription, it
+refuses a move to the subscription before asking or closing Claude, and the
+menu disables that choice. Open Claude leaves histories alone. The stable
 `claude_profile_launch.py` follows the installed release pointer so both actions
 survive updates and release pruning. After a rollback to a release without task
 sharing it runs that release's plain switch, opens Claude for Open Claude and

@@ -1,5 +1,28 @@
 # Compatibility
 
+## Claude Code without a Claude subscription, 21 October 2026 AEDT
+
+The terminal slice of no-subscription Claude (`claude_mode` `none`) passed a
+bounded live probe. The candidate's own `claude_config.attach` wrote Claude
+Code settings into a scratch config folder from the running router's
+`/v1/models` listing. Claude Code `2.1.283` then ran `claude -p` with no
+inherited login settings. Caps: one turn, no retries, `--max-budget-usd 0.50`.
+The router was the installed `1.3.11.199`; this change does not touch router
+code.
+
+| Leg | Requested model and effort | Served model | Result |
+| --- | --- | --- | --- |
+| Default | `openai/gpt-6-luna`, max | `openai/gpt-6-luna` (provider reported) | Success, `PONG` |
+| `--model haiku` | `anthropic/claude-haiku-5.5`, max | `anthropic/claude-haiku-5.5` (provider reported) | Success, `PONG` |
+
+Two paid calls ran. The router recorded `effort requested=max` for both. The
+provider does not report the effort it applied. Claude Code printed an
+`unrecognized_model` notice for the Luna id and still sent the request. The
+owner's own Claude settings file was not changed. This machine has a stored
+Claude login, so the probe does not show the first-run screen on a machine
+with no login. Claude desktop's OpenRouter mode without a subscription needs
+an owner check, because switching modes restarts the running Claude app.
+
 ## MiniMax M3.1 Flash onboarding, 21 October 2026 AEDT
 
 OpenRouter's exact `minimax/minimax-m3.1-flash:free` maps to canonical version

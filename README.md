@@ -30,9 +30,9 @@ a subscription model and an approved model billed to your own OpenRouter key.
 SC AI Router is independent software. OpenAI, Anthropic and OpenRouter do
 not endorse this release. Claude gateways retain the signed-in client's
 own authentication. Anthropic documents gateway configuration but does not
-endorse, maintain or audit third-party gateways. It does not support non-Claude
-models in Claude Code. Other Messages-compatible
-routes keep truthful vendor IDs and are outside that client support boundary.
+endorse, maintain or audit third-party gateways, and does not support non-Claude
+models in Claude Code. The router still offers other vendors' models to Claude
+under their real vendor IDs; using them is outside Anthropic's support.
 See [integration scope and data flows](docs/publication.md) for release decisions.
 
 ## Get started
@@ -89,9 +89,13 @@ The menu preserves the connections needed to resume saved Codex chats in both mo
 Claude shares saved Code tasks using the existing account binding.
 Cowork tasks stay in their original profile.
 
-For **Claude without subscription access**, this repo currently rejects
-`--claude-mode none`. Use Codex's OpenRouter connection or contact IT about
-Claude access. An OpenRouter key alone does not establish that Claude setup works.
+For **Claude without subscription access**, choose **No subscription** for the
+Claude question in the key setup window. Claude Code in the terminal then needs
+no Claude sign-in: it starts on OpenAI GPT-6 Luna at max effort, and its Opus,
+Sonnet, Haiku and Fable choices use the matching Claude models on OpenRouter.
+Claude desktop opens on OpenRouter, and **Claude subscription** stays unavailable
+in the menu. Every reply charges your OpenRouter key. To add a subscription later,
+choose **Replace model key** and answer **I have one**.
 
 After either switch, select the intended model and send a short greeting.
 Check that you receive a reply. The existing Mac switch shortcuts remain available.
@@ -113,8 +117,9 @@ Windows); read `<version>` from `<home>/current`.
 ## Use it
 
 - Switch models mid-thread from the picker to keep working in the same chat.
-  Codex offers subscription and OpenRouter models. Claude Code's supported
-  gateway scope is Claude-family models; other vendors remain unsupported.
+  Codex offers subscription and OpenRouter models. Claude desktop's OpenRouter
+  mode can offer other vendors' models too, though some desktop versions hide
+  them; Anthropic supports only Claude models there.
 - Claude desktop's gateway profile uses OpenRouter models. Its subscription
   remains in the signed-in profile; see [Claude setup](docs/claude-code.md).
 - Generate images on the originating chat's connection: native OpenAI chats

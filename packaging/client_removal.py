@@ -62,7 +62,9 @@ def json_plan(home, client, entry):
             raise _json.Conflict('damaged_receipt')
         written = (owner.desired_env(home, state) if client == 'claude'
                    else owner.desired_values(state))
-    if (not isinstance(written, dict) or set(written) != set(owner.OWNED_KEYS)
+    base = set(owner.OWNED_KEYS)
+    if (not isinstance(written, dict)
+            or not base <= set(written) <= base | set(getattr(owner, 'NONE_KEYS', ()))
             or any(not isinstance(value, str) for value in written.values())):
         raise _json.Conflict('damaged_receipt')
     if any(value is not None and not isinstance(value, str) for value in previous.values()):

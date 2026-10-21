@@ -168,7 +168,7 @@ def attach_desktop_only(args, home, state, codex, desktop, saved=None, python=No
     """
     if args.client == 'none':
         raise SystemExit('--desktop conflicts with --client none')
-    desktop.attach(home, state, codex, saved, python=python, refresh=bool(saved))
+    desktop.attach(home, state, codex, saved, python=python)
 
 
 def none_outcome(args, desktop=False):
@@ -193,7 +193,7 @@ def attach_current(args, home, *, codex, desktop, claude, write_state, resolve,
         return 0
     state = ensure_state(home)
     previous = state.copy()
-    _, clients, claude_mode, mode = resolve(args, home, state)
+    _, clients, _, mode = resolve(args, home, state)
     saved = desktop.saved_profile(home, codex) if getattr(args, 'repair', False) else None
     if args.choose_clients and args.clients is None:
         # The chooser was asked for but could not ask (no dialog tool, or an
@@ -208,13 +208,9 @@ def attach_current(args, home, *, codex, desktop, claude, write_state, resolve,
             return 0
         ready(home, state, previous, python)
         if saved:
-            desktop.attach(home, state, codex, saved, python=python, refresh=True)
+            desktop.attach(home, state, codex, saved, python=python)
             return 0
         return desktop.attach_current(args, codex, write_state, python=python)
-    if claude_mode == 'none' and clients in ('claude', 'both'):
-        write_state(home, previous)
-        raise SystemExit('claude_mode is none: re-run with --claude-mode subscription '
-                         'to attach Claude Code, or select --clients codex')
     ready(home, state, previous, python)
     names = []
     if clients in ('codex', 'both'):
@@ -226,7 +222,7 @@ def attach_current(args, home, *, codex, desktop, claude, write_state, resolve,
         names.append('Claude Code')
     if args.desktop or saved:
         if saved:
-            desktop.attach(home, state, codex, saved, python=python, refresh=True)
+            desktop.attach(home, state, codex, saved, python=python)
         else:
             desktop.attach_current(args, codex, write_state, python=python)
         names.append('Claude desktop')

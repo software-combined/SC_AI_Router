@@ -188,16 +188,19 @@ remain separate. See [Claude desktop setup and limits](claude-code.md#claude-des
 
 ## I have no Claude subscription access
 
-This router currently rejects `--claude-mode none` for Claude desktop and the
-Claude Code terminal. A paid OpenRouter key does not remove that setup restriction.
-Use [Codex's OpenRouter connection](#codex-send-button-is-greyed-out-or-chatgpt-subscription-access-is-unavailable)
-or ask IT to confirm your Claude access. Returning to a subscription connection
-also requires working subscription access.
+Choose **No subscription** for the Claude question in the key window. From a
+terminal, add `--claude-mode none` to the install command. Then:
 
-If Claude Code in the terminal is already attached and signed in, use `/model`
-to choose an OpenRouter model or return to a subscription model. Restart the
-terminal client after setup. Keep `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` unset;
-the [Claude guide](claude-code.md#setup) explains their effect on sign-in.
+- Claude Code in the terminal needs no Claude sign-in. It starts on OpenAI
+  GPT-6 Luna at max effort. Its Opus, Sonnet, Haiku and Fable choices use the
+  matching Claude models on OpenRouter, or Claude Sonnet when one is missing.
+  Restart it after setup.
+- Claude desktop opens on OpenRouter. **Claude subscription** is unavailable
+  in the SCG Router menu.
+
+Setup stops with a message when your OpenRouter key cannot use Claude Sonnet.
+Ask IT to check the key. To add a subscription later, choose **Replace model
+key** in the SCG Router menu and answer **I have one**.
 
 ## The installer stops before it downloads anything
 
@@ -272,7 +275,9 @@ this fallback; update to the corrected release instead of disabling discovery.
 
 `ANTHROPIC_BASE_URL` must point at the loopback URL with the path token;
 `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_API_KEY` must stay unset, because either
-one replaces the subscription credential the router forwards.
+one replaces the subscription credential the router forwards. Without a Claude
+subscription, the installer sets `ANTHROPIC_AUTH_TOKEN` to its own placeholder;
+leave that value as it is.
 
 - Re-attach: `packaging/install.py --home <home> --clients claude` (or `both`).
 - Detach everything: `packaging/install.py --home <home> --uninstall`.

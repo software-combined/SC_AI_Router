@@ -2,9 +2,12 @@
 
 Claude Code can talk to the local router instead of Anthropic directly. It
 keeps your Claude subscription sign-in. Claude-family OpenRouter models can
-appear next to subscription models and charge the OpenRouter key. Anthropic
-does not support Claude Code routing to other vendors; the stock client may
-filter their truthful IDs. Native requests use your existing Claude sign-in.
+appear next to subscription models and charge the OpenRouter key. The router
+also offers other vendors' models under their real IDs. Claude desktop's
+OpenRouter mode can use them, but Anthropic does not support Claude Code
+routing to other vendors, and the stock terminal client and some desktop
+versions may hide them.
+Native requests use your existing Claude sign-in.
 
 ## Setup
 
@@ -46,10 +49,36 @@ The installer keeps the original restore record until detach completes.
 
 Claude's subscription choice is independent of Codex's `--openai-mode`.
 `--claude-mode` and `--anthropic-mode` name the same Claude choice; conflicting
-values are refused. A saved `none` requires an explicit
-`--claude-mode subscription` before connecting Claude Code. A changed mode
-reloads the current router and checks its health before confirming connection.
-Updates preserve `none` for already connected Claude clients.
+values are refused. A changed mode reloads the current router and checks its
+health before confirming connection. Updates preserve `none` for already
+connected Claude clients.
+
+### Without a Claude subscription
+
+Choose **No subscription** for the Claude question in the key window, or pass
+`--claude-mode none`. The key window asks this question for Claude Code and for
+Claude desktop alone. When the answer changes the mode of an attached Claude
+Code, native setup runs the installer again with the new `--claude-mode`. A
+terminal-only install that answers in the key window applies the change at the
+next update, or at once with `--claude-mode none`.
+
+Claude Code then needs no Claude sign-in, and every request goes to OpenRouter.
+The installer also owns these settings:
+
+| Setting | Value |
+|---|---|
+| `ANTHROPIC_AUTH_TOKEN` | `scg-router`, a placeholder that outranks a stored Claude login. The router sends its own OpenRouter key upstream, never this value. |
+| `ANTHROPIC_MODEL` | `openai/gpt-6-luna`, or the Sonnet row when Luna is not listed |
+| `CLAUDE_CODE_EFFORT_LEVEL` | `max` |
+| `ANTHROPIC_DEFAULT_OPUS_MODEL`, `_SONNET_`, `_HAIKU_`, `_FABLE_` | the matching Claude row on OpenRouter, or the Sonnet row when a tier is missing |
+
+Model ids come from the router's listing at attach time, so an update replaces
+an id this installer wrote. Without a Sonnet row, attach refuses. The effort is
+an environment setting because Claude Code 2.1.283 saves `effortLevel` only up
+to `xhigh` and keeps `max` for one session. It applies to every request,
+including Haiku background calls; every Claude row and Luna accept `max`.
+Choosing a subscription again removes these settings and restores any value
+you had before the first attach.
 
 ### Deferred tool loading
 
@@ -115,7 +144,8 @@ export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=true
 
 Set only those two. Never set `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`:
 either one overrides the subscription bearer and breaks subscription
-passthrough. Unset `ANTHROPIC_BASE_URL` to return to direct routing, and
+passthrough. Without a Claude subscription, use the settings in
+[the table above](#without-a-claude-subscription) instead. Unset `ANTHROPIC_BASE_URL` to return to direct routing, and
 restart Claude Code after changing it.
 
 ## Reference
@@ -158,6 +188,9 @@ forces deferred loading off.
 `ANTHROPIC_API_KEY` must stay unset: either one overrides the subscription
 bearer, so subscription requests would stop reaching Anthropic with the
 client's own login and the listing fetch would present the wrong credential.
+Without a Claude subscription the installer owns the placeholder token, the
+default model, the effort and the four tier settings as well; a hand-set value
+for any of them refuses attachment before anything is written.
 The attach records the listing ids, display names and tiers it was told
 about, and `--doctor` compares that snapshot with the live `GET /v1/models`;
 a change shows up as `drift` with the added and removed ids, and `unknown`
@@ -465,8 +498,9 @@ The publication candidate reports truthful vendor IDs and does not assign a
 Claude family tier to another vendor. This removes the old picker workaround.
 Some desktop versions will hide non-Claude rows; earlier compatibility
 measurements do not verify this candidate. Attach with
-`packaging/install.py --desktop` (refuses when `claude_mode` is `none`);
-service-only install and uninstall detach again. The first-party
+`packaging/install.py --desktop`. Without a Claude subscription
+(`claude_mode` `none`), the menu disables **Claude subscription** and the switch
+refuses to move there; service-only install and uninstall detach again. The first-party
 profile's credentials are never touched, so native sign-in survives, and
 a detach returns the app to first-party mode.
 

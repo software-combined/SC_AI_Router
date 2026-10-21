@@ -132,12 +132,26 @@ def _key(resources, home, replace=False, run=subprocess.run):
     url = 'http://127.0.0.1:%s/%s/setup/%s' % (state['port'], state['token'], setup['nonce'])
     current = (Path(home) / 'current').read_text().strip()
     release = Path(home) / 'releases' / current
+    try:
+        attached = load('codex_config').read_receipt(home).get('clients', {})
+    except (OSError, ValueError):  # An unreadable receipt must not block replacing the key.
+        attached = {}
+    clients = state.get('clients', 'codex')
+    if clients == 'none' and 'claude-desktop' in attached:
+        clients = 'claude'  # Claude desktop alone still needs the Claude subscription answer.
     result = run([str(python), '-m', 'ai_router.key_prompt', '--stdin',
-                  '--clients', state.get('clients', 'codex')], input=url + '\n',
+                  '--clients', clients], input=url + '\n',
                  capture_output=True, text=True, timeout=900, cwd=release,
                  env=dict(environment(resources), ROUTER_HOME=str(home)))
     if result.returncode not in (0, 2):
         raise ValueError('The key window could not finish. Open SCG Router to try again.')
+    # Claude Code was attached before the window saved the Claude choice.
+    mode = read_json(Path(home) / 'mixed-router-state.json').get('claude_mode')
+    if ('claude' in attached and mode in ('subscription', 'none')
+            and attached['claude'].get('claude_mode', 'subscription') != mode
+            and not _succeeded(run_installer(resources, home, ['--claude-mode', mode]))):
+        raise ValueError('Claude Code could not be set up for your Claude choice. '
+                         'Open SCG Router to try again.')
 
 
 def _claude_on_openrouter(home, dialog):

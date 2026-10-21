@@ -33,7 +33,7 @@ def key_prompt(provider_id=None):
 
 KEY_PROMPT = key_prompt()
 CODEX_QUESTION = 'Do you also use a ChatGPT subscription on this computer?'
-CLAUDE_QUESTION = 'Do you also use a Claude subscription for Claude Code?'
+CLAUDE_QUESTION = 'Do you also use a Claude subscription on this computer?'
 STARTER_QUESTION = 'How should Codex write for you by default?'
 
 

@@ -160,17 +160,19 @@ class DesktopMergeTests(unittest.TestCase):
             desktop_config.detach(home, install_mod._codex_config, data_dir_override=data_dir)
             self.assertEqual(_entry(data_dir), {})
 
-    def test_none_mode_refuses_before_writing(self):
+    def test_none_mode_attaches_the_gateway_and_leaves_the_mode_to_the_switch(self):
+        # Without a Claude subscription the gateway is the only way Claude works.
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             home.mkdir()
             data_dir = _profile(tmp)
             state = dict(_state(), claude_mode='none')
-            with self.assertRaisesRegex(SystemExit, 'claude_mode is none'):
-                desktop_config.attach(home, state, install_mod._codex_config,
-                                      data_dir_override=data_dir)
-            self.assertEqual(_entry(data_dir), {})
+            desktop_config.attach(home, state, install_mod._codex_config,
+                                  data_dir_override=data_dir)
+            self.assertEqual(_entry(data_dir)['inferenceProvider'], 'gateway')
             self.assertFalse((data_dir / 'claude_desktop_config.json').exists())
+            entry = install_mod._codex_config.read_receipt(home)['clients']['claude-desktop']
+            self.assertEqual(entry['claude_mode'], 'none')
 
     def test_detach_without_claim_is_noop_without_profile(self):
         # CLI-only machines have no Claude-3p profile: installer teardown
