@@ -132,7 +132,10 @@ def _key(resources, home, replace=False, run=subprocess.run):
     url = 'http://127.0.0.1:%s/%s/setup/%s' % (state['port'], state['token'], setup['nonce'])
     current = (Path(home) / 'current').read_text().strip()
     release = Path(home) / 'releases' / current
-    attached = load('codex_config').read_receipt(home).get('clients', {})
+    try:
+        attached = load('codex_config').read_receipt(home).get('clients', {})
+    except (OSError, ValueError):  # An unreadable receipt must not block replacing the key.
+        attached = {}
     clients = state.get('clients', 'codex')
     if clients == 'none' and 'claude-desktop' in attached:
         clients = 'claude'  # Claude desktop alone still needs the Claude subscription answer.
