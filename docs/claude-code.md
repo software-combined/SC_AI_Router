@@ -80,7 +80,7 @@ or run the installer already in the router home:
 
 ```sh
 # beta hosts: download the current bootstrap, then ask it to attach a client
-curl -fsSL https://dist.softwarecombined.com/bootstrap/bootstrap.sh -o bootstrap.sh
+curl -fsSL https://dist.softwarecombined.com/install/bootstrap.sh -o bootstrap.sh
 sh bootstrap.sh --channel=beta --choose-clients
 # a stable host omits --channel=beta
 
