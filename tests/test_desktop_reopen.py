@@ -13,7 +13,7 @@ from tests.test_native_setup import module
 class DesktopReopenTests(unittest.TestCase):
     def test_reopening_mac_requests_the_existing_menu_instead_of_a_second_window(self):
         menu = module('desktop_menu')
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(menu.sys, 'platform', 'darwin'):
             home = Path(temporary)
             (home / 'control').mkdir()
             (home / 'control/scg-router-menu').touch()
@@ -23,8 +23,7 @@ class DesktopReopenTests(unittest.TestCase):
             def consume(_):
                 observed.append(request.is_file())
                 request.unlink()
-            with mock.patch.object(menu.sys, 'platform', 'darwin'), \
-                    menu.load('service').install_lock(home, menu.session_lock()), \
+            with menu.load('service').install_lock(home, menu.session_lock()), \
                     mock.patch.object(menu.time, 'sleep', side_effect=consume), \
                     mock.patch.object(menu, 'fallback') as fallback:
                 self.assertEqual(menu.run_menu(home, home), 0)
@@ -44,7 +43,7 @@ class DesktopReopenTests(unittest.TestCase):
                 return len(text)
         shell = SimpleNamespace(stdin=Input(), stdout=io.StringIO(), poll=lambda: None,
                                 wait=lambda **kwargs: 0)
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(menu.sys, 'platform', 'darwin'):
             home = Path(temporary)
             (home / 'control').mkdir()
             (home / 'control/scg-router-menu').touch()
@@ -56,8 +55,7 @@ class DesktopReopenTests(unittest.TestCase):
                 queue.put({'action': 'refresh'})
                 # The old implementation ignores the request; end it without hanging.
                 queue.put({'closed': True})
-            with mock.patch.object(menu.sys, 'platform', 'darwin'), \
-                    mock.patch.object(menu, '_events', side_effect=events), \
+            with mock.patch.object(menu, '_events', side_effect=events), \
                     mock.patch.object(menu, '_control', return_value=dict(status='Running', clients=[])), \
                     mock.patch.object(menu.subprocess, 'Popen', return_value=shell):
                 self.assertEqual(menu.run_menu(home, home, autostart=True), 0)
@@ -72,15 +70,14 @@ class DesktopReopenTests(unittest.TestCase):
                 return len(text)
         shell = SimpleNamespace(stdin=Input(), stdout=io.StringIO(), poll=lambda: None,
                                 wait=lambda **kwargs: 0)
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(menu.sys, 'platform', 'darwin'):
             home = Path(temporary)
             (home / 'control').mkdir()
             (home / 'control/scg-router-menu').touch()
             (home / 'installer.json').write_text('{"version":"1.3.7"}')
             request = home / (menu.session_lock() + '.open')
             request.touch()
-            with mock.patch.object(menu.sys, 'platform', 'darwin'), \
-                    mock.patch.object(menu.time, 'time', return_value=request.stat().st_mtime + 10), \
+            with mock.patch.object(menu.time, 'time', return_value=request.stat().st_mtime + 10), \
                     mock.patch.object(menu, '_events', side_effect=lambda stream, queue: queue.put({'closed': True})), \
                     mock.patch.object(menu, '_control', return_value=dict(status='Running', clients=[])), \
                     mock.patch.object(menu.subprocess, 'Popen', return_value=shell):

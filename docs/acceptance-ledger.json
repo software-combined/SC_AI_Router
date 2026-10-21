@@ -1511,5 +1511,271 @@
       "result": "pass"
     }
   ]
+},
+{
+  "kind": "model_routes_v1",
+  "observed_at": "2026-10-21T00:09:22.133028+00:00",
+  "model": "stepfun/step-5-preview",
+  "provider": "openrouter",
+  "capability_fingerprint": "b4832f5b645eae24d29cf4666b301334a29d0668f4b100309bead40d45a33a30",
+  "runtime_fingerprint": "69bb58165f32ab8f8fb3f129e6bff5a0278c74dedd7303e1f85d96cf8e16a9b8",
+  "router_version": "1.3.9",
+  "router_revision": "02c849f1bcde1df7831d308b6c16512119f7f4f9",
+  "routes": [
+    {
+      "protocol": "responses",
+      "client": "codex",
+      "client_version": "0.163.0-alpha.10.2",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "stepfun/step-5-preview",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "stepfun/step-5-preview",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "stepfun/step-5-preview",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "stepfun/step-5-preview",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "stepfun/step-5-preview",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "stepfun/step-5-preview",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "stepfun/step-5-preview",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "stepfun/step-5-preview",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "stepfun/step-5-preview",
+          "source": "response.completed.response.model"
+        }
+      ],
+      "served_efforts": [
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        }
+      ],
+      "calls": 4,
+      "conformance": "pass",
+      "result": "pass"
+    },
+    {
+      "protocol": "messages",
+      "client": "claude",
+      "client_version": "2.1.283",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "stepfun/step-5-preview",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "stepfun/step-5-preview",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "stepfun/step-5-preview",
+          "source": "message_start.message.model"
+        }
+      ],
+      "served_efforts": [],
+      "calls": 3,
+      "conformance": "pass",
+      "result": "pass"
+    }
+  ]
+},
+{
+  "kind": "model_routes_v1",
+  "observed_at": "2026-10-21T01:59:13.422735+00:00",
+  "model": "minimax/minimax-m3.1-flash:free",
+  "provider": "openrouter",
+  "capability_fingerprint": "ba5e449b619c8f8b590af8d18f1d3f790805080ccdf43e365cc0a4a3b607b2e9",
+  "runtime_fingerprint": "69bb58165f32ab8f8fb3f129e6bff5a0278c74dedd7303e1f85d96cf8e16a9b8",
+  "router_version": "1.3.10",
+  "router_revision": "3b6a9688b19755bbe96ad7c9e18f583e39bb5fa2",
+  "routes": [
+    {
+      "protocol": "responses",
+      "client": "codex",
+      "client_version": "0.163.0-alpha.10.2",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "minimax/minimax-m3.1-flash:free",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "minimax/minimax-m3.1-flash:free",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "minimax/minimax-m3.1-flash:free",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "minimax/minimax-m3.1-flash:free",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "minimax/minimax-m3.1-flash:free",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "minimax/minimax-m3.1-flash:free",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "minimax/minimax-m3.1-flash:free",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "minimax/minimax-m3.1-flash:free",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "minimax/minimax-m3.1-flash:free",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "minimax/minimax-m3.1-flash:free",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "minimax/minimax-m3.1-flash:free",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "minimax/minimax-m3.1-flash:free",
+          "source": "response.completed.response.model"
+        }
+      ],
+      "served_efforts": [
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        }
+      ],
+      "calls": 5,
+      "conformance": "pass",
+      "result": "pass"
+    },
+    {
+      "protocol": "messages",
+      "client": "claude",
+      "client_version": "2.1.283",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "minimax/minimax-m3.1-flash:free",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "minimax/minimax-m3.1-flash:free",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "minimax/minimax-m3.1-flash:free",
+          "source": "message_start.message.model"
+        }
+      ],
+      "served_efforts": [],
+      "calls": 3,
+      "conformance": "pass",
+      "result": "pass"
+    }
+  ]
 }
 ]

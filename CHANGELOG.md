@@ -7,6 +7,23 @@
   where each release publishes the current scripts. The prompt named a folder
   that returns Forbidden, and the other links fetched an older script.
 
+## 1.3.11
+
+- Add MiniMax M3.1 Flash (free) to both model pickers after real Codex and
+  Claude Code checks. Low is the default reasoning effort. OpenRouter retires
+  this free entry on 22 October at 23:00 AEDT; the paid entry needs separate
+  availability and onboarding checks before it can replace it.
+
+## 1.3.10
+
+- Add StepFun Step 5 Preview to both model pickers after real Codex and
+  Claude Code checks. Low remains the default reasoning effort.
+
+## 1.3.9
+
+- Set the simulated platform before creating Mac reopen requests in tests, so
+  Linux release checks use the same session lock as the menu under test.
+
 ## 1.3.8
 
 - Update the warning-window test fixture for the shared window lock, so native
