@@ -1,12 +1,14 @@
 # Router install prompt for your agent
 
 Paste this to your coding agent (Codex, Claude Code) after downloading the
-bootstrap for your OS from `https://dist.softwarecombined.com/bootstrap/`.
-The agent runs everything; you only approve restarts.
+bootstrap for your OS: `https://dist.softwarecombined.com/install/bootstrap.sh`
+for macOS/Linux or `https://dist.softwarecombined.com/install/bootstrap.ps1`
+for Windows. The agent runs everything; you only approve restarts.
 
-> Set up the SCG mixed-model router on this machine. The bootstrap files
-> (`bootstrap.sh` for macOS/Linux, `bootstrap.ps1` for Windows) are in my
-> downloads from `https://dist.softwarecombined.com/bootstrap/`.
+> Set up the SCG mixed-model router on this machine. The bootstrap for my OS
+> is in my downloads: `bootstrap.sh` (macOS/Linux) from
+> `https://dist.softwarecombined.com/install/bootstrap.sh`, or `bootstrap.ps1`
+> (Windows) from `https://dist.softwarecombined.com/install/bootstrap.ps1`.
 >
 > Steps: run the bootstrap for my OS, then verify with the
 > installer `--preflight` and `--status` probes against the default home
