@@ -295,10 +295,12 @@ python3.14 tools/publish_first_install.py --bucket "$FEED_BUCKET" --dry-run  # p
 python3.14 tools/publish_first_install.py --bucket "$FEED_BUCKET"  # download, verify, upload
 ```
 
-Hand a recipient the bootstrap URL for their OS:
+Hand a recipient the `install/` URL for their OS. Every release refreshes
+the `install/*` copies, while the `bootstrap/*` copies change only when this
+tool runs:
 
 ```sh
-curl -fsSL https://dist.softwarecombined.com/bootstrap/bootstrap.sh -o bootstrap.sh
+curl -fsSL https://dist.softwarecombined.com/install/bootstrap.sh -o bootstrap.sh
 sh bootstrap.sh
 ```
 

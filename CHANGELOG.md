@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Point the setup-script links in the agent install prompt, the Claude Code
+  guide and the operations guide at `https://dist.softwarecombined.com/install/`,
+  where each release publishes the current scripts. The prompt named a folder
+  that returns Forbidden, and the other links fetched an older script.
+
 ## 1.3.8
 
 - Update the warning-window test fixture for the shared window lock, so native
