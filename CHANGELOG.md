@@ -6,6 +6,10 @@
   guide and the operations guide at `https://dist.softwarecombined.com/install/`,
   where each release publishes the current scripts. The prompt named a folder
   that returns Forbidden, and the other links fetched an older script.
+- Say plainly in the README and the Claude Code guide that Claude desktop's
+  OpenRouter mode can offer other vendors' models as well as Claude models. The
+  old wording read as if those models did not work. Anthropic still does not
+  support them.
 
 ## 1.3.11
 
