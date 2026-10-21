@@ -2,9 +2,12 @@
 
 Claude Code can talk to the local router instead of Anthropic directly. It
 keeps your Claude subscription sign-in. Claude-family OpenRouter models can
-appear next to subscription models and charge the OpenRouter key. Anthropic
-does not support Claude Code routing to other vendors; the stock client may
-filter their truthful IDs. Native requests use your existing Claude sign-in.
+appear next to subscription models and charge the OpenRouter key. The router
+also offers other vendors' models under their real IDs. Claude desktop's
+OpenRouter mode can use them, but Anthropic does not support Claude Code
+routing to other vendors, and the stock terminal client and some desktop
+versions may hide them.
+Native requests use your existing Claude sign-in.
 
 ## Setup
 
