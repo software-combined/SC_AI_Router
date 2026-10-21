@@ -31,10 +31,22 @@ LAUNCHER_ID = 'com.softwarecombined.router.claude-switch'
 ICON = Path(__file__).parent / 'assets' / 'router-icon.png'
 DESTINATIONS = {'1p': 'your Claude subscription', '3p': 'OpenRouter'}
 PROFILE_ACTIONS = ('start', 'switch')
+NO_SUBSCRIPTION = ('No Claude subscription is set up on this computer, so Claude stays '
+                   'on OpenRouter. To add one, open SCG Router and choose Replace model key.')
 
 
 class SwitchError(Exception):
     """A message safe to show without paths, settings or credentials."""
+
+
+def subscription_chosen(home):
+    """False only when setup recorded no Claude subscription; legacy state keeps it."""
+    try:
+        state = json.loads((Path(home) / 'mixed-router-state.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return True
+    return not (isinstance(state, dict)
+                and state.get('anthropic_mode', state.get('claude_mode')) == 'none')
 
 
 def attached_profile(home):
@@ -95,11 +107,11 @@ def _initialized(sync, roots):
         for store in sync.STORES) for index, root in enumerate(roots))
 
 
-def _setup_only(context, current_mode):
+def _setup_only(context, current_mode, subscription=True):
     """True when sharing is not set up yet, so a switch may change only the mode.
 
     Refuses instead when switching away from an unidentified subscription while
-    tasks are saved.
+    tasks are saved, unless setup recorded no subscription to identify.
     """
     sync, _, roots = context
     initialization_only = not _initialized(sync, roots)
@@ -107,7 +119,9 @@ def _setup_only(context, current_mode):
     # user must be able to reach it; a subscription user opens a Code task first.
     # Claude creates the gateway identity on its first OpenRouter launch, so a
     # gateway profile that was never opened is set up by switching to it.
-    if (initialization_only and current_mode == '1p' and not _initialized(sync, roots[:1])
+    # Without a subscription the saved tasks stay where they are, unshared.
+    if (initialization_only and subscription and current_mode == '1p'
+            and not _initialized(sync, roots[:1])
             and any(sync._records.record_paths(root / store, include_irregular=True)
                     for root in roots for store in sync.STORES)):
         raise SwitchError('Open a Code task in Claude, then try again.')
@@ -176,11 +190,14 @@ def _run_action(home, *, run, policy_check, action, sync, platform_ops, profile_
             raise SwitchError('Claude could not open. Open Claude to continue.') from exc
         return current_mode
     mode = target or ('1p' if current_mode == '3p' else '3p')
+    subscription = subscription_chosen(home)
+    if mode == '1p' and not subscription:
+        raise SwitchError(NO_SUBSCRIPTION)
     try:
         context = _sync_context(home, config.parent, profile_env)
         if policy_check() is not False:
             raise SwitchError('Your organization manages how Claude connects. Contact your administrator.')
-        setup_only = _setup_only(context, current_mode)  # Refuse while Claude is still open.
+        setup_only = _setup_only(context, current_mode, subscription)  # Refuse while Claude is still open.
         # The subscription side is identified, so only Claude's first OpenRouter launch is missing.
         first_gateway = setup_only and mode == '3p' and _initialized(context[0], context[2][:1])
         prompt = ('Switch Claude to %s? Claude will restart.' if setup_only else
@@ -207,7 +224,9 @@ def _run_action(home, *, run, policy_check, action, sync, platform_ops, profile_
     except (OSError, subprocess.SubprocessError) as exc:
         raise SwitchError('Claude is ready in %s. Open Claude to continue.'
                           % DESTINATIONS[mode]) from exc
-    if initialization_only and first_gateway:
+    if initialization_only and not subscription:
+        pass  # Without a subscription there are no tasks to share and no next step.
+    elif initialization_only and first_gateway:
         _notice('Claude opened on OpenRouter for the first time, so your saved Code tasks '
                 'were not shared yet. To bring them here, switch Claude to your Claude '
                 'subscription and back.', platform_ops, run)
@@ -240,7 +259,7 @@ def _share_and_select(home, config, current_mode, mode, *, run, policy_check, sy
         raise SwitchError('Claude settings or status could not be checked. Try again.') from exc
     try:
         # Checked again now that Claude has quit; the answer decides what runs.
-        initialization_only = _setup_only(context, current_mode)
+        initialization_only = _setup_only(context, current_mode, subscription_chosen(home))
         report = ({'failed': 0, 'pending': 0} if initialization_only else
                   (sync if sync is not None else _sync_profiles)(
                       home, current_mode, third, profile_env))

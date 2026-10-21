@@ -245,7 +245,7 @@ def saved_profile(home, receipts):
     return path.parents[1] if path.is_absolute() and path.parent.name == 'configLibrary' else None
 
 
-def attach(home, state, receipts, data_dir_override=None, env=None, *, python=None, refresh=False):
+def attach(home, state, receipts, data_dir_override=None, env=None, *, python=None):
     """Attach the desktop gateway without touching first-party state.
 
     Merges only the four owned entry values. deploymentMode is left alone:
@@ -272,9 +272,6 @@ def attach(home, state, receipts, data_dir_override=None, env=None, *, python=No
     # Refuse before writing anything: a mode conflict must leave the entry untouched.
     previous_mode = read_desktop_config(data_dir)[0].get('deploymentMode')
     owned = _owned_snapshot(home, data_dir, state, receipts)
-    if state.get('claude_mode', 'subscription') == 'none' and not (refresh and owned is not None):
-        raise SystemExit('claude_mode is none: re-run with --claude-mode subscription '
-                         'to attach the Claude desktop gateway')
     if previous_mode not in (None, '3p') and not (previous_mode == '1p' and owned is not None):
         raise SystemExit(
             'Claude desktop deploymentMode is managed outside this installer; '

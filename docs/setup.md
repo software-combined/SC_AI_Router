@@ -78,6 +78,10 @@ its separate profile and unfinished task-sharing checks.
 
 Claude Code in the terminal keeps its subscription sign-in. Never set
 `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`; either overrides that sign-in.
+The one exception is an install without a Claude subscription
+(`--claude-mode none`, or **No subscription** in the key window): there the
+installer sets `ANTHROPIC_AUTH_TOKEN` to a placeholder, so Claude Code needs no
+Claude sign-in and every reply goes to OpenRouter.
 
 ## What the installer does
 

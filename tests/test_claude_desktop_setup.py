@@ -264,13 +264,8 @@ class DesktopSetupTests(unittest.TestCase):
                 with mock.patch.dict(os.environ, {'CLAUDE_USER_DATA_DIR': str(profile)}), \
                         mock.patch.object(install_mod, 'find_python', return_value='python3.14'), \
                         contextlib.redirect_stdout(io.StringIO()):
-                    if selected == 'none':
-                        with self.assertRaisesRegex(SystemExit, 'claude_mode is none'):
-                            install_mod.do_install(args, _fetch=lambda _: b'{"version":"1.0.0"}')
-                        self.assertFalse(profile.exists())
-                    else:
-                        install_mod.do_install(args, _fetch=lambda _: b'{"version":"1.0.0"}')
-                        self.assertTrue(profile.exists())
+                    install_mod.do_install(args, _fetch=lambda _: b'{"version":"1.0.0"}')
+                self.assertTrue(profile.exists())
                 self.assertEqual(json.loads(settings.read_text())['claude_mode'], selected)
 
     def test_failed_initial_metadata_write_can_be_retried(self):
