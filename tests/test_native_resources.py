@@ -16,6 +16,9 @@ from tests.test_native_setup import module, resources
 class NativeResourcesTests(unittest.TestCase):
     def fixture(self, root):
         owner = module('native_resources')
+        original = owner.load
+        owner.load = lambda name: (SimpleNamespace(reconcile=lambda _: 'inactive')
+            if name == 'runtime_rebind' else original(name))
         source = resources(root / 'Resources', version='1.3.0.9')
         helper = source / 'control/scg-router-menu'
         if owner.target().startswith('windows/'):

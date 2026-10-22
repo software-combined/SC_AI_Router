@@ -7,7 +7,6 @@ the Windows platform backend. `query` is injectable for offline contract tests.
 import json
 import importlib.util
 import logging
-import os
 import re
 import subprocess
 import time

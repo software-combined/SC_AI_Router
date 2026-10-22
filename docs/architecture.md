@@ -46,6 +46,14 @@ again after preparing the temporary file.
 pointer. `update_launch` selects that controller across runtime rollback.
 Linux reloads and reads back the effective stable updater command before
 pruning. Loaded jobs and a running legacy updater retain their release files.
+`runtime_rebind` uses verified retained resource metadata after `setup-current`
+advances. The Windows task adapter snapshots all three owned definitions,
+changes only the executable and verifies its exact path, enabled and pending states.
+A failed readback restores attempted definitions. Both runtimes remain retained.
+The outer maintenance cadence retries failures under the installation lock.
+`desktop_menu` records helper exit codes and controller exception types.
+It retries an unexpected helper exit once after one second within the controller.
+Quit and removal stop it. Resource replacement uses the existing reload path.
 `feed` downloads public software without credentials. Legacy `download_auth`,
 `download_oauth` and `download_session` helpers are retained for compatibility,
 but the installer and updater no longer require them. `control_models` checks

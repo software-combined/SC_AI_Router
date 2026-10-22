@@ -50,7 +50,7 @@ PACKAGING_FILES = (
     'packaging/assets/router-icon.png',
     'packaging/systemd.py', 'packaging/update_launch.py',
     'packaging/task_launch.py',
-    'packaging/updater.py', 'packaging/update_reconcile.py',
+    'packaging/updater.py', 'packaging/update_reconcile.py', 'packaging/runtime_rebind.py',
     'packaging/update_status.py', 'packaging/update_warning.py',
     'packaging/codex_config.py', 'packaging/codex_owned.py', 'packaging/codex_recovery.py',
     'packaging/codex_switch_config.py', 'packaging/codex_switch_offer.py',

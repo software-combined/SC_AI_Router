@@ -73,7 +73,8 @@ def _windows_dialog(message, confirm, labels=('Continue', 'Cancel')):
         "%s$c=New-Object System.Windows.Forms.Button;$c.Text=%s;"
         "$c.AutoSize=$true;$c.DialogResult='Cancel';$r.Controls.Add($c);"
         "$f.CancelButton=$c;$p.Controls.Add($l);$p.Controls.Add($r);$f.Controls.Add($p);"
-        "if($f.ShowDialog() -eq 'OK'){exit 0}else{exit 1}"
+        "if($f.ShowDialog() -eq 'OK'){'SCG_ROUTER_DIALOG_RESULT=accept';exit 0}"
+        "else{'SCG_ROUTER_DIALOG_RESULT=cancel';exit 1}"
         % (_ps(ICON), _ps(message), (
             "$b=New-Object System.Windows.Forms.Button;$b.Text=%s;"
             "$b.AutoSize=$true;$b.DialogResult='OK';$r.Controls.Add($b);"

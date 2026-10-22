@@ -31,6 +31,7 @@ def run(home, service):
                     outcomes['attachment'] = 'conflict'
                 except OSError as exc:
                     outcomes['attachment'] = 'conflict' if type(exc).__name__ == 'ConcurrentChange' else 'failed'
+                outcomes['runtime'] = load('runtime_rebind').reconcile(home)
         log(home, 'reconcile', 'completed', **outcomes)
     except (Exception, SystemExit) as exc:
         outcomes['attachment'] = 'failed'

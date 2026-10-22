@@ -5,6 +5,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from tests.test_native_setup import module
@@ -52,9 +53,7 @@ class WarningPolicyTests(unittest.TestCase):
 class WarningDeliveryTests(unittest.TestCase):
     def setUp(self):
         self.owner = module('update_warning')
-        temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(temporary.cleanup)
-        self.home = Path(temporary.name)
+        self.home = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.state = self.home / 'mixed-router-state.json'
         self.state.write_text('{"last_error":"installer_failed","custom":"preserved"}')
         self.before = self.state.read_bytes()
@@ -120,12 +119,52 @@ class WarningDeliveryTests(unittest.TestCase):
         self.assertEqual(Path(command[1]).name, 'update_warning.py')
         self.assertEqual(spawn.call_args.kwargs['stdout'], self.owner.subprocess.DEVNULL)
 
+    def test_same_version_warning_explains_failed_component_and_logs_safe_facts(self):
+        self.doc['running_version'] = self.doc['update']['latest_known_version']
+        self.doc['update'].update(component_repairs={'scheduler': 'failed', '/private': 'failed'},
+                                installation_repair_required=True, last_error='installer_failed')
+        self.dialog.confirm_result.return_value = False
+        self.owner.show(self.home, self.now)
+        text = self.dialog.confirm_result.call_args.args[0]
+        self.assertIn('Scheduled checks need repair.', text)
+        rows = (self.home / 'logs/maintenance.jsonl').read_text()
+        self.assertIn('scheduler', rows)
+        self.assertNotIn('/private', text + rows)
+
+    def test_windows_later_with_extra_output_still_suppresses_the_next_check(self):
+        native = module('native_dialog')
+        run = mock.Mock(return_value=SimpleNamespace(returncode=1,
+            stdout='SCG_ROUTER_DIALOG_RESULT=cancel\n', stderr='#< CLIXML\nprogress output'))
+        self.dialog.confirm_result.side_effect = lambda text, home, labels: native.confirm_result(
+            text, home, run=run, labels=labels)
+        with mock.patch.object(native.sys, 'platform', 'win32'), \
+                mock.patch.object(native.dialog, 'tool', return_value='powershell'):
+            self.owner.show(self.home, self.now)
+            self.assertTrue((self.home / self.owner.RECEIPT).exists())
+            self.owner.show(self.home, self.now + 60)
+            run.assert_called_once()
+        self.owner.repair.assert_not_called()
+
+    def test_failed_dismissal_receipt_write_logs_only_safe_failure_metadata(self):
+        original, atomic = self.owner.load.side_effect, mock.Mock()
+        atomic.replace_json.side_effect = PermissionError('/private/fixture')
+        self.dialog.confirm_result.return_value = False
+        with mock.patch.object(self.owner, 'load', side_effect=lambda name:
+                atomic if name == 'atomic_write' else original(name)):
+            self.owner.show(self.home, self.now)
+        text = (self.home / 'logs/maintenance.jsonl').read_text()
+        self.assertIn('receipt_write_failed', text)
+        self.assertIn('PermissionError', text)
+        self.assertNotIn('/private/fixture', text)
+        self.assertFalse((self.home / self.owner.RECEIPT).exists())
+
 
 class WarningDialogTests(unittest.TestCase):
     def test_each_platform_uses_repair_now_later_with_title_and_product_icon(self):
         dialog = module('native_dialog')
         for platform in ('darwin', 'win32', 'linux'):
-            result = mock.Mock(returncode=0, stdout='button returned:Repair now', stderr='')
+            result = mock.Mock(returncode=0, stdout='SCG_ROUTER_DIALOG_RESULT=accept' if platform == 'win32'
+                               else 'button returned:Repair now', stderr='')
             with mock.patch.object(dialog.sys, 'platform', platform), \
                     mock.patch.object(dialog.dialog, 'tool', return_value='dialog'), \
                     mock.patch.dict(os.environ, {'DISPLAY': ':synthetic'}):
@@ -205,7 +244,6 @@ class WarningMenuTests(unittest.TestCase):
         self.assertNotIn('1.3.2.187', json.dumps(model.menu(facts, checked_update=checked)))
 
     def test_read_only_check_never_calls_a_failed_install_up_to_date(self):
-        from types import SimpleNamespace
         control, dialog = module('desktop_control'), mock.Mock()
         original = control.load
         checked = dict(installed='1.3.2.185', latest='1.3.2.185', available=None,
@@ -255,3 +293,7 @@ class WarningRepairCommandTests(unittest.TestCase):
             self.assertIn('https://dist.softwarecombined.com/beta/latest.json', args)
             self.assertIn('--repair', args)
             self.assertNotIn('--setup', args)
+            with mock.patch.object(owner, 'os', SimpleNamespace(name='nt')), \
+                    mock.patch.object(owner.subprocess, 'CREATE_NO_WINDOW', 0x08000000, create=True):
+                owner.repair(home, run=run)
+            self.assertEqual(run.call_args.kwargs['creationflags'], 0x08000000)

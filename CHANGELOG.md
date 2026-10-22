@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 1.3.14
+
+- Move all three owned Windows tasks to the verified retained runtime after delivery.
+  Preserve schedules and disabled states. Restore prior definitions if verification fails.
+- Record tray helper exits and controller failures. Retry an unexpected helper exit once.
+  Keep Quit, removal and the saved startup choice effective.
+- Explain which component needs repair when the installed and latest versions match.
+  Record safe warning facts for support and hide the repair command's console window.
+- Recognize Windows **Later** even when PowerShell returns extra output.
+  Keep the daily warning limit and leave unconfirmed dialogs pending.
+
 - Reconnect an active Codex attachment when its complete Router block is missing.
   Preserve model choices and original settings evidence. Conflicts stay unchanged.
   Offer a dismissible restart notice even when no version or model changed.

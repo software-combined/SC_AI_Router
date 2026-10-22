@@ -127,7 +127,7 @@ class DesktopControlsTests(unittest.TestCase):
             with mock.patch.object(menu, '_events', side_effect=events), \
                     mock.patch.object(menu, '_control', side_effect=control), \
                     mock.patch.object(menu.subprocess, 'Popen', return_value=shell):
-                self.assertEqual(menu.run_menu(home, home), 0)
+                self.assertEqual(menu.run_menu(home, home), 74)  # Synthetic helper EOF.
         self.assertEqual(calls, ['codex.openrouter'])
         self.assertTrue(any(doc['status'] == 'Switching…' for doc in documents))
 
@@ -158,7 +158,7 @@ class DesktopControlsTests(unittest.TestCase):
             with mock.patch.object(menu, '_events', side_effect=events), \
                     mock.patch.object(menu, '_control', side_effect=lambda *args: next(answers)), \
                     mock.patch.object(menu.subprocess, 'Popen', return_value=shell):
-                self.assertEqual(menu.run_menu(home, home), 0)
+                self.assertEqual(menu.run_menu(home, home), 74)  # Synthetic helper EOF.
         self.assertEqual(documents[-1]['status'], 'Needs attention')
         self.assertIn('Claude — Claude subscription', [row['label'] for row in documents[-1]['menu']])
 

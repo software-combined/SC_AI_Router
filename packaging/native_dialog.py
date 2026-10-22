@@ -54,6 +54,12 @@ def confirm_result(text, home=None, run=subprocess.run, *, labels=('Continue', '
             return True
         if result.returncode == 1 and re.search(r'\(-128\)\s*$', stderr):
             return False
+    elif sys.platform == 'win32':
+        markers = [line for line in stdout.splitlines() if line.startswith('SCG_ROUTER_DIALOG_RESULT=')]
+        if result.returncode == 0 and markers == ['SCG_ROUTER_DIALOG_RESULT=accept']:
+            return True
+        if result.returncode == 1 and markers == ['SCG_ROUTER_DIALOG_RESULT=cancel']:
+            return False
     elif result.returncode == 0:
         return True
     elif result.returncode == 1 and not stderr.strip():

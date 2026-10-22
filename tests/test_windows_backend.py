@@ -42,7 +42,7 @@ USER = 'S-1-5-21-1-2-3-1001'
 
 def _query(status):
     return dict(kind='present', state=status, enabled=status != 1, pending=False,
-                instances=['instance'] if status == 4 else [])
+                instances=['instance'] if status == 4 else [], executable=backend._pythonw(PY))
 
 
 QUERY_READY = _query(3)

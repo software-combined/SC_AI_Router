@@ -1,5 +1,37 @@
 # Compatibility
 
+## Windows recovery candidate, 23 October 2026 AEDT
+
+The macOS compatibility check used Codex desktop `26.1016.61520`, bundled CLI
+`0.163.0-alpha.11.1`, and Claude Code `2.1.283`. Each leg completed a synthetic
+tool round trip at Low effort. Client settings and authentication files were unchanged.
+
+| Client and route | Requested model | Counted work | Result |
+| --- | --- | --- | --- |
+| Codex / OpenRouter | `z-ai/glm-5.3-flash` | 2 upstream attempts | Tool result and final marker passed |
+| Codex / ChatGPT subscription | `gpt-5.6-luna` | 1 tool round trip | Tool result and final marker passed |
+| Claude Code / OpenRouter | `z-ai/glm-5.3-flash` | 2 upstream attempts, 2 client turns | File-read marker passed |
+| Claude Code / Claude subscription | `claude-sonnet-5-5` | 2 client turns | File-read marker passed |
+
+The external legs used an isolated candidate Router from this branch. Its shared
+budget allowed at most twelve attempts, 512 KiB input and 65,536 output tokens.
+Four upstream attempts ran in the counted confirmation. Both protocols reported
+the exact requested model. Codex also reported Low effort; Claude did not report
+served effort. These are provider reports, not independent attestation.
+
+The subscription legs used the existing client sign-in. Codex's ephemeral
+app-server ran with a ninety-second deadline and exactly one allowed dynamic tool
+call. Claude used at most three turns, 2,048 output tokens, no retries and a
+USD 0.10 client budget. Upstream subscription attempt counts were not retained.
+Claude's client report named the requested Sonnet model. Served identity and
+effort for the Codex subscription leg remain unverified.
+
+Windows native security, installer and affected-PC acceptance remain separate
+release gates. The macOS result does not establish Store-app switching, visible
+console suppression, tray recovery or scheduled-task paths on Windows.
+Test sign-in and account changes only in an isolated Windows profile. Keep only
+configuration-change metadata and launch or exit outcomes; do not copy authentication data.
+
 ## Claude Code without a Claude subscription, 21 October 2026 AEDT
 
 The terminal slice of no-subscription Claude (`claude_mode` `none`) passed a

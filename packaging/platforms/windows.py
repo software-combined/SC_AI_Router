@@ -227,14 +227,15 @@ class Backend:
             self._sid = _winacl.current_sid(query=self._query)
         return self._sid
 
-    def _task_state(self, name, home, operation='query', *, xml=None, legacy=False, pending=True):
+    def _task_state(self, name, home, operation='query', *, xml=None, legacy=False, pending=True, executable=None):
         scripts = {ROUTER_TASK: ('router_launch.py', ROUTER_LOG),
                    UPDATE_TASK: ('update_launch.py', UPDATE_LOG),
                    EXPRESS_TASK: ('express_launch.py', UPDATE_LOG)}
         sid = self._identity()
         try:
             return _tasks.invoke(self._call, sid, name if legacy else name + '-' + sid,
-                                 _arguments(home, *scripts[name]), operation, xml, pending=pending)
+                                 _arguments(home, *scripts[name]), operation, xml,
+                                 pending=pending, executable=executable)
         except _tasks.OwnershipError:
             if not legacy or operation != 'query':
                 raise
@@ -357,6 +358,10 @@ class Backend:
             state = self._task_state(name, home)
             if state and state['pending']:
                 self._task_state(name, home, 'enable')
+
+    def rebind_runtime(self, python, home):
+        return _tasks.rebind(self._task_state, home, _pythonw(str(python)),
+                             (ROUTER_TASK, UPDATE_TASK, EXPRESS_TASK))
 
     def ensure_serving(self, home, state, version):
         if not self._running(ROUTER_TASK, home, legacy=self._router(home)[0]):

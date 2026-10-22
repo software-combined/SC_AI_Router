@@ -88,7 +88,8 @@ class NativeTaskTests(unittest.TestCase):
                 '<Settings>', '<Settings><Hidden>true</Hidden>')
             def call(operation='query', **changes):
                 return backend._tasks.invoke(obj._call, changes.get('sid', sid), name,
-                                             changes.get('arguments', arguments), operation, xml)
+                    changes.get('arguments', arguments), operation, changes.get('xml', xml),
+                    executable=changes.get('executable'))
             def wait_running():
                 deadline = time.monotonic() + 15
                 while time.monotonic() < deadline:
@@ -103,8 +104,17 @@ class NativeTaskTests(unittest.TestCase):
                 self.assertEqual(call('register')['state'], 1)
                 self.assertFalse(call()['enabled'])
                 self.assertTrue(call()['pending'])  # Every call starts a fresh PowerShell process.
+                saved = call('snapshot')
+                self.assertEqual(saved['executable'], backend._pythonw(sys.executable))
+                call('rebind', executable=sys.executable)
+                self.assertEqual(call()['executable'], sys.executable)
+                self.assertFalse(call()['enabled'])
+                self.assertTrue(call()['pending'])
+                call('restore', xml=saved['xml'])
+                self.assertEqual(call()['executable'], saved['executable'])
+                self.assertEqual(call('snapshot')['xml'], saved['xml'])
                 for changes in ({'sid': 'S-1-5-18'}, {'arguments': arguments + ' foreign'}):
-                    for operation in ('register', 'handover', 'run', 'complete', 'enable', 'disable', 'stop', 'delete'):
+                    for operation in ('register', 'rebind', 'restore', 'snapshot', 'handover', 'run', 'complete', 'enable', 'disable', 'stop', 'delete'):
                         with self.assertRaises(backend._tasks.OwnershipError):
                             call(operation, **changes)
                 self.assertIn(call('enable')['state'], (2, 3, 4))

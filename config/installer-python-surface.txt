@@ -69,6 +69,7 @@ load packaging/service.py
 load packaging/systemd.py
 load packaging/updater.py
 load packaging/update_reconcile.py
+load packaging/runtime_rebind.py
 load packaging/update_status.py
 load packaging/update_warning.py
 load packaging/platforms/__init__.py

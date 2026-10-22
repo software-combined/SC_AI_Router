@@ -7,6 +7,21 @@ Use the supported detach or removal action to disable automatic reconnection.
 After repair, choose **Quit and reopen** or **Later** in the restart notice.
 If no dialog is available, the notice stays pending.
 The content-free `logs/maintenance.jsonl` records regular and Express check outcomes.
+It also records tray helper exits, retry decisions and controller exception types.
+An unexpected tray exit gets one retry. Quit and the saved startup choice remain effective.
+
+Windows updates verify the executable paths of all three owned scheduled tasks.
+Failed verification restores prior definitions and retries on the next maintenance pass.
+Both runtime folders remain available. Do not remove old setup folders during recovery.
+
+A repair warning can show matching running and latest versions.
+It means a saved installation component needs repair, or scheduled checks were missed.
+A successful version check does not verify those components.
+The dialog names failed components; `logs/maintenance.jsonl` records their names and your choice.
+**Later** delays the next displayed warning for 24 hours. It keeps the repair pending.
+If it returns sooner, the log distinguishes an unconfirmed dialog from a failed receipt write.
+Choose **Repair now** after finishing active work. If the warning returns, run **Check setup**.
+Share the reported component names with IT. Do not share keys or authentication files.
 
 If Windows reports that Router could not check its stored key, retry shortly.
 This message does not mean the key is invalid. If it persists, open **SCG Router**
