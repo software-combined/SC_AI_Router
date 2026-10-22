@@ -1,6 +1,6 @@
 # Review lanes
 
-The pre-commit review runs three read-only lanes in parallel on the same staged tree. Each lane owns one class of failure and does not report the others' findings. The main agent sends every lane the same brief from the [pre-commit-review skill](../skills/pre-commit-review/SKILL.md) (step 7). Each lane reads this whole guide and applies its own section; the reportability, severity and report-format rules apply to every lane. The main agent uses the same reportability and severity rules when it adjudicates the findings.
+The pre-commit review runs four read-only lanes on the same staged tree. Each lane owns one class of failure. The main agent sends every lane the same brief from the [pre-commit-review skill](../skills/pre-commit-review/SKILL.md) (step 7). Each lane reads this whole guide and applies its own section; the reportability, severity and report-format rules apply to every lane. The main agent uses the same rules when it adjudicates the findings. Route an out-of-lane concern to its owner through the parent; do not silently discard it or report duplicate findings.
 
 Before inspecting anything, every lane reads the installed `scg-ponytail:ponytail` skill in full at the resolved absolute path supplied by the parent, following [Ponytail dependency](../skills/pre-commit-review/SKILL.md#ponytail-dependency), and applies it within its own lane. A lane that cannot confirm it read Ponytail is incomplete, the same as a lane that did not inspect the whole staged scope.
 
@@ -8,7 +8,7 @@ Before inspecting anything, every lane reads the installed `scg-ponytail:ponytai
 
 Owns functional defects, broken contracts, blocking verification failures, and missing tests for changed high-consequence behaviour. It does not report naming, cleanup, optional refactors or generic hardening.
 
-Ask: can the staged behaviour fail for common, edge, empty, malformed, stale or concurrent inputs? Does it preserve public contracts, schemas, file formats, workflow contracts and API behaviour? Are errors handled in the repo's established pattern? Are security, auth, secret handling, permissions and untrusted-input boundaries preserved? Would the new or changed tests catch the likely regression?
+Ask: can the staged behaviour fail for common, edge, empty, malformed or stale inputs? Does it preserve public contracts, schemas, file formats, workflow contracts and API behaviour? Are errors handled in the repo's established pattern? Would the new or changed tests catch the likely regression? Security boundary failures belong to security; operational races and recovery failures belong to adversarial.
 
 When the simplification pass replaced or consolidated code, trace the affected callers and compare the old and new inputs, outputs, exceptions, side effects and meaningful execution order. A standard-library or native replacement must still satisfy the existing contract. Report concrete regressions, not the choice to simplify.
 
@@ -22,11 +22,37 @@ Treat reuse opportunities as clues, not automatic findings. Report duplicate log
 
 ## Adversarial lane
 
-Owns trust-boundary abuse, destructive side effects, replay, rollback, concurrency, deployment and fail-open risks. It must prove a concrete failure path; it does not report hypothetical hardening or repeat a correctness finding.
+Owns non-hostile operational failure: destructive side effects, duplicate work, rollback, concurrency, deployment, recovery and fail-open behaviour. Attacker-driven trust-boundary failures belong to security, even when they involve replay or a race. Prove a concrete failure path; do not report hypothetical hardening or duplicate another lane.
 
 Ask: what hidden regression would pass a casual review? What missing test would let this bug return? What race, replay, idempotency, rollback, deployment, migration or observability failure could happen? What happens if dependencies, schemas, credentials, permissions, live state or external services drift? What breaks if the change is partly deployed, retried or reverted?
 
-When the simplification pass removed or consolidated a guard or wrapper, trace the reachable failure or abuse path it controlled, and check the validation, authorisation, idempotency and data-loss or recovery protections on the remaining path. Report only a concrete lost protection or fail-open behaviour.
+When simplification removed or consolidated a guard or wrapper, trace the reachable operational failure it controlled. Check idempotency, data-loss and recovery protections on the remaining path. Route an authorization or malicious-input failure to security.
+
+## Security lane
+
+Owns attacker-driven failures of authentication, authorization, tenant isolation,
+input/output handling, secret protection, tool authority and delivery integrity.
+Read the [security-review skill](../skills/security-review/SKILL.md) in full.
+It defines source-only inspection, changed-boundary attribution, the strongest
+defense/refutation check and independent verification mode. It supplies no model.
+
+A candidate must identify the actual attacker capability, affected principal
+or resource, reachable entry-to-effect path, failed defense, concrete impact,
+and staged/base evidence of introduction or worsening. Distinguish deterministic
+source proof from an observed check. A broken security boundary is at least
+`HIGH`, never an accepted `MEDIUM`. A concrete unresolved fact essential to
+decide a material candidate is a validation gap with no asserted severity;
+the lane is incomplete (`❌ Block`) until that fact is resolved. Generic
+suspicion or a missing extra defense is not a validation gap.
+
+The parent batches every reported security candidate, merging duplicates only,
+into one fresh verification
+assignment using the same skill, tree, base and configured security model
+selection. The discoverer never verifies its own candidates. No extra pass is
+needed when there are no candidates. Parent adjudication remains authoritative;
+model agreement does not establish a flaw. Binary assets unrelated to changed
+security paths have their uninspected contents listed as coverage limits only,
+not as residual risks or incomplete required coverage.
 
 ## What is reportable
 
