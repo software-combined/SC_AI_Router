@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Find the bundled Codex command beside the verified Windows Store app.
+  Keep the same app identity during switching and recovery.
+- Hide console windows during Windows app checks, setup choices and notices.
+
 - Read Windows key permissions directly instead of starting PowerShell. A
   temporary permission-query failure now retries briefly and asks the client
   to retry, rather than rejecting requests for 30 seconds or requesting a new key.

@@ -105,7 +105,7 @@ def _pid_alive(pid):
             out = subprocess.run(['powershell', '-NoProfile', '-Command',
                                   query], stdout=subprocess.PIPE,
                                  stderr=subprocess.DEVNULL, text=True,
-                                 timeout=PROBE_TIMEOUT)
+                                 timeout=PROBE_TIMEOUT, creationflags=0x08000000)
         else:
             out = subprocess.run(['ps', '-p', str(pid), '-o', 'command='],
                                  stdout=subprocess.PIPE,
@@ -420,7 +420,7 @@ def _spawn(cmd):
     """Launch the dialog detached and return its pid; never waits."""
     if sys.platform == 'win32':
         flags = (getattr(subprocess, 'DETACHED_PROCESS', 0)
-                 | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0))
+                 | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0) | 0x08000000)
         proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
                                 stdout=subprocess.DEVNULL,
                                 stderr=subprocess.DEVNULL,

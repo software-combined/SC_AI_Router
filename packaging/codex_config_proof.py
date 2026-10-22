@@ -33,18 +33,19 @@ DESKTOP_BUNDLED = ('resources/codex-cli/bin/codex', 'resources/codex',
                    'resources/codex-cli/vendor/x86_64-pc-windows-msvc/codex/codex.exe')
 
 
-def codex_bin(env, app_root):
+def codex_bin(env, app_root, *, app_exe=None):
     """CODEX_BIN, else the first bundled CLI in the app at `app_root`, else None."""
     if env.get('CODEX_BIN'):
         return env['CODEX_BIN']
-    paths = [Path(app_root) / rel for rel in BUNDLED + DESKTOP_BUNDLED] if app_root else []
+    paths = [Path(app_exe).parent / rel for rel in DESKTOP_BUNDLED] if app_exe else []
+    paths += [Path(app_root) / rel for rel in BUNDLED + DESKTOP_BUNDLED] if app_root else []
     return next((str(path) for path in paths if path.is_file()), None)
 
 
-def prove(app_root, codex_home=None, env=None, timeout=30):
+def prove(app_root, codex_home=None, env=None, timeout=30, *, app_exe=None):
     """True when Codex's loader accepts the switched config.toml, else False."""
     env = dict(os.environ if env is None else env)
-    command = codex_bin(env, app_root)
+    command = codex_bin(env, app_root, app_exe=app_exe)
     if command is None:
         return False
     # Only config.toml and Codex's own login may decide the answers: an

@@ -25,7 +25,8 @@ def choose(question, options, run=subprocess.run, *, labels=('Continue', 'Cancel
     if not tool:
         raise OSError('The setup window is unavailable.')
     result = run(dialog.argv(tool, sys.platform, question, options, labels=labels),
-                 capture_output=True, text=True, timeout=300)
+                 capture_output=True, text=True, timeout=300,
+                 **({'creationflags': 0x08000000} if sys.platform == 'win32' else {}))
     return dialog.answer(sys.platform, result.stdout, options) if result.returncode == 0 else None
 
 
@@ -84,7 +85,8 @@ class Progress:
                     '--title=' + TITLE, '--window-icon=' + str(ICON),
                     '--text=' + text, '--cancel-label=' + self.button]
         self.process = subprocess.Popen(args, stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.DEVNULL, stdin=subprocess.PIPE)
+                                        stderr=subprocess.DEVNULL, stdin=subprocess.PIPE,
+                                        **({'creationflags': 0x08000000} if sys.platform == 'win32' else {}))
         return self
 
     def __exit__(self, *_):

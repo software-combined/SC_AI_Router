@@ -80,8 +80,9 @@ def _windows_dialog(message, confirm, labels=('Continue', 'Cancel')):
         ) % _ps(labels[0]) if confirm else '', _ps(labels[-1])))
 
 
-def _run(command, run, timeout=5):
-    return run(command, capture_output=True, text=True, timeout=timeout)
+def _run(command, run, timeout=5, platform_name=None):
+    flags = {'creationflags': 0x08000000} if (platform_name or sys.platform) == 'win32' else {}
+    return run(command, capture_output=True, text=True, timeout=timeout, **flags)
 
 
 def _dialog(message, platform_name, confirm, run, tool_path=None, detailed=False,
@@ -97,7 +98,7 @@ def _dialog(message, platform_name, confirm, run, tool_path=None, detailed=False
                 '--ok-label', labels[0] if confirm else labels[-1]]
         if confirm:
             argv += ['--cancel-label', labels[1]]
-    answer = _run(argv, run, 120)
+    answer = _run(argv, run, 120, platform_name)
     if detailed:
         return answer
     return answer.returncode == 0 and (platform_name != 'darwin' or not confirm
@@ -118,7 +119,7 @@ def policy_disabled(platform_name, run=subprocess.run, *, profile=None):
 
 def _json_command(script, run):
     answer = _run(['powershell', '-NoProfile', '-Command',
-                   "$ErrorActionPreference='Stop';" + script], run)
+                   "$ErrorActionPreference='Stop';" + script], run, platform_name='win32')
     if answer.returncode:
         raise OSError('Claude identity could not be checked')
     try:
@@ -229,8 +230,15 @@ def is_running(platform_name, run=subprocess.run, app=CLAUDE):
                     app.writers)
 
 
-def request_stop(platform_name, run=subprocess.run, timeout=65, app=CLAUDE):
+def _checked_identity(platform_name, run, app, expected):
     identity = app_identity(platform_name, run, app=app)
+    if expected is not None and identity != expected:
+        raise OSError('desktop app identity changed')
+    return identity
+
+
+def request_stop(platform_name, run=subprocess.run, timeout=65, app=CLAUDE, *, identity=None):
+    identity = _checked_identity(platform_name, run, app, identity)
     seen = {}
     if not _writers(_snapshot(platform_name, identity, run), identity, seen, platform_name,
                     app.writers):
@@ -257,7 +265,7 @@ def request_stop(platform_name, run=subprocess.run, timeout=65, app=CLAUDE):
             return False
         argv = None
     try:
-        if argv and _run(argv, run, max(0.1, min(30, timeout))).returncode:
+        if argv and _run(argv, run, max(0.1, min(30, timeout)), platform_name).returncode:
             return False
     except subprocess.TimeoutExpired:
         pass  # Claude may still close, for example after its own confirmation; the wait decides.
@@ -273,8 +281,8 @@ def request_stop(platform_name, run=subprocess.run, timeout=65, app=CLAUDE):
         time.sleep(min(0.25, max(0, deadline - time.monotonic())))
 
 
-def open_app(platform_name, run=subprocess.run, app=CLAUDE):
-    identity = app_identity(platform_name, run, app=app)
+def open_app(platform_name, run=subprocess.run, app=CLAUDE, *, identity=None):
+    identity = _checked_identity(platform_name, run, app, identity)
     if platform_name == 'darwin':
         argv = ['/usr/bin/open', identity['root']]
     elif platform_name == 'win32':
@@ -282,7 +290,7 @@ def open_app(platform_name, run=subprocess.run, app=CLAUDE):
                 "$ErrorActionPreference='Stop';Start-Process " + _ps('shell:AppsFolder:' + identity['app'])]
     else:
         argv = ['gtk-launch', identity['desktop_id']]
-    answer = _run(argv, run, 10)
+    answer = _run(argv, run, 10, platform_name)
     if answer.returncode:
         raise subprocess.CalledProcessError(answer.returncode, 'open Claude')
     return answer
@@ -315,7 +323,7 @@ def install_launcher(home, python, action='switch', applications=None,
                   "$s.TargetPath=%s;$s.Arguments=%s;$s.Description=%s;$s.IconLocation=%s;$s.Save()"
                   % tuple(map(_ps, (path, path, marker, arguments, python, arguments, marker, ICON))))
         applications.mkdir(parents=True, exist_ok=True)
-        answer = _run(['powershell', '-NoProfile', '-Command', script], run, 15)
+        answer = _run(['powershell', '-NoProfile', '-Command', script], run, 15, platform_name)
         if answer.returncode:
             raise OSError('unowned or unavailable Claude launcher')
     elif platform_name != 'darwin':
