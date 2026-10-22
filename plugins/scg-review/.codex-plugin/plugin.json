@@ -1,7 +1,7 @@
 {
   "name": "scg-review",
-  "version": "0.6.1",
-  "description": "Simplification, secret scanning and three-lane review of the exact staged Git tree.",
+  "version": "0.7.0",
+  "description": "Simplification, secret scanning and four-lane review of the exact staged Git tree.",
   "author": {
     "name": "Software Combined"
   },
@@ -10,7 +10,7 @@
   "interface": {
     "displayName": "SCG Pre-Commit Review",
     "shortDescription": "Review staged changes before committing.",
-    "longDescription": "Runs a simplification pass, a pinned secret scan, and correctness, quality and adversarial reviews. Includes setup checks and the shared Git hook adapter.",
+    "longDescription": "Runs simplification, a pinned secret scan, and correctness, quality, adversarial and security reviews. Includes setup checks and the shared Git hook adapter.",
     "developerName": "Software Combined",
     "category": "Productivity",
     "capabilities": [],

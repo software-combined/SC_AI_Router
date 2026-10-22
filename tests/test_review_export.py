@@ -32,7 +32,7 @@ class ReviewExportTest(unittest.TestCase):
         self.git("commit", "-m", "test: fixture")
         config = Path(self.temp.name) / ".config/scg-agent-git-hooks/config.json"
         config.parent.mkdir(parents=True)
-        config.write_text(json.dumps({"required_lanes": ["correctness", "quality", "adversarial"]}))
+        config.write_text(json.dumps({"required_lanes": ["correctness", "quality", "adversarial", "security"]}))
         root = self.git("rev-parse", "--show-toplevel").strip()
         repo_id = hashlib.sha256(root.encode()).hexdigest()
         tree = self.git("rev-parse", "HEAD^{tree}").strip()
@@ -41,7 +41,7 @@ class ReviewExportTest(unittest.TestCase):
         self.state = {"version": 2, "repo_root": root, "repo_id": repo_id, "branch": "feature",
                       "tree": tree, "decision": "ALL_CLEAR", "approved": True,
                       "created_at_epoch": int(time.time()),
-                      "passes": dict.fromkeys(["correctness", "quality", "adversarial"],
+                      "passes": dict.fromkeys(["correctness", "quality", "adversarial", "security"],
                                               "fixture@high::unverified@unverified"),
                       "summary": "PRIVATE-FREE-TEXT", "runner": "PRIVATE-HOST"}
         self.save()

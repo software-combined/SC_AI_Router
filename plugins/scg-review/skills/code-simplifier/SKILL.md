@@ -1,6 +1,6 @@
 ---
 name: code-simplifier
-description: Code simplification pass that improves clarity, consistency, and maintainability of code changed by the current task while preserving behavior. Trigger - invoked by the pre-commit-review skill as Pass 1 (before the three review lanes), or directly by the owner on request; never run proactively.
+description: Code simplification pass that improves clarity, consistency, and maintainability of code changed by the current task while preserving behavior. Trigger - invoked by the pre-commit-review skill as Pass 1 (before the four review lanes), or directly by the owner on request; never run proactively.
 ---
 
 # Code Simplifier
@@ -13,7 +13,7 @@ Delegate using the active runtime's entry under [models and runtimes](../pre-com
 
 Supply the staged scope and relevant context with the prompt below. Resolve the installed `scg-ponytail:ponytail` skill under the pre-commit skill's [Ponytail dependency](../pre-commit-review/SKILL.md#ponytail-dependency) rule. Require the executor to read it in full before inspection; supply its resolved absolute path. A missing, disabled or unreadable dependency blocks this pass. During its edits the main agent pauses writing; the main agent stages and verifies the result afterwards.
 
-Pass 1 can take longer than the three read-only review lanes because the
+Pass 1 can take longer than the four read-only review lanes because the
 executor must read the staged scope and its context before deciding whether a
 change is safe. Quiet output while it is working is expected. Do not cancel or
 restart an active simplifier because it has not sent a progress update; wait

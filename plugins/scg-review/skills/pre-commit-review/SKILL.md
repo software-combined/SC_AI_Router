@@ -1,6 +1,6 @@
 ---
 name: pre-commit-review
-description: Run the required staged-diff review (a simplification pass, a secret scan, then three read-only review lanes) before every git commit, and record the approved staged-tree state for the shared Git hook. Use when an agent is about to commit, runs /pre-commit-review, reviews staged commit scope, or decides whether a commit may proceed after code, workflow, documentation, test, configuration or infrastructure edits.
+description: Run the required staged-diff review (a simplification pass, a secret scan, then four read-only review lanes) before every git commit, and record the approved staged-tree state for the shared Git hook. Use when an agent is about to commit, runs /pre-commit-review, reviews staged commit scope, or decides whether a commit may proceed after code, workflow, documentation, test, configuration or infrastructure edits.
 ---
 
 # Pre-Commit Review
@@ -9,7 +9,7 @@ These skills ship with the SCG router, which delivers and refreshes them; see
 [automatic updates](../../references/updates.md). There is no per-plugin updater
 to configure. Respect explicit read-only scope.
 
-This skill is the gate before every commit. You, the main agent, prepare the staged change, run a simplification pass, scan for secrets, run the required checks once, have three read-only reviewer subagents inspect the exact staged tree, decide on their findings, and record one approval for that tree. The shared Git hook refuses a commit without that approval. If this process does not run, the task is incomplete and you must not commit.
+This skill is the gate before every commit. You, the main agent, prepare the staged change, run a simplification pass, scan for secrets, run the required checks once, have four read-only reviewer subagents inspect the exact staged tree, decide on their findings, and record one approval for that tree. The shared Git hook refuses a commit without that approval. If this process does not run, the task is incomplete and you must not commit.
 
 **Materiality over coverage.** The gate catches realistic failures that this change causes. Report, fix and block only on failures with a plausible path in normal or demonstrably reachable use, never on speculative edge cases. A proportionate review that finishes is success; an exhaustive review that never converges is a failed review.
 
@@ -25,7 +25,7 @@ Do them in this order. Each section below says exactly what to run.
 | 4 | Capture the reviewed tree | |
 | 5 | Secret scan | the scan exits non-zero |
 | 6 | Run the required checks once | a required check fails |
-| 7 | Brief and run the three review lanes | a lane cannot complete |
+| 7 | Brief and run the four review lanes | a lane cannot complete |
 | 8 | Adjudicate the findings and fix blockers | an accepted blocker needs owner input |
 | 9 | Re-review if the staged tree changed | |
 | 10 | Record the approval and commit | |
@@ -48,8 +48,8 @@ fall back to older Ponytail guidance.
 
 Read the bundled [reviewer routing policy](../../references/reviews.md) before every review. It defines model-agnostic selection, bounded availability fallbacks and escalation. It is an unchanged copy of the canonical optimal-subagents policy. Exact user or project model/effort requirements take precedence over it.
 
-- **Codex:** use the machine owner's configured reviewer choices under the bundled policy. Use the bundled [code-simplifier](../code-simplifier/SKILL.md) for Pass 1 and the active subagent tools for the three lanes.
-- **Claude Code:** use the installed adapter agents `code-simplifier`, `review-correctness`, `review-quality` and `review-adversarial`. Their configured models and effort must match the owner's selected hook preferences. This plugin does not install those agents.
+- **Codex:** use the machine owner's configured reviewer choices under the bundled policy. Use the bundled [code-simplifier](../code-simplifier/SKILL.md) for Pass 1 and the active subagent tools for the four lanes. Security also reads the bundled [security-review](../security-review/SKILL.md) skill.
+- **Claude Code:** use the installed adapter agents `code-simplifier`, `review-correctness`, `review-quality` and `review-adversarial`, plus the bundled `scg-review:review-security` agent. The parent selects the owner's configured model and effort for every pass using the active tool schema. Without a per-invocation effort field, use a verified matching inherited session effort; otherwise report the selection blocker. Never label a client selection limit as unsupported model effort. This plugin supplies the security agent with no model or effort; it does not install or change the other local agents. Skip a model when the active client has no eligible route to it; a configured identifier does not establish access.
 - **Other runtimes:** use only a verified installed adapter that implements this procedure.
 
 When the selected model is unavailable, use an eligible fallback and record the substitution. Fallbacks are enabled unless the current user forbids substitution or an applicable instruction requires an exact model, provider or effort. Follow the policy's two-fallback dispatch limit and shared-failure rules. A required pass is `❌ Block` when no permitted model can complete it. Never switch runtimes, accounts or data constraints, or weaken a gate, to get around a requirement. Confirm access through actual review calls: an accepted dispatch is not a completed review. See [provider access and identity rules](../../references/reviewer-models.md).
@@ -114,7 +114,7 @@ Run `git status --short`. Stage only this commit's scope, and move unrelated sta
 
 ## Step 3: Pass 1, simplification
 
-Run the simplification pass before the lanes, then stage its edits. A no-op is valid and is recorded as one. Use your runtime's entry under Models and runtimes and the installed code-simplifier skill. Pause your own edits while the simplifier has write ownership. It edits staged files only, reads ponytail first, follows project instructions and reports its changes or a no-op. If it edits outside the staged scope, undo only its own out-of-scope edits and keep any pre-existing work. Verify its result, then stage it; the staged scope must still be the intended commit. The hook receipt still lists only the three review lanes.
+Run the simplification pass before the lanes, then stage its edits. A no-op is valid and is recorded as one. Use your runtime's entry under Models and runtimes and the installed code-simplifier skill. Pause your own edits while the simplifier has write ownership. It edits staged files only, reads ponytail first, follows project instructions and reports its changes or a no-op. If it edits outside the staged scope, undo only its own out-of-scope edits and keep any pre-existing work. Verify its result, then stage it; the staged scope must still be the intended commit. The hook receipt lists the four review lanes, not the simplifier.
 
 Pass 1 is often the slowest phase. The simplifier may read the staged scope, instructions, callers and tests for a long time before it edits or reports, so a quiet child is not a stalled child: do not cancel, interrupt, respawn, or launch a duplicate simplifier because it is quiet. Check on it through the runtime's bounded wait or status mechanism. Treat Pass 1 as stalled only when the runtime reports a failure, the child asks for attention, or an established runtime/transport timeout occurs. Then inspect the worktree and index before one focused retry with a fresh brief.
 
@@ -125,9 +125,12 @@ git diff --cached --name-only
 git diff --cached --stat
 git diff --cached
 git write-tree
+git rev-parse --verify HEAD
 ```
 
-The `git write-tree` output is the reviewed tree id. Every later step refers to it.
+The `git write-tree` output is the reviewed tree id. Record HEAD as the base
+commit; if HEAD does not exist, record an initial repository explicitly. Every
+later step refers to this pair. A changed base invalidates introduction evidence.
 
 ## Step 5: Secret scan
 
@@ -155,9 +158,9 @@ Record the exact commands, their results and the reviewed tree id. Every lane re
 
 Right before spawning reviewers, confirm `git write-tree` still prints the reviewed tree id. If it does not, isolate the change, recapture the scope, rescan and rerun the affected checks.
 
-## Step 7: Brief and run the three review lanes
+## Step 7: Brief and run the four review lanes
 
-Run the three lanes in parallel, only after Pass 1 is finished and staged, so no more than three reviewers run at once. Each lane owns one failure class, defined in the [lane guide](../../references/lanes.md): correctness, quality and adversarial.
+Run correctness, quality, adversarial and security after Pass 1 is finished and staged. Use independent contexts and the same frozen tree. Respect available child slots: run at most three reviewers at once, then the remaining lane. Scheduling does not make a lane optional. Each lane owns one failure class in the [lane guide](../../references/lanes.md).
 
 List the context files reviewers need beyond the staged files: direct callers or importers of changed exports; adjacent tests and fixtures; schemas, contracts, builders, snapshots, workflow definitions or config that define the changed behaviour; and docs or runbooks when behaviour or deployment changes. If a lane cannot inspect required context, its review is incomplete.
 
@@ -167,17 +170,18 @@ Send every lane this brief, changing only the lane name and model line. Do not w
 <requested model> <effort>: pre-commit review, <lane> lane, for <task or branch>.
 Worktree: <absolute worktree path>
 Reviewed tree: <tree id>
+Base commit: <HEAD commit id, or initial repository with no HEAD>
 Staged files: <list>
 Context files: <absolute paths>
 Risk profile: <normal, or elevated because ...>
 Verification already run: <commands and results>
-First read in full: <resolved absolute path of scg-ponytail's ponytail SKILL.md>, then <absolute path of references/lanes.md>, applying its <lane> section.
+First read in full: <resolved absolute path of scg-ponytail's ponytail SKILL.md>, then <absolute path of references/lanes.md>, applying its <lane> section. Security also reads <absolute security-review SKILL.md> with role discover and uses its safer Git object-read commands for all target material.
 Inspect the staged change with these commands, run in the worktree, and read the listed context files; inspect nothing else:
   git write-tree            must print the reviewed tree id; on a mismatch, report it and stop
   git diff --cached --stat
   git diff --cached
   git show :path            for every staged file, in full
-You are read-only: do not edit, stage, commit, push, delegate or change any system. You may run one narrow, non-destructive check to prove or disprove a finding; report what you ran and what it showed.
+You are read-only: do not edit, stage, commit, push, delegate or change any system. Other lanes may run one narrow, non-destructive check to prove or disprove a finding; report what you ran and what it showed. Security performs source reads only: no target code, tests, imports, filters, network, credentials or live tools. It reads tracked context from the reviewed tree, compares base blobs and checks tree/base stability again before reporting.
 Reply in the lane report format from the lane guide, then stop.
 ```
 
@@ -202,9 +206,19 @@ These three labels are the whole verdict vocabulary. A verdict keeps its label a
 
 ## Step 8: Adjudicate the findings and fix blockers
 
-1. Confirm all three lanes inspected the full staged diff and every staged file, and read ponytail first. A lane missing either confirmation is incomplete and blocks the commit.
+1. Confirm all four lanes inspected the full staged diff and every staged file, and read ponytail first. A lane missing either confirmation is incomplete and blocks the commit. Security's explicit exception for irrelevant binary asset contents requires honest coverage reporting, not a full-file claim. Confirm security used the captured tree/base and source-only contract.
 2. Merge duplicate findings by root cause; the lane that owns the failure class keeps it.
-3. Decide each item: Accept, Downgrade or Reject, against the staged evidence and the reportability and severity rules in the [lane guide](../../references/lanes.md). Accept only when the change caused or worsened it, the failure path is executable or deterministic, the impact is material, the confidence is justified and the smallest fix is in scope. A downgrade must fit the severity scale: a finding that breaks a contract, a safety boundary, data integrity or required operability is at least `HIGH`, never `MEDIUM`. Write a short reason for any decision that is not obvious. A rejected `❌ Block` triggers no edits and no further review.
+3. Decide each item: Accept, Downgrade or Reject, against the staged evidence and the reportability and severity rules in the [lane guide](../../references/lanes.md). Security candidates first undergo the independent verification below; the parent may merge duplicates but cannot discard a reported security candidate on its merits before verification. Accept only when the change caused or worsened it, the failure path is executable or deterministic, the impact is material, the confidence is justified and the smallest fix is in scope. A downgrade must fit the severity scale: a finding that breaks a contract, a safety boundary, data integrity or required operability is at least `HIGH`, never `MEDIUM`. Write a short reason for any decision that is not obvious. A rejected `❌ Block` triggers no edits and no further review after any required security verification.
+
+Send every reported security candidate, after merging duplicates, to one fresh
+security verifier that did not discover them. Use the same configured security
+selection, full staged scope, named context and source-only brief, with role
+`verify`. Do not supply the parent's preferred verdict. Require an independent
+source trace and disposition for every candidate. No candidates means no extra
+call. Record the verifier's requested and returned model/effort, exact tree/base,
+disposition for each root cause and any missing identity fields as unverified.
+A material replacement claim requires fresh verification before acceptance;
+unresolved material candidates or incomplete verification remain `❌ Block`.
 4. Act on what you accepted:
 
 | Accepted item | Action |
@@ -230,7 +244,7 @@ Compare the final staged tree with the reviewed tree id. If they match, no re-re
 | Delta | Examples | What to do |
 |---|---|---|
 | Mechanical | typos, behaviour-neutral formatting, adding exactly the regression test a reviewer asked for without changing test strategy, narrowing a change exactly as asked without altering behaviour, prose-only corrections | No lane reruns. Self-verify, run targeted checks, rescan, and record why the original review still covers the final tree |
-| Material | any change to behaviour or public contracts; auth, security, permissions or secrets handling; payments, sends, deletes, record writes or other side effects; migrations, deployment, rollback or infrastructure; concurrency, idempotency, retry or state; test strategy or coverage boundaries; agent instructions, approval rules, executable runbooks, specs, schemas or workflow JSON when a contract or required behaviour changes; any simplification pass run after the lanes | Rerun the owning lane on the final tree, plus correctness when another lane owned the finding or behaviour changed. Rerun all three only when one fix spans several lanes, adds a new risk area, or cannot be bounded from the delta |
+| Material | any change to behaviour or public contracts; auth, security, permissions or secrets handling; payments, sends, deletes, record writes or other side effects; migrations, deployment, rollback or infrastructure; concurrency, idempotency, retry or state; test strategy or coverage boundaries; agent instructions, approval rules, executable runbooks, specs, schemas or workflow JSON when a contract or required behaviour changes; any simplification pass run after the lanes | Rerun the owning lane on the final tree, plus correctness when another lane owned the finding or behaviour changed. Security also reruns when its inspected boundary or evidence changed. Rerun all four only when one fix spans several lanes, adds a new risk area, or cannot be bounded from the delta |
 
 A delta that touches anything in the Material row is material, even when part of it also looks mechanical.
 
@@ -243,18 +257,18 @@ Check that the effective `core.hooksPath` is `~/.config/scg-agent-git-hooks/`. T
 Then record the approval under `~/.cache/scg-agent-git-hooks/reviews/`:
 
 ```bash
-~/.config/scg-agent-git-hooks/bin/scg-review-state approve --decision ALL_CLEAR --pass correctness=<requested-model>@<requested-variant>::<returned-model>@<returned-variant> --pass quality=<requested-model>@<requested-variant>::<returned-model>@<returned-variant> --pass adversarial=<requested-model>@<requested-variant>::<returned-model>@<returned-variant>
+~/.config/scg-agent-git-hooks/bin/scg-review-state approve --decision ALL_CLEAR --pass correctness=<requested-model>@<requested-variant>::<returned-model>@<returned-variant> --pass quality=<requested-model>@<requested-variant>::<returned-model>@<returned-variant> --pass adversarial=<requested-model>@<requested-variant>::<returned-model>@<returned-variant> --pass security=<requested-model>@<requested-variant>::<returned-model>@<returned-variant>
 ```
 
 - `✅ All Clear` maps to `--decision ALL_CLEAR` and `📝 Proceed With Notes` maps to `--decision PROCEED_WITH_NOTES`. Never record approval for `❌ Block`.
 - Each `--pass` value is `<requested-model>@<requested-variant-or-unavailable>::<returned-model-or-unverified>@<returned-variant-or-unverified-or-unavailable>`. Use the actual callable identifier and supported effort, or `unavailable` when effort is unsupported. When the runtime does not echo its serving identity, record `unverified@unverified` on the returned side; that absence never blocks approval.
-- Never invent a value, and never record approval without a genuine three-lane review having run. Self-attesting the review is a bypass of the gate, not a review.
+- Never invent a value, and never record approval without a genuine four-lane review having run. Self-attesting the review is a bypass of the gate, not a review.
 
 Commit with `<type>: <short summary>`, where type is `feat`, `fix`, `refactor`, `test`, `chore` or `docs`, matching the shared commit-msg hook.
 
 ## Rules that apply throughout
 
 - Run this process once for the intended staged commit scope.
-- Reviewers are read-only. They inspect the staged diff and the full staged files from the git index, never snippets or working-tree content, and the main agent's single verification run stands for all three lanes.
+- Reviewers are read-only. They inspect the staged diff and the full staged files from the git index, never snippets or working-tree content, and the main agent's single verification run stands for all four lanes.
 - Every pass reads the installed `scg-ponytail:ponytail` skill in full before inspecting anything; give each pass its resolved absolute path under [Ponytail dependency](#ponytail-dependency). Ponytail informs judgement about the smallest correct change. It never makes style-only, `LOW`, speculative or out-of-lane findings reportable, and never justifies editing for rejected items.
 - The parent owns orchestration. A reviewer must not run the whole gate or spawn its own reviewers. Use the runtime's actual subagent tools and schemas, and the current policy rather than model names remembered from an earlier turn.

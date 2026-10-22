@@ -15,7 +15,7 @@ import tempfile
 
 PLUGIN = Path(__file__).resolve().parents[1]
 FILES = ("pre-commit", "commit-msg", "bin/scg-review-state", "lib/scg_agent_git_hooks.py")
-LANES = ["correctness", "quality", "adversarial"]
+LANES = ["correctness", "quality", "adversarial", "security"]
 # The hook helper needs 3.11+ (datetime.UTC). The POSIX shims' historical
 # bare python3 stays unvalidated; anything absolute is probed before install.
 POSIX_INTERPRETER = "python3"
@@ -91,7 +91,7 @@ def effective_config(config, os_name=None):
 
 def verify_config(config, os_name=None):
     if config.get("required_lanes") != LANES:
-        raise ValueError("Configuration must require correctness, quality and adversarial lanes.")
+        raise ValueError("Configuration must require correctness, quality, adversarial and security lanes.")
     ttl = config.get("review_state_ttl_seconds")
     if type(ttl) is not int or not 1 <= ttl <= 86400:
         raise ValueError("Review receipt lifetime must be between 1 and 86400 seconds.")
