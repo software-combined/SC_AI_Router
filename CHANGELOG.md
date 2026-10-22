@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Reconnect an active Codex attachment when its complete Router block is missing.
+  Preserve model choices and original settings evidence. Conflicts stay unchanged.
+  Offer a dismissible restart notice even when no version or model changed.
+- Record regular and Express update launches, completion, failure and repair outcomes.
+
 - Find the bundled Codex command beside the verified Windows Store app.
   Keep the same app identity during switching and recovery.
 - Hide console windows during Windows app checks, setup choices and notices.

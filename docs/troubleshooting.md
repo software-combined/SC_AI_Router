@@ -1,5 +1,13 @@
 # Troubleshooting
 
+Scheduled checks can reconnect Codex when its complete Router block is missing.
+This requires an active attachment receipt and a healthy Router.
+Partial blocks, conflicting connection settings and damaged receipts require manual review.
+Use the supported detach or removal action to disable automatic reconnection.
+After repair, choose **Quit and reopen** or **Later** in the restart notice.
+If no dialog is available, the notice stays pending.
+The content-free `logs/maintenance.jsonl` records regular and Express check outcomes.
+
 If Windows reports that Router could not check its stored key, retry shortly.
 This message does not mean the key is invalid. If it persists, open **SCG Router**
 and run **Check setup**. Permission-query diagnostics contain operation names,

@@ -65,6 +65,14 @@ channel and source before displaying them.
 
 ## Domains and direction
 
+`update_reconcile` runs after applying-update installation locks close, including
+unchanged regular and Express checks. It takes the installation lock without waiting.
+`codex_recovery` repairs only an absent block under a valid, active receipt and
+healthy Router. `codex_owned` validates absence, connection conflicts and TOML.
+Configuration and receipt writes compare their prior contents and verify readback.
+Original uninstall evidence remains intact. The receipt retains a repair event
+until `notice` can offer its configuration-only restart reason.
+
 `winsecurity` reads Windows security descriptors through the operating system.
 `winacl` owns the permitted identities and rejects unsupported rules. Checks
 have no verdict cache, so permission changes apply on the next key read.

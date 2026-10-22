@@ -169,6 +169,14 @@ cannot be drawn is taken back off the list so a later pass offers it again.
 
 ## Switch Codex run log
 
+Applying update checks append content-free records to `logs/maintenance.jsonl`.
+The regular and Express tasks record launch, completion or failure.
+Reconciliation records `repaired`, `unchanged`, `inactive`, `deferred`, `unhealthy`,
+`conflict` or `failed` for the Codex attachment. Records contain no settings or keys.
+A repaired attachment retains its original uninstall evidence in `activation.json`.
+Its `repair_notice` event deduplicates the configuration-only restart offer in
+`update-notice.json`. A missing dialog leaves that offer pending.
+
 Each Switch Codex run appends one JSON line to `logs/codex-switch.log`, so a
 switch that refused can be diagnosed afterwards:
 

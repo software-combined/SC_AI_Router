@@ -29,7 +29,7 @@ def clients(value):
     return value if value in CLIENTS else 'codex'
 
 
-def message(version, clients='codex', names=()):
+def message(version, clients='codex', names=(), attachment=False):
     """Restart instruction for the clients this install actually serves.
 
     `names` are the models the update added, as the picker labels them.
@@ -43,6 +43,9 @@ def message(version, clients='codex', names=()):
         action = 'Restart your AI client'
     else:
         action = 'Quit and reopen Codex'
+    if attachment:
+        listed = '\nNew models:\n' + '\n'.join('- %s' % name for name in names) if names else ''
+        return 'SCG Router was reconnected.%s\n%s to load the changes.' % (listed, action)
     if names:
         listed = '\n'.join('- %s' % name for name in names)
         return ('SCG Router was updated to %s.\nNew models:\n%s\n%s to use them.'

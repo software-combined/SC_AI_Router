@@ -52,6 +52,7 @@ load packaging/claude_profile_ledger.py
 load packaging/claude_profile_hook.py
 load packaging/codex_config.py
 load packaging/codex_owned.py
+load packaging/codex_recovery.py
 load packaging/codex_switch_config.py
 load packaging/codex_desktop_switch.py
 load packaging/codex_config_proof.py
@@ -67,6 +68,7 @@ load packaging/provider_keys.py
 load packaging/service.py
 load packaging/systemd.py
 load packaging/updater.py
+load packaging/update_reconcile.py
 load packaging/update_status.py
 load packaging/update_warning.py
 load packaging/platforms/__init__.py
