@@ -39,7 +39,7 @@ are never copied between machines.
 `ai_router/apply_catalogue.py`, `ai_router/activation.py`,
 `ai_router/__init__.py`, `ai_router/__main__.py`,
 `ai_router/model_metadata.py`, `ai_router/model_refresh.py`,
-`ai_router/winacl.py`, `ai_router/image_items.py`,
+`ai_router/winacl.py`, `ai_router/winsecurity.py`, `ai_router/image_items.py`,
 `ai_router/turn_budget.py`,
 `ai_router/model_prompt.py`, `ai_router/model_prompt_page.py`,
 `ai_router/model_policy.py`,
@@ -168,6 +168,14 @@ shows no dialog rather than the same one every minute, and a dialog that
 cannot be drawn is taken back off the list so a later pass offers it again.
 
 ## Switch Codex run log
+
+Applying update checks append content-free records to `logs/maintenance.jsonl`.
+The regular and Express tasks record launch, completion or failure.
+Reconciliation records `repaired`, `unchanged`, `inactive`, `deferred`, `unhealthy`,
+`conflict` or `failed` for the Codex attachment. Records contain no settings or keys.
+A repaired attachment retains its original uninstall evidence in `activation.json`.
+Its `repair_notice` event deduplicates the configuration-only restart offer in
+`update-notice.json`. A missing dialog leaves that offer pending.
 
 Each Switch Codex run appends one JSON line to `logs/codex-switch.log`, so a
 switch that refused can be diagnosed afterwards:

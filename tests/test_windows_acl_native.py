@@ -17,7 +17,7 @@ class NativeAclTests(unittest.TestCase):
             child = home / "inherited $name`[1]; & 'é'.key"
             child.write_text('synthetic test data', encoding='utf-8')
             winacl.check(child, fresh=True)
-            doc = winacl._query(child, winacl._run)
+            doc = winacl._query(child)
             self.assertIn(doc['owner'], {doc['user'], 'S-1-5-18', 'S-1-5-32-544'})
             self.assertTrue(any(rule['sid'] == doc['user'] and rule['type'] == 0
                                 and rule['flags'] & 16 for rule in doc['rules']))

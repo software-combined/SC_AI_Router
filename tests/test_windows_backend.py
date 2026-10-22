@@ -42,7 +42,7 @@ USER = 'S-1-5-21-1-2-3-1001'
 
 def _query(status):
     return dict(kind='present', state=status, enabled=status != 1, pending=False,
-                instances=['instance'] if status == 4 else [])
+                instances=['instance'] if status == 4 else [], executable=backend._pythonw(PY))
 
 
 QUERY_READY = _query(3)
@@ -105,7 +105,8 @@ def _fake_run(state=None, calls=None, fail=(), end_fails=False):
 
 
 def _backend(state=None, calls=None, fail=(), end_fails=False):
-    obj = backend.Backend(service, _fake_run(state, calls, fail, end_fails))
+    obj = backend.Backend(service, _fake_run(state, calls, fail, end_fails),
+                          query=lambda path: {'user': USER})
     obj._sleep = lambda seconds: None
     return obj
 
@@ -308,7 +309,7 @@ class InstallTests(unittest.TestCase):
             seen.append(kwargs)
             return SimpleNamespace(returncode=0)
 
-        obj = backend.Backend(service, run)
+        obj = backend.Backend(service, run, query=lambda path: {'user': USER})
         obj._call(['whoami'], creationflags=1234)
         self.assertEqual(seen[0].get('creationflags'), 1234)
         obj._call(['whoami'])
@@ -356,7 +357,7 @@ class InstallTests(unittest.TestCase):
             return fake(cmd, **kwargs)
         with tempfile.TemporaryDirectory() as tmp, \
                 mock.patch.object(service, 'wait_version', return_value=True):
-            backend.Backend(service, run).install(PY, Path(tmp), {}, ROOT, None)
+            backend.Backend(service, run, query=lambda path: {'user': USER}).install(PY, Path(tmp), {}, ROOT, None)
         self.assertTrue(seen)
         self.assertTrue(all(flag == backend._NO_WINDOW['creationflags'] for flag in seen))
 

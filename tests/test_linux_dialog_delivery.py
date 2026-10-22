@@ -117,7 +117,10 @@ class DialogDeliveryTests(unittest.TestCase):
         for name, rows in (
                 ('linux', ((0, '', '', True), (1, '', '', False),
                            (1, '', 'cannot open display', None), (2, '', '', None))),
-                ('win32', ((0, '', '', True), (1, '', '', False),
+                ('win32', ((0, 'SCG_ROUTER_DIALOG_RESULT=accept', '', True),
+                           (1, 'SCG_ROUTER_DIALOG_RESULT=cancel', 'progress output', False),
+                           (0, '', '', None), (1, '', '', None),
+                           (1, 'SCG_ROUTER_DIALOG_RESULT=accept', '', None),
                            (1, '', 'PowerShell error', None), (2, '', '', None))),
                 ('darwin', ((0, 'button returned:Continue', '', True),
                             (1, '', 'execution error: User canceled. (-128)', False),

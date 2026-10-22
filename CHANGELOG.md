@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+## 1.3.14
+
+- Move all three owned Windows tasks to the verified retained runtime after delivery.
+  Preserve schedules and disabled states. Restore prior definitions if verification fails.
+- Record tray helper exits and controller failures. Retry an unexpected helper exit once.
+  Keep Quit, removal and the saved startup choice effective.
+- Explain which component needs repair when the installed and latest versions match.
+  Record safe warning facts for support and hide the repair command's console window.
+- Recognize Windows **Later** even when PowerShell returns extra output.
+  Keep the daily warning limit and leave unconfirmed dialogs pending.
+
+- Reconnect an active Codex attachment when its complete Router block is missing.
+  Preserve model choices and original settings evidence. Conflicts stay unchanged.
+  Offer a dismissible restart notice even when no version or model changed.
+- Record regular and Express update launches, completion, failure and repair outcomes.
+
+- Find the bundled Codex command beside the verified Windows Store app.
+  Keep the same app identity during switching and recovery.
+- Hide console windows during Windows app checks, setup choices and notices.
+
+- Read Windows key permissions directly instead of starting PowerShell. A
+  temporary permission-query failure now retries briefly and asks the client
+  to retry, rather than rejecting requests for 30 seconds or requesting a new key.
+
 ## 1.3.13
 
 - Point the setup-script links in the agent install prompt, the Claude Code

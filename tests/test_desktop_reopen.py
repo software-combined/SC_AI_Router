@@ -58,7 +58,7 @@ class DesktopReopenTests(unittest.TestCase):
             with mock.patch.object(menu, '_events', side_effect=events), \
                     mock.patch.object(menu, '_control', return_value=dict(status='Running', clients=[])), \
                     mock.patch.object(menu.subprocess, 'Popen', return_value=shell):
-                self.assertEqual(menu.run_menu(home, home, autostart=True), 0)
+                self.assertEqual(menu.run_menu(home, home, autostart=True), 74)
             self.assertEqual(sum(bool(doc.get('open_menu')) for doc in documents), 1)
             self.assertFalse(request.exists())
 
@@ -81,7 +81,7 @@ class DesktopReopenTests(unittest.TestCase):
                     mock.patch.object(menu, '_events', side_effect=lambda stream, queue: queue.put({'closed': True})), \
                     mock.patch.object(menu, '_control', return_value=dict(status='Running', clients=[])), \
                     mock.patch.object(menu.subprocess, 'Popen', return_value=shell):
-                self.assertEqual(menu.run_menu(home, home, autostart=True), 0)
+                self.assertEqual(menu.run_menu(home, home, autostart=True), 74)
             self.assertFalse(any(doc.get('open_menu') for doc in documents))
             self.assertFalse(request.exists())
 

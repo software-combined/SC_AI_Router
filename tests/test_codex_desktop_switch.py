@@ -44,13 +44,13 @@ class FakeApp:
         self.calls.append(('confirm', message))
         return self.answer
 
-    def request_stop(self, platform_name, run=None, app=None):
+    def request_stop(self, platform_name, run=None, app=None, *, identity=None):
         self.calls.append(('stop', app.bundle_id))
         if isinstance(self.stops, Exception):
             raise self.stops
         return self.stops
 
-    def open_app(self, platform_name, run=None, app=None):
+    def open_app(self, platform_name, run=None, app=None, *, identity=None):
         self.calls.append(('open', app.bundle_id))
         return SimpleNamespace(returncode=0)
 
@@ -159,7 +159,7 @@ class SwitchFlowTests(unittest.TestCase):
                 (self.fake(), False, 'still checking'),
                 (self.fake(identity=FileNotFoundError('not installed')), True, 'could not check'),
                 (self.fake(identity=OSError('two copies')), True, 'could not check'),
-                (FakeApp(self.app.parent / 'Old.app'), True, 'could not check')):
+                (FakeApp(self.app.parent / 'Old.app'), True, 'missing a bundled tool')):
             with self.subTest(message=message, identity=app.identity):
                 with self.assertRaisesRegex(switcher.SwitchError, message):
                     self.run_switch(app, ready=ready)

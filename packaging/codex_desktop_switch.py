@@ -31,6 +31,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 
 
@@ -68,6 +69,8 @@ STAYED_OPEN = ('The ChatGPT app (Codex) did not close. Quit it from the ChatGPT 
 NOT_PROVEN = 'The ChatGPT app (Codex) could not use the new settings, so nothing changed.'
 NO_APP = ('Switch Codex could not check the ChatGPT app (Codex). Make sure one '
           'up-to-date copy is installed, then try again.')
+NO_COMMAND = ('The ChatGPT app (Codex) is missing a bundled tool. Update the app, '
+              'then try Switch Codex again.')
 QUIT_FIRST = ('Quit the ChatGPT app (Codex) first, then choose Continue to switch it back '
               'to your ChatGPT subscription.')
 BACK_OPEN_AGAIN = ('The ChatGPT app (Codex) is switched back to your ChatGPT subscription. '
@@ -103,7 +106,11 @@ def switch(home, *, run=subprocess.run, platform_ops=None, prove=None, ready=Non
 
 
 def _switch(home, run, ops, prove, ready, record, target=None):
-    root = _app_root(ops, run)
+    identity = _app_identity(ops, run)
+    root = identity['root'] if identity else None
+    app_exe = identity.get('exe') if identity else None
+    if prove is _proof.prove:
+        prove = partial(prove, app_exe=app_exe)
     _recover(home, prove, root)
     try:
         entry = _receipts.codex_attachment(home)
@@ -124,8 +131,12 @@ def _switch(home, run, ops, prove, ready, record, target=None):
             raise SwitchError(NOTHING_TO_SWITCH)
         if not ready(home):
             raise SwitchError(NOT_READY)
-        if root is None or _proof.codex_bin(os.environ, root) is None:
+        if root is None:
+            record['reason'] = 'app_unavailable'
             raise SwitchError(NO_APP)
+        if _proof.codex_bin(os.environ, root, app_exe=app_exe) is None:
+            record['reason'] = 'bundled_command_missing'
+            raise SwitchError(NO_COMMAND)
     try:
         if not ops.confirm(PROMPTS[target] if root else QUIT_FIRST, sys.platform, run=run):
             return None
@@ -134,14 +145,14 @@ def _switch(home, run, ops, prove, ready, record, target=None):
     closed = None  # the way back may go on with no app it can quit or reopen
     if root is not None:
         try:
-            closed = ops.request_stop(sys.platform, run=run, app=CODEX)
+            closed = ops.request_stop(sys.platform, run=run, app=CODEX, identity=identity)
         except (OSError, subprocess.SubprocessError) as exc:
             if target == SWITCHED:
                 raise SwitchError(FAILED) from exc
         if closed is False:
             record['open'] = _running(root, run)  # before the reopen starts it again
             try:
-                _open(ops, run)  # a refusal never leaves it closed; a running app is only shown
+                _open(ops, run, identity)  # A refusal never leaves the app closed.
             except (OSError, subprocess.SubprocessError):
                 pass
             raise SwitchError(STAYED_OPEN)
@@ -150,7 +161,7 @@ def _switch(home, run, ops, prove, ready, record, target=None):
     except SwitchError as exc:
         try:
             if closed:
-                _open(ops, run)
+                _open(ops, run, identity)
         except (OSError, subprocess.SubprocessError):
             raise SwitchError('%s Open the ChatGPT app (Codex) to continue.' % exc) from exc
         raise
@@ -158,17 +169,17 @@ def _switch(home, run, ops, prove, ready, record, target=None):
         _notice(ops, run, BACK_OPEN_AGAIN)
         return target
     try:
-        _open(ops, run)
+        _open(ops, run, identity)
     except (OSError, subprocess.SubprocessError) as exc:
         raise SwitchError('The ChatGPT app (Codex) is switched to %s. Open it to continue.'
                           % DESTINATIONS[target]) from exc
     return target
 
 
-def _app_root(ops, run):
-    """The ChatGPT app's bundle when exactly one is found, else None."""
+def _app_identity(ops, run):
+    """Keep the verified executable together with its package root."""
     try:
-        return ops.app_identity(sys.platform, run=run, app=CODEX)['root']
+        return ops.app_identity(sys.platform, run=run, app=CODEX)
     except Exception:
         return None
 
@@ -249,8 +260,8 @@ def _notice(ops, run, message):
         pass
 
 
-def _open(ops, run):
-    answer = ops.open_app(sys.platform, run=run, app=CODEX)
+def _open(ops, run, identity):
+    answer = ops.open_app(sys.platform, run=run, app=CODEX, identity=identity)
     if getattr(answer, 'returncode', 0) != 0:
         raise OSError('the app did not open')
 

@@ -1,11 +1,19 @@
 """Task Scheduler's structured API and mutation-time ownership gate. Python 3.9+."""
 import json
+import ntpath
 import subprocess
 
 _SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $pendingMarker = 'codex-router-installer:pending-activation'
+function Test-Python($path) {
+    try {
+        $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($path)
+        return ([IO.Path]::IsPathRooted($path) -and $info.ProductName -eq 'Python' -and
+            $info.OriginalFilename -match '^pythonw?(_d)?\.exe$')
+    } catch { return $false }
+}
 try {
     $r = [Console]::In.ReadToEnd() | ConvertFrom-Json
     $service = New-Object -ComObject Schedule.Service
@@ -39,12 +47,7 @@ try {
             $d.RegistrationInfo.Author -eq 'codex-router-installer'
         if ($owned) {
             # Read CPython's version resource; never execute a task's claimed interpreter.
-            try {
-                $path = $d.Actions.Item(1).Path
-                $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($path)
-                $owned = [IO.Path]::IsPathRooted($path) -and $info.ProductName -eq 'Python' -and
-                    $info.OriginalFilename -match '^pythonw?(_d)?\.exe$'
-            } catch { $owned = $false }
+            $owned = Test-Python ($d.Actions.Item(1).Path)
         }
         if (-not $owned) {
             @{kind = 'foreign'} | ConvertTo-Json -Compress
@@ -64,7 +67,16 @@ try {
         $flags = if ($null -eq $task) { 2 } else { 4 }
         $task = $folder.RegisterTaskDefinition($r.name, $definition, $flags, $r.sid, $null, 3, $null)
     } elseif ($null -ne $task) {
-        if ($r.operation -in @('handover', 'complete', 'disable') -or
+        if ($r.operation -eq 'restore') {
+            $definition = $service.NewTask(0)
+            $definition.XmlText = $r.xml
+            $task = $folder.RegisterTaskDefinition($r.name, $definition, 4, $r.sid, $null, 3, $null)
+        } elseif ($r.operation -eq 'rebind') {
+            if (-not (Test-Python $r.executable)) { throw 'invalid runtime' }
+            $definition = $task.Definition
+            $definition.Actions.Item(1).Path = $r.executable
+            $task = $folder.RegisterTaskDefinition($r.name, $definition, 4, $r.sid, $null, 3, $null)
+        } elseif ($r.operation -in @('handover', 'complete', 'disable') -or
             ($r.operation -eq 'enable' -and $task.Definition.Data -eq $pendingMarker)) {
             $definition = $task.Definition
             # Record restart intent with disabling; Run must retain it until health succeeds.
@@ -95,9 +107,12 @@ try {
         $instances = @(foreach ($instance in $service.GetRunningTasks(1)) {
             if ($instance.Path -ieq $task.Path) { $instance.InstanceGuid }
         })
-        @{kind = 'present'; state = [int]$task.State; instances = $instances
+        $reply = @{kind = 'present'; state = [int]$task.State; instances = $instances
           enabled = [bool]$task.Enabled
-          pending = $task.Definition.Data -eq $pendingMarker} | ConvertTo-Json -Depth 4 -Compress
+          pending = $task.Definition.Data -eq $pendingMarker
+          executable = [string]$task.Definition.Actions.Item(1).Path}
+        if ($r.operation -eq 'snapshot') { $reply.xml = $task.Definition.XmlText }
+        $reply | ConvertTo-Json -Depth 4 -Compress
     }
 } catch { exit 1 }
 """
@@ -107,9 +122,10 @@ class OwnershipError(SystemExit):
     """A task belongs elsewhere, or its owner cannot be read."""
 
 
-def invoke(run, sid, name, arguments, operation='query', xml=None, *, pending=True):
+def invoke(run, sid, name, arguments, operation='query', xml=None, *, pending=True, executable=None):
     """Names and paths travel as JSON data, never interpolated PowerShell."""
-    request = dict(sid=sid, name=name, arguments=arguments, operation=operation, xml=xml, pending=pending)
+    request = dict(sid=sid, name=name, arguments=arguments, operation=operation,
+                   xml=xml, pending=pending, executable=executable)
     try:
         result = run(['powershell', '-NoLogo', '-NoProfile', '-NonInteractive',
                       '-Command', _SCRIPT], input=json.dumps(request),
@@ -126,12 +142,52 @@ def invoke(run, sid, name, arguments, operation='query', xml=None, *, pending=Tr
         if (doc['kind'] != 'present' or type(doc['state']) is not int
                 or type(doc.get('pending')) is not bool
                 or type(doc.get('enabled')) is not bool
+                or not isinstance(doc.get('executable'), str) or not ntpath.isabs(doc['executable'])
                 or doc['state'] not in (0, 1, 2, 3, 4)
                 or not isinstance(doc['instances'], list)
                 or any(not isinstance(item, str) or not item for item in doc['instances'])):
             raise ValueError('malformed task state')
         if doc['state'] == 0:
             raise ValueError('unknown task state')
+        if operation == 'snapshot' and (not isinstance(doc.get('xml'), str) or not doc['xml']):
+            raise ValueError('missing task definition')
         return doc
     except (OSError, subprocess.SubprocessError, ValueError, TypeError, KeyError):
         raise SystemExit('cannot verify Windows task %s during %s' % (name, operation))
+
+
+def _matches(current, previous, executable):
+    return (current is not None and current['executable'] == executable
+            and all(current[key] == previous[key] for key in ('enabled', 'pending')))
+
+
+def rebind(call, home, executable, names):
+    """Snapshot all definitions before mutation; restore every attempted change on failure."""
+    previous = {name: call(name, home, 'snapshot') for name in names}
+    if any(row is None for row in previous.values()):
+        raise SystemExit('Windows runtime repair requires all three owned tasks')
+    changed = []
+    try:
+        for name, before in previous.items():
+            if before['executable'] == executable:
+                continue
+            changed.append(name)
+            call(name, home, 'rebind', executable=executable)
+            if not _matches(call(name, home), before, executable):
+                raise SystemExit('Windows task runtime readback failed')
+    except BaseException:
+        failed = []
+        for name in reversed(changed):
+            try:
+                before = previous[name]
+                call(name, home, 'restore', xml=before['xml'])
+                restored = call(name, home, 'snapshot')
+                if (not _matches(restored, before, before['executable'])
+                        or restored['xml'] != before['xml']):
+                    raise ValueError('runtime rollback readback failed')
+            except BaseException:
+                failed.append(name)
+        if failed:
+            raise SystemExit('Windows runtime repair could not restore every task; retained runtimes kept') from None
+        raise
+    return bool(changed)

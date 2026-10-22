@@ -4,12 +4,12 @@ from .redaction import redact  # noqa: F401 (re-exported: errors.redact)
 ROUTER_TYPE = 'router_error'
 
 
-class RouterError(Exception):
-    """Defined HTTP failure: status, stable code, user-facing message.
+class CredentialCheckUnavailable(PermissionError):
+    """Permission facts could not be read; the stored key was not rejected."""
 
-    `detail` is log-only, path-redacted evidence: the person reads the plain
-    message while the log keeps the technical reason.
-    """
+
+class RouterError(Exception):
+    """HTTP failure with a plain message and redacted, log-only detail."""
 
     def __init__(self, status, code, message, detail=None):
         super().__init__(message)
@@ -68,7 +68,6 @@ def _error(status, code, message, detail=None):
     return RouterError(status, code, message, detail)
 
 
-# Loopback boundary.
 def forbidden():
     return _error(403, 'FORBIDDEN', 'The router refused this request. If this app has '
                   'stopped working, re-run the router installer to attach it again.')
@@ -264,13 +263,14 @@ def upstream_described(message):
 
 
 def map_client_error(exc):
-    """Split the old vague catch-all: bugs 500, credentials 400/401, else payload/model 400.
-
-    The caller logs request_failed with a traceback for INTERNAL_ERROR;
-    the traceback never leaves the log. Credential detail is log-only.
-    """
+    """Map client failures; credential detail stays in the redacted log."""
     if isinstance(exc, (AttributeError, TypeError)):
         return internal_error()
+    if isinstance(exc, CredentialCheckUnavailable):
+        error = _error(503, 'CREDENTIAL_CHECK_UNAVAILABLE',
+                       'The router could not check its stored key. Retry shortly.', str(exc))
+        error.retry_after = '1'
+        return error
     if isinstance(exc, PermissionError):
         return credential_permission(str(exc))
     if isinstance(exc, LookupError):

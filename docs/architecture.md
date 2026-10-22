@@ -46,6 +46,14 @@ again after preparing the temporary file.
 pointer. `update_launch` selects that controller across runtime rollback.
 Linux reloads and reads back the effective stable updater command before
 pruning. Loaded jobs and a running legacy updater retain their release files.
+`runtime_rebind` uses verified retained resource metadata after `setup-current`
+advances. The Windows task adapter snapshots all three owned definitions,
+changes only the executable and verifies its exact path, enabled and pending states.
+A failed readback restores attempted definitions. Both runtimes remain retained.
+The outer maintenance cadence retries failures under the installation lock.
+`desktop_menu` records helper exit codes and controller exception types.
+It retries an unexpected helper exit once after one second within the controller.
+Quit and removal stop it. Resource replacement uses the existing reload path.
 `feed` downloads public software without credentials. Legacy `download_auth`,
 `download_oauth` and `download_session` helpers are retained for compatibility,
 but the installer and updater no longer require them. `control_models` checks
@@ -64,6 +72,19 @@ the warning pending. Controls bind manual-check results to installed version,
 channel and source before displaying them.
 
 ## Domains and direction
+
+`update_reconcile` runs after applying-update installation locks close, including
+unchanged regular and Express checks. It takes the installation lock without waiting.
+`codex_recovery` repairs only an absent block under a valid, active receipt and
+healthy Router. `codex_owned` validates absence, connection conflicts and TOML.
+Configuration and receipt writes compare their prior contents and verify readback.
+Original uninstall evidence remains intact. The receipt retains a repair event
+until `notice` can offer its configuration-only restart reason.
+
+`winsecurity` reads Windows security descriptors through the operating system.
+`winacl` owns the permitted identities and rejects unsupported rules. Checks
+have no verdict cache, so permission changes apply on the next key read.
+Temporary operating-system failures cannot grant access or open key setup.
 
 Desktop connection commands accept explicit destinations. The switch owner
 rechecks the current selection while holding the installation lock, followed
