@@ -50,7 +50,7 @@ class GitleaksPinPortabilityTest(unittest.TestCase):
     def config(self, *, binary=None, version: str = "9.9.9", sha256: str | None = None) -> dict:
         return {
             "review_state_ttl_seconds": 86400,
-            "required_lanes": ["correctness", "quality", "adversarial"],
+            "required_lanes": ["correctness", "quality", "adversarial", "security"],
             "gitleaks": {
                 "binary": str(self.scanner if binary is None else binary),
                 "version": version,

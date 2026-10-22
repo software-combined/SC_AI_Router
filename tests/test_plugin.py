@@ -60,7 +60,7 @@ class PluginTest(unittest.TestCase):
         self.assertEqual(entry["name"], manifest["name"])
         self.assertEqual(manifest["repository"], "https://github.com/software-combined/SC_AI_Router")
         self.assertRegex(manifest["version"], r"^\d+\.\d+\.\d+(?:\+[A-Za-z0-9.-]+)?$")
-        for skill in ("pre-commit-review", "code-simplifier", "review-setup"):
+        for skill in ("pre-commit-review", "code-simplifier", "review-setup", "security-review"):
             self.assertTrue((PLUGIN / "skills" / skill / "SKILL.md").is_file())
         self.assertFalse((PLUGIN / "skills/ponytail").exists())
         for markdown in (PLUGIN / "skills").glob("*/SKILL.md"):

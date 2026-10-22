@@ -165,7 +165,7 @@ Before coding or reviewing code, read the installed
 [`scg-ponytail:ponytail` skill](plugins/scg-ponytail/skills/ponytail/SKILL.md)
 in full. Resolve its current absolute path from the active client's
 skill catalogue or plugin inventory; never pin a cache version. SCG Review
-requires that same skill for its simplifier and all three lanes, and blocks
+requires that same skill for its simplifier and all four lanes, and blocks
 when the dependency is missing, disabled or unreadable. Ponytail owns solution
 simplicity; this file and the review skill retain all verification gates.
 

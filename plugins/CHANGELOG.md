@@ -1,5 +1,16 @@
 # Changelog
 
+## scg-review 0.7.0 and scg-subagents 0.6.2 (2026-10-22)
+
+- Add a mandatory, model-agnostic security reviewer for Codex and Claude Code.
+  Trace changed trust boundaries, check the strongest defense, and independently
+  verify surviving candidates. Keep source reasoning distinct from observed results.
+- Require four lane identities and owner-selected security model preferences.
+  Three-lane configurations need the documented explicit migration; plugin updates
+  preserve local settings. Narrow adversarial review to operational failures.
+- Adapt Cloudflare's source-first security method without its full audit fleet,
+  target-code execution, coverage ledgers or additional dependencies.
+
 ## scg-prototypes 0.1.5 and scg-subagents 0.6.1 (2026-10-19)
 
 - Remove environment-specific cloud and finance account details from the

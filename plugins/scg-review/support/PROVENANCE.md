@@ -1,5 +1,18 @@
 # Imported source provenance
 
+## Security review method
+
+The security-review skill adapts the defensive tracing and independent
+refutation method in [Cloudflare security-audit-skill](https://github.com/cloudflare/security-audit-skill)
+at commit `c1c8a8c1471069fb0e188eeaff69b8e8db6564a8`, inspected on 22 October 2026.
+The reference was `skills/security-audit/`: `SKILL.md`, `HUNTING.md`,
+`VALIDATION-AND-REPORTING.md`, `ATTACK-CLASSES.md`, `AI-AND-LLM.md` and
+`SUPPLY-CHAIN-AND-RELEASE.md`. Its [MIT notice](cloudflare-LICENSE.txt) is retained.
+SCG supplies its own staged-tree scope, Markdown report contract and commit gate.
+It does not bundle Cloudflare's audit engine, validators or execution machinery.
+
+## Original review tooling
+
 Captured 2026-09-08 from the installed SCG review tooling. No credentials,
 machine scanner configuration, caches or review receipts are included.
 The hook adapter and its tests were imported from `.config/scg-agent-git-hooks`
@@ -43,8 +56,8 @@ directories. Their plugin copies change only packaging and dependency routing.
 | `support/git-hooks/commit-msg` | `2cbaa16377d52c890c3d64488d7e8b404859f44f059420388ae0c599a3528362` |
 | `support/git-hooks/lib/scg_agent_git_hooks.py` | `ad249c614a172b7936ac773edc2722cfe3098d5aaa94917b5abb6017f84230f2` |
 | `support/git-hooks/pre-commit` | `2b33623f31fc1acddba480987fbd6769d88e232b2bd3494145d0723be741d98b` |
-| `support/git-hooks/tests/test_review_gate.py` | `fbc73e5b5d23bb76b8d0dd10ab5f2f1465a52f747465851ef537bf53dde1f805` |
-| `support/git-hooks/tests/test_gitleaks_pin_portability.py` | `d551856d39ac756205e82ca94ae0a3b342cefa79f7f056d8ba98946934d40f9e` |
+| `support/git-hooks/tests/test_review_gate.py` | `e204608d2ad51319bab97125b4e842290db95c351eedfd708ce4b7d6e43d134d` |
+| `support/git-hooks/tests/test_gitleaks_pin_portability.py` | `87d7fafdc3a90e93214e35b4e9059d82e664d3dc545acc35b65aec6b20b99482` |
 | `support/git-hooks/tests/test_interpreter_selection.py` | `a82500c6dc2160c056df95238f70207c302ce76d590f44b63a34bc1aaed7f198` |
 
 Every row is the current content of this repository. The helper was imported as

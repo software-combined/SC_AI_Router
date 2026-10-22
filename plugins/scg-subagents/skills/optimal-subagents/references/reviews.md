@@ -10,8 +10,10 @@ governs a running review; do not mix policy versions mid-review.
 ## Select each pass
 
 The review procedure does not require a particular model, vendor, provider,
-billing route or effort level. It requires a simplifier and three independent
-review lanes that can complete the full staged-tree review.
+billing route or effort level. It requires a simplifier and four independent
+review lanes (correctness, quality, adversarial and security) that can complete
+the full staged-tree review. Security candidate verification uses the security
+role's choices; it is not another configured lane.
 
 1. Apply explicit user and project model, provider and effort requirements first.
    An exact requirement remains binding until the user changes it.
