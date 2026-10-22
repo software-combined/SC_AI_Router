@@ -39,13 +39,15 @@ these illustrative identifiers with models available in your client:
     "simplification": ["your-codex-model@high"],
     "correctness": ["your-codex-model@high", "your-fallback@unavailable"],
     "quality": ["your-codex-model@high"],
-    "adversarial": ["your-codex-model@high"]
+    "adversarial": ["your-codex-model@high"],
+    "security": ["your-security-model@high"]
   },
   "claude-code": {
     "simplification": ["your-claude-model@high"],
     "correctness": ["your-claude-model@high"],
     "quality": ["your-claude-model@high"],
-    "adversarial": ["your-claude-model@high"]
+    "adversarial": ["your-claude-model@high"],
+    "security": ["your-security-model@high"]
   }
 }
 ```
@@ -56,8 +58,31 @@ Run `~/.config/scg-agent-git-hooks/bin/scg-review-state models --client codex`
 before dispatch. A missing client profile never falls back to another client's
 choices. The hook does not call a
 provider or certify a model's capability; it records the completed lane choices.
-Older receipts remain usable. An old adapter without `models` needs the refresh
+Receipts must contain exactly the current required lanes. An old adapter without `models` needs the refresh
 below before using this release. No plugin update selects models for the owner.
+
+### Upgrade from three lanes
+
+Version 0.7.0 adds a mandatory security lane. The new setup check refuses a
+three-lane configuration without changing it. With the owner's authorization,
+back up the local config and add `security` after `adversarial` in
+`required_lanes`. Add the owner's ordered `security` choices to every configured
+client profile. Preserve all other choices, scanner pins, interpreter and lifetime.
+No shared model or effort is supplied, and there is no implicit cross-client
+fallback. Select only routes available to that client; a Claude subscription
+does not by itself provide a GPT route.
+
+Run the new setup check and `models --client codex` and/or
+`models --client claude-code`. Old three-lane receipts no longer satisfy the
+gate. A new genuine four-lane review is required; never rewrite old receipts.
+Claude Code loads the bundled `scg-review:review-security` agent in a fresh
+session. The parent must pass its selected model and effort; the agent omits both.
+Codex uses the bundled `security-review` skill in a fresh child context.
+Verify both clients' actual new-session pickup before claiming local delivery.
+Claude Code's [subagent reference](https://code.claude.com/docs/en/sub-agents#choose-an-effort-level)
+documents per-invocation effort for version 2.1.292 and later. On older clients,
+use a verified matching inherited session effort or stop at the selection gap.
+Do not invent an effort field or silently change the owner's choice.
 
 ## Gitleaks scanner
 
@@ -93,7 +118,7 @@ configuration as UTF-8. Its shape is:
 ```json
 {
   "review_state_ttl_seconds": 86400,
-  "required_lanes": ["correctness", "quality", "adversarial"],
+  "required_lanes": ["correctness", "quality", "adversarial", "security"],
   "gitleaks": {
     "binary": "/absolute/path/to/approved/gitleaks",
     "version": "approved-version",
@@ -111,7 +136,7 @@ Windows to accept the router's runtime; set it to override either default:
 {
   "interpreter": "C:/Program Files/Python 3.14/python.exe",
   "review_state_ttl_seconds": 86400,
-  "required_lanes": ["correctness", "quality", "adversarial"],
+  "required_lanes": ["correctness", "quality", "adversarial", "security"],
   "gitleaks": { "...": "..." }
 }
 ```
@@ -162,8 +187,9 @@ python3 "<plugin-root>/scripts/setup.py" check --repo /absolute/path/to/repo
 ```
 
 Keep `config.json` (including the recorded `interpreter`), the repository's
-effective `core.hooksPath` and the review receipts under
-`~/.cache/scg-agent-git-hooks/reviews/` exactly as they are. The check passing
+effective `core.hooksPath` and review receipts unchanged during an adapter refresh.
+The separately authorized three-to-four-lane configuration migration above is
+the only additional change needed for 0.7.0. The check passing
 is the evidence that the refresh is complete; the installer's exact-match
 refusal for every other difference stays in place.
 

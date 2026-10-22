@@ -30,6 +30,8 @@ LANE_ARGS = [
     "quality=model-q",
     "--pass",
     "adversarial=model-a",
+    "--pass",
+    "security=model-s",
 ]
 
 
@@ -44,7 +46,7 @@ class ReviewGateTest(unittest.TestCase):
             json.dumps(
                 {
                     "review_state_ttl_seconds": 86400,
-                    "required_lanes": ["correctness", "quality", "adversarial"],
+                    "required_lanes": ["correctness", "quality", "adversarial", "security"],
                 }
             )
         )
@@ -104,7 +106,7 @@ class ReviewGateTest(unittest.TestCase):
                 "Duplicate --pass",
             ),
             (
-                [*LANE_ARGS, "--pass", "security=m"],
+                [*LANE_ARGS, "--pass", "unknown=m"],
                 "Unknown review lane",
             ),
             (
@@ -148,6 +150,7 @@ class ReviewGateTest(unittest.TestCase):
                 "correctness": "model-c",
                 "quality": "model-q",
                 "adversarial": "model-a",
+                "security": "model-s",
             },
         )
         self.assertEqual(state["runner"], "local-cli")
@@ -158,7 +161,7 @@ class ReviewGateTest(unittest.TestCase):
         path = self.home / ".config/scg-agent-git-hooks/config.json"
         config = json.loads(path.read_text())
         choices = {role: ["local/custom-model@unavailable", "vendor/other-model@high"]
-                   for role in ("simplification", "correctness", "quality", "adversarial")}
+                   for role in ("simplification", "correctness", "quality", "adversarial", "security")}
         other = {role: ["another-provider/reviewer@high"] for role in choices}
         config["review_models"] = {"codex": choices, "claude-code": other}
         path.write_text(json.dumps(config))
@@ -167,7 +170,8 @@ class ReviewGateTest(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout), choices)
         self.assertEqual(json.loads(self.helper("models", "--client", "claude-code").stdout), other)
         self.assertNotEqual(self.helper("models", "--client", "unconfigured").returncode, 0)
-        for invalid in ({}, {**choices, "extra": ["model@high"]},
+        for invalid in ({}, {key: value for key, value in choices.items() if key != 'security'},
+                        {**choices, "extra": ["model@high"]},
                         *({**choices, "quality": value} for value in
                           ([], "model@high", [None], ["model"], ["model@"], ["model@high ::x"]))):
             with self.subTest(invalid=invalid):
@@ -184,6 +188,19 @@ class ReviewGateTest(unittest.TestCase):
         result = self.helper("pre-commit")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("SCG pre-commit hook blocked", result.stderr)
+
+    def test_three_lane_receipt_and_missing_security_pass_are_refused(self) -> None:
+        result = self.helper('approve', '--decision', 'ALL_CLEAR', *LANE_ARGS[:-2])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('security', result.stderr)
+        self.assertEqual(self.approve().returncode, 0)
+        path = self.state_dir() / f'{self.tree()}.review.json'
+        state = json.loads(path.read_text())
+        del state['passes']['security']
+        path.write_text(json.dumps(state))
+        result = self.helper('pre-commit')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('recorded review lanes do not match required lanes', result.stderr)
 
     def test_staged_tree_change_rejects_previous_approval(self) -> None:
         self.assertEqual(self.approve().returncode, 0)

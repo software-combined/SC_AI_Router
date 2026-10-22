@@ -1,0 +1,4 @@
+interface:
+  display_name: "Security Review"
+  short_description: "Trace and verify security flaws in staged changes."
+  default_prompt: "Use $security-review to inspect the exact staged Git tree for reachable security flaws."
