@@ -8,7 +8,7 @@ import json
 import os
 from pathlib import Path
 
-from . import key_store, provider_defs, state as state_mod
+from . import errors, key_store, provider_defs, state as state_mod
 from .state import default_home  # used below and re-exported for importers
 
 # Per-module flag so tests can drive the Windows branch without patching
@@ -64,7 +64,10 @@ class Credentials:
             # One owner for the key-privacy gate (Plan 131): the platform
             # branch and its message live in winacl.
             from . import winacl as _winacl
-            _winacl.require_owner_only(key_file, _ON_WINDOWS)
+            try:
+                _winacl.require_owner_only(key_file, _ON_WINDOWS)
+            except _winacl.VerificationUnavailable as exc:
+                raise errors.CredentialCheckUnavailable(str(exc)) from None
             value = key_file.read_text().strip()
             if value:
                 return value

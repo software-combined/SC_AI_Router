@@ -1,5 +1,10 @@
 # Troubleshooting
 
+If Windows reports that Router could not check its stored key, retry shortly.
+This message does not mean the key is invalid. If it persists, open **SCG Router**
+and run **Check setup**. Permission-query diagnostics contain operation names,
+Windows error numbers and timings, without key contents.
+
 Symptom-first remedies for a machine that runs the router. Every command here
 is safe to run and prints no secrets. Replace the home path if you installed
 elsewhere; the default is `~/.codex/mixed-model-router`.

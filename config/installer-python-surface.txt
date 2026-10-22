@@ -89,6 +89,7 @@ load ai_router/state.py
 load ai_router/subscription_roster.py
 load ai_router/clients/roster.py
 load ai_router/winacl.py
+load ai_router/winsecurity.py
 parse packaging/router_launch.py
 parse packaging/claude_profile_launch.py
 parse packaging/codex_switch_launch.py

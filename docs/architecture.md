@@ -65,6 +65,11 @@ channel and source before displaying them.
 
 ## Domains and direction
 
+`winsecurity` reads Windows security descriptors through the operating system.
+`winacl` owns the permitted identities and rejects unsupported rules. Checks
+have no verdict cache, so permission changes apply on the next key read.
+Temporary operating-system failures cannot grant access or open key setup.
+
 Desktop connection commands accept explicit destinations. The switch owner
 rechecks the current selection while holding the installation lock, followed
 by the client transition and profile locks. Repeated destination selections

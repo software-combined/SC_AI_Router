@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Read Windows key permissions directly instead of starting PowerShell. A
+  temporary permission-query failure now retries briefly and asks the client
+  to retry, rather than rejecting requests for 30 seconds or requesting a new key.
+
 ## 1.3.13
 
 - Point the setup-script links in the agent install prompt, the Claude Code

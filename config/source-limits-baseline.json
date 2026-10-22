@@ -64,7 +64,6 @@
   "tests/test_update_channel.py": 421,
   "tests/test_updater.py": 301,
   "tests/test_upstream_failures.py": 481,
-  "tests/test_windows_acl.py": 366,
   "tests/test_windows_backend.py": 449,
   "tests/test_workflows.py": 303,
   "tools/probe_agent_handoffs.py": 515,

@@ -39,7 +39,7 @@ are never copied between machines.
 `ai_router/apply_catalogue.py`, `ai_router/activation.py`,
 `ai_router/__init__.py`, `ai_router/__main__.py`,
 `ai_router/model_metadata.py`, `ai_router/model_refresh.py`,
-`ai_router/winacl.py`, `ai_router/image_items.py`,
+`ai_router/winacl.py`, `ai_router/winsecurity.py`, `ai_router/image_items.py`,
 `ai_router/turn_budget.py`,
 `ai_router/model_prompt.py`, `ai_router/model_prompt_page.py`,
 `ai_router/model_policy.py`,

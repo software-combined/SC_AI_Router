@@ -162,7 +162,7 @@ def _grant(run, path, grantee, verb):
         raise SystemExit('cannot %s %s: %s' % (verb, path, _tail(result.stderr)))
 
 
-def protect_file(path, run):
+def protect_file(path, run, query=None):
     """Restrict path to the installing user via icacls; verify afterwards.
 
     Given the router home itself (an existing directory), hardens it in
@@ -173,10 +173,10 @@ def protect_file(path, run):
     naming the exact failure; never silently leaves an exposed secret.
     """
     path = Path(path)
-    grantee = '*' + _winacl.current_sid(run=run)
+    grantee = '*' + _winacl.current_sid(query=query)
     if path.is_dir():
         _grant(run, path, grantee + ':(OI)(CI)F', 'restrict')
-        _winacl.check(path, run=run, fresh=True)
+        _winacl.check(path, query=query, fresh=True)
         return
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     _grant(run, path.parent, grantee + ':(OI)(CI)F', 'restrict')
@@ -184,7 +184,7 @@ def protect_file(path, run):
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         os.close(fd)
     _grant(run, path, grantee + ':F', 'protect')
-    _winacl.check(path, run=run, fresh=True)
+    _winacl.check(path, query=query, fresh=True)
 
 
 def _post_shutdown(state):
@@ -201,11 +201,12 @@ def _post_shutdown(state):
 class Backend:
     name = 'windows'
 
-    def __init__(self, svc, run):
+    def __init__(self, svc, run, query=None):
         self._svc = svc
         self._run = run
         self._sleep = time.sleep
         self._sid = None
+        self._query = query
 
     def _call(self, cmd, **kwargs):
         """Run one console child windowless; an explicit flag wins."""
@@ -223,7 +224,7 @@ class Backend:
 
     def _identity(self):
         if self._sid is None:
-            self._sid = _winacl.current_sid(run=self._call)
+            self._sid = _winacl.current_sid(query=self._query)
         return self._sid
 
     def _task_state(self, name, home, operation='query', *, xml=None, legacy=False, pending=True):

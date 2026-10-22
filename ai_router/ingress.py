@@ -75,10 +75,8 @@ MAX_LOG_DETAIL = 200
 
 
 def error(handler, err, *, log_event, retry_after=None):
-    """Log the rejection, then answer it. `detail` is the log's copy of the
-    technical reason the plain message leaves out; every refusal, retryable
-    or not, leaves one line here. An error marked `stream` reaches a
-    streaming turn as its one `response.failed` frame instead of JSON."""
+    """Log the redacted rejection and send its JSON or failed-stream response."""
+    retry_after = retry_after or getattr(err, 'retry_after', None)
     prefix = '/' + handler.server.state.get('token', '')
     raw = handler.path
     suffix = raw[len(prefix):] if prefix != '/' and raw.startswith(prefix) else '<unrouted>'
