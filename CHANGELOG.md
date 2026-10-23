@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Switch Windows Store Codex without querying owners of unrelated protected processes.
+  Keep tracking app descendants and refuse an unreadable relevant process.
+- Allow thirty seconds for Store identity discovery and record safe failure reasons.
+- Select and verify the bundled Windows executable before switching.
+  Discover each updated package afresh; ignore Windows `CODEX_BIN` overrides.
+
 ## 1.3.14
 
 - Preserve Unicode task paths and saved definitions across Windows PowerShell.

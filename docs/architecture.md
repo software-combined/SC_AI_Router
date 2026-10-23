@@ -705,6 +705,13 @@ settings as they are.
 moves an attached install to the other variant, holding the installer lock
 throughout, and a hand-edited block refuses before anything is asked. Each
 run appends one line to `logs/codex-switch.log` (docs/runtime-files.md).
+Windows discovers the current Store package for each operation. The Windows adapter
+allows thirty seconds for identity discovery and records content-free failure facts.
+Its process snapshot queries owners only for package processes, named writers,
+descendants and previously tracked PIDs. Vanished processes do not invalidate a scan;
+an unreadable relevant process still refuses. Windows CLI selection checks the package
+boundary, executable header and `codex-cli` version before preflight and proof share it.
+Only package-relative selection diagnostics enter the log; no Codex install path is persisted.
 
 `switched` is strict. It needs `codex_route.ready`, a subscription install
 (no-subscription mode already runs without sign-in), exactly one ChatGPT app

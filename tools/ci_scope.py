@@ -165,6 +165,8 @@ INSTALLER_TESTS = (
     'tests.test_claude_profile_launch',
     'tests.test_popup_style',
     'tests.test_claude_desktop_platform',
+    'tests.test_windows_process_snapshot',
+    'tests.test_windows_cli_resolution',
     'tests.test_claude_profile_hook',
     'tests.test_claude_profile_identity',
     'tests.test_claude_profile_records',

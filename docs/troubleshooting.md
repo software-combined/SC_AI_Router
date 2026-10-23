@@ -29,8 +29,12 @@ and run **Check setup**. Permission-query diagnostics contain operation names,
 Windows error numbers and timings, without key contents.
 
 If Switch Codex reports a missing bundled tool, update the ChatGPT app (Codex).
-Router checks beside the verified app executable, including the Windows Store layout.
-An unavailable app and a missing bundled tool have separate messages in the switch log.
+Router discovers the current Store package, then checks the bundled Windows executable
+and its version. Do not set `CODEX_BIN` or save a versioned Store path.
+If Codex takes too long to check, retry Switch Codex. Discovery allows thirty seconds.
+The switch log distinguishes identity timeouts, query failures and rejected commands.
+Its command paths are relative to the package. Protected unrelated Windows processes
+do not block switching; an unreadable relevant app process still requires attention.
 
 Symptom-first remedies for a machine that runs the router. Every command here
 is safe to run and prints no secrets. Replace the home path if you installed

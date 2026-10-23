@@ -60,10 +60,16 @@ class DesktopTargetTests(unittest.TestCase):
         case = self.fixture(codex_tests.SwitchFlowTests)
         for name in ('win32', 'linux'):
             with mock.patch.object(codex.sys, 'platform', name):
+                cli = case.app / 'resources/codex.exe'
+                cli.parent.mkdir(exist_ok=True)
+                cli.write_bytes(b'MZ fixture')
+                version = mock.Mock(return_value=mock.Mock(returncode=0,
+                    stdout='codex-cli 0.163.0-alpha.11', stderr=''))
                 app = mock.Mock(wraps=case.fake())
                 for target in ('switched', 'switched_back'):
                     self.assertEqual(codex.switch(case.home, target=target, platform_ops=app,
-                                                 prove=case.prove(), ready=lambda _: True), target)
+                                                 prove=case.prove(), ready=lambda _: True,
+                                                 run=version), target)
                     self.assertEqual(app.request_stop.call_args.args[0], name)
                     self.assertEqual(app.open_app.call_args.args[0], name)
 
@@ -78,5 +84,6 @@ class DesktopTargetTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             cli = Path(root) / 'resources/codex.exe'
             cli.parent.mkdir()
-            cli.touch()
-            self.assertEqual(codex._proof.codex_bin({}, root), str(cli))
+            cli.write_bytes(b'MZfixture')
+            version = mock.Mock(return_value=mock.Mock(returncode=0, stdout='codex-cli 0.163.0'))
+            self.assertEqual(codex._proof.codex_bin({}, root, platform_name='win32', run=version), str(cli))

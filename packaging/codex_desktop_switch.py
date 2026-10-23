@@ -31,7 +31,6 @@ import os
 import subprocess
 import sys
 from datetime import datetime
-from functools import partial
 from pathlib import Path
 
 
@@ -69,6 +68,7 @@ STAYED_OPEN = ('The ChatGPT app (Codex) did not close. Quit it from the ChatGPT 
 NOT_PROVEN = 'The ChatGPT app (Codex) could not use the new settings, so nothing changed.'
 NO_APP = ('Switch Codex could not check the ChatGPT app (Codex). Make sure one '
           'up-to-date copy is installed, then try again.')
+SLOW_APP = 'The ChatGPT app (Codex) took too long to check. Try Switch Codex again.'
 NO_COMMAND = ('The ChatGPT app (Codex) is missing a bundled tool. Update the app, '
               'then try Switch Codex again.')
 QUIT_FIRST = ('Quit the ChatGPT app (Codex) first, then choose Continue to switch it back '
@@ -99,6 +99,8 @@ def switch(home, *, run=subprocess.run, platform_ops=None, prove=None, ready=Non
                              _proof.prove if prove is None else prove,
                              _route_ready if ready is None else ready, record, target)
     except Exception as exc:
+        if 'reason' not in record and (exc.__cause__ is not None or not isinstance(exc, SwitchError)):
+            record.update(_platform.error_facts(exc, 'switch'))
         _log(home, record, str(exc) if isinstance(exc, SwitchError) else FAILED)
         raise
     _log(home, record, 'done' if target else 'cancelled')
@@ -106,11 +108,19 @@ def switch(home, *, run=subprocess.run, platform_ops=None, prove=None, ready=Non
 
 
 def _switch(home, run, ops, prove, ready, record, target=None):
-    identity = _app_identity(ops, run)
+    identity = _app_identity(ops, run, record)
     root = identity['root'] if identity else None
     app_exe = identity.get('exe') if identity else None
+    selected = {}
+    def command():
+        if 'path' not in selected:
+            selected['path'] = _proof.codex_bin(os.environ, root, app_exe=app_exe,
+                                               run=run, record=record)
+        return selected['path']
     if prove is _proof.prove:
-        prove = partial(prove, app_exe=app_exe)
+        def prove(root):
+            cli = command()
+            return cli is not None and _proof.prove(root, app_exe=app_exe, command=cli)
     _recover(home, prove, root)
     try:
         entry = _receipts.codex_attachment(home)
@@ -132,9 +142,9 @@ def _switch(home, run, ops, prove, ready, record, target=None):
         if not ready(home):
             raise SwitchError(NOT_READY)
         if root is None:
-            record['reason'] = 'app_unavailable'
-            raise SwitchError(NO_APP)
-        if _proof.codex_bin(os.environ, root, app_exe=app_exe) is None:
+            record.setdefault('reason', 'app_unavailable')
+            raise SwitchError(SLOW_APP if record['reason'] == 'timeout' else NO_APP)
+        if command() is None:
             record['reason'] = 'bundled_command_missing'
             raise SwitchError(NO_COMMAND)
     try:
@@ -148,8 +158,10 @@ def _switch(home, run, ops, prove, ready, record, target=None):
             closed = ops.request_stop(sys.platform, run=run, app=CODEX, identity=identity)
         except (OSError, subprocess.SubprocessError) as exc:
             if target == SWITCHED:
+                record.update(_platform.error_facts(exc, 'request_stop'))
                 raise SwitchError(FAILED) from exc
         if closed is False:
+            record.setdefault('reason', 'close_not_confirmed')
             record['open'] = _running(root, run)  # before the reopen starts it again
             try:
                 _open(ops, run, identity)  # A refusal never leaves the app closed.
@@ -176,11 +188,12 @@ def _switch(home, run, ops, prove, ready, record, target=None):
     return target
 
 
-def _app_identity(ops, run):
+def _app_identity(ops, run, record):
     """Keep the verified executable together with its package root."""
     try:
         return ops.app_identity(sys.platform, run=run, app=CODEX)
-    except Exception:
+    except Exception as exc:
+        record.update(_platform.error_facts(exc, 'app_identity'))
         return None
 
 
