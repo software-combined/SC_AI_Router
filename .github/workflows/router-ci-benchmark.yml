@@ -51,6 +51,8 @@ jobs:
           ref: bc2920a6688cceb9eed3caf40847fef4dc031f39
           persist-credentials: false
       - uses: ./.github/actions/setup
+        with:
+          python-version: "3.14.8"
       - name: Native installer tests
         shell: bash
         run: python -m unittest $(python tools/ci_scope.py --installer-tests)
@@ -70,6 +72,8 @@ jobs:
           ref: bc2920a6688cceb9eed3caf40847fef4dc031f39
           persist-credentials: false
       - uses: ./.github/actions/setup
+        with:
+          python-version: "3.14.8"
       - name: Native installer tests
         shell: bash
         run: python -m unittest $(python tools/ci_scope.py --installer-tests)
@@ -98,7 +102,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
-          python-version: "3.9"
+          python-version: "3.9.25"
       - name: Installer surface imports on 3.9
         run: python tools/check_installer_python39.py
 
@@ -115,6 +119,8 @@ jobs:
           ref: bc2920a6688cceb9eed3caf40847fef4dc031f39
           persist-credentials: false
       - uses: ./.github/actions/setup
+        with:
+          python-version: "3.14.8"
       - name: Unit suite (offline)
         env:
           SCG_RUN_INSTALLER_TESTS: '1'
@@ -179,6 +185,8 @@ jobs:
           ref: bc2920a6688cceb9eed3caf40847fef4dc031f39
           persist-credentials: false
       - uses: ./.github/actions/setup
+        with:
+          python-version: "3.14.8"
       - name: Unit suite (offline)
         if: startsWith(github.ref, 'refs/heads/cyril/router-ci-benchmark-serial-')
         env:
@@ -285,6 +293,8 @@ jobs:
           ref: bc2920a6688cceb9eed3caf40847fef4dc031f39
           persist-credentials: false
       - uses: ./.github/actions/setup
+        with:
+          python-version: "3.14.8"
       - name: Pinned Linux menu toolchain
         if: runner.os == 'Linux'
         run: rustup toolchain install 1.90.0 --profile minimal
@@ -324,6 +334,8 @@ jobs:
           ref: bc2920a6688cceb9eed3caf40847fef4dc031f39
           persist-credentials: false
       - uses: ./.github/actions/setup
+        with:
+          python-version: "3.14.8"
       - name: Start the disposable Linux user manager
         if: runner.os == 'Linux'
         run: |
@@ -360,6 +372,8 @@ jobs:
           ref: bc2920a6688cceb9eed3caf40847fef4dc031f39
           persist-credentials: false
       - uses: ./.github/actions/setup
+        with:
+          python-version: "3.14.8"
       - name: Hook adapter tests
         # The receipt gate, the interpreter selection and the shims run on
         # both platforms. Tests needing a POSIX scanner stub stay
