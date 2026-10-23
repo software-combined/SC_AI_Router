@@ -17,7 +17,9 @@ Python 3.9-safe, stdlib only and inert on import.
 import json
 import os
 import queue
+import re
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -26,25 +28,80 @@ from pathlib import Path
 # never imports the checkout-run tools/ (a test pins the two), but inside the
 # app Spotlight found rather than /Applications only. ChatGPT 26.924
 # (codex-cli 0.158) moved the CLI into codex-cli/bin, earlier builds keep it
-# one level up, and CODEX_BIN, when set, always wins.
+# one level up. CODEX_BIN overrides apply only outside Windows.
 BUNDLED = ('Contents/Resources/codex-cli/bin/codex', 'Contents/Resources/codex')
 DESKTOP_BUNDLED = ('resources/codex-cli/bin/codex', 'resources/codex',
                    'resources/codex-cli/bin/codex.exe', 'resources/codex.exe',
                    'resources/codex-cli/vendor/x86_64-pc-windows-msvc/codex/codex.exe')
+WINDOWS_BUNDLED = tuple(path for path in DESKTOP_BUNDLED if path.endswith('.exe'))
+CLI_VERSION = re.compile(r'codex-cli \d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?')
 
 
-def codex_bin(env, app_root):
-    """CODEX_BIN, else the first bundled CLI in the app at `app_root`, else None."""
+def codex_bin(env, app_root, *, app_exe=None, platform_name=None, run=None, record=None):
+    """The bundled CLI, or a non-Windows CODEX_BIN override; None if unavailable."""
+    if (platform_name or sys.platform) == 'win32':
+        return _windows_bin(env, app_root, app_exe, run or subprocess.run, record)
     if env.get('CODEX_BIN'):
         return env['CODEX_BIN']
-    paths = [Path(app_root) / rel for rel in BUNDLED + DESKTOP_BUNDLED] if app_root else []
+    paths = [Path(app_exe).parent / rel for rel in DESKTOP_BUNDLED] if app_exe else []
+    paths += [Path(app_root) / rel for rel in BUNDLED + DESKTOP_BUNDLED] if app_root else []
     return next((str(path) for path in paths if path.is_file()), None)
 
 
-def prove(app_root, codex_home=None, env=None, timeout=30):
+def _windows_bin(env, app_root, app_exe, run, record):
+    if app_root is None:
+        return None
+    root = Path(app_root)
+    if not root.is_absolute():
+        return None
+    checked_root = root.resolve()
+    bases = ([Path(app_exe).parent] if app_exe else []) + [root]
+    attempts = []
+    for path in dict.fromkeys(base / rel for base in bases for rel in WINDOWS_BUNDLED):
+        started = time.monotonic()
+        try:
+            relative = path.relative_to(root).as_posix()
+        except ValueError:
+            continue
+        try:
+            if checked_root not in path.resolve().parents or path.suffix.lower() != '.exe':
+                continue
+            if not path.is_file():
+                continue
+            with path.open('rb') as source:
+                if source.read(2) != b'MZ':
+                    attempts.append(dict(path=relative, reason='not_windows_executable',
+                                         operation='cli_header', elapsed_ms=round((time.monotonic() - started) * 1000, 1)))
+                    continue
+            result = run([str(path), '--version'], capture_output=True, text=True,
+                timeout=5, creationflags=0x08000000,
+                env={key: value for key, value in env.items()
+                     if not key.startswith(('OPENAI_', 'CODEX_'))})
+            if result.returncode or not CLI_VERSION.fullmatch(result.stdout.strip()):
+                attempts.append(dict(path=relative, reason='version_rejected', exit_code=result.returncode,
+                                     operation='cli_version', elapsed_ms=round((time.monotonic() - started) * 1000, 1)))
+                continue
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            facts = dict(path=relative, operation='cli_version', elapsed_ms=round(
+                (time.monotonic() - started) * 1000, 1), reason='version_timeout' if isinstance(
+                    exc, subprocess.TimeoutExpired) else 'candidate_unavailable')
+            for key in ('winerror', 'errno'):
+                if type(getattr(exc, key, None)) is int:
+                    facts[key] = getattr(exc, key)
+            attempts.append(facts)
+            continue
+        if record is not None:
+            record.update(cli_path=relative, cli_reason='windows_pe_version_verified', cli_attempts=attempts)
+        return str(path)
+    if record is not None:
+        record['cli_attempts'] = attempts
+    return None
+
+
+def prove(app_root, codex_home=None, env=None, timeout=30, *, app_exe=None, command=None):
     """True when Codex's loader accepts the switched config.toml, else False."""
     env = dict(os.environ if env is None else env)
-    command = codex_bin(env, app_root)
+    command = command or codex_bin(env, app_root, app_exe=app_exe)
     if command is None:
         return False
     # Only config.toml and Codex's own login may decide the answers: an

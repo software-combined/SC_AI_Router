@@ -40,21 +40,22 @@ class FakeApp:
             raise self.identity
         return {'root': str(self.root)}
 
-    def confirm(self, message, platform_name, run=None):
+    def confirm(self, message, platform_name, run=None, *, home=None):
         self.calls.append(('confirm', message))
         return self.answer
 
-    def request_stop(self, platform_name, run=None, app=None):
+    def request_stop(self, platform_name, run=None, app=None, *, identity=None,
+                     allow_terminate=False, record=None):
         self.calls.append(('stop', app.bundle_id))
         if isinstance(self.stops, Exception):
             raise self.stops
         return self.stops
 
-    def open_app(self, platform_name, run=None, app=None):
+    def open_app(self, platform_name, run=None, app=None, *, identity=None):
         self.calls.append(('open', app.bundle_id))
         return SimpleNamespace(returncode=0)
 
-    def show_message(self, message, platform_name, run=None):
+    def show_message(self, message, platform_name, run=None, *, home=None):
         self.calls.append(('notice', message))
 
 
@@ -159,7 +160,7 @@ class SwitchFlowTests(unittest.TestCase):
                 (self.fake(), False, 'still checking'),
                 (self.fake(identity=FileNotFoundError('not installed')), True, 'could not check'),
                 (self.fake(identity=OSError('two copies')), True, 'could not check'),
-                (FakeApp(self.app.parent / 'Old.app'), True, 'could not check')):
+                (FakeApp(self.app.parent / 'Old.app'), True, 'missing a bundled tool')):
             with self.subTest(message=message, identity=app.identity):
                 with self.assertRaisesRegex(switcher.SwitchError, message):
                     self.run_switch(app, ready=ready)
@@ -264,15 +265,6 @@ class SwitchFlowTests(unittest.TestCase):
         with self.assertRaisesRegex(switcher.SwitchError, 'could not be finished'):
             self.run_switch(self.fake())
         self.assertTrue((self.home / switcher.MARKER).exists())
-
-    def test_busy_installer_and_other_platforms_refuse(self):
-        with switcher._service.install_lock(self.home) as held:
-            self.assertTrue(held)
-            with self.assertRaisesRegex(switcher.SwitchError, 'updating'):
-                self.run_switch(self.fake())
-        with mock.patch.object(switcher.sys, 'platform', 'freebsd'):
-            with self.assertRaisesRegex(switcher.SwitchError, 'on Mac'):
-                self.run_switch(self.fake())
 
     def test_wording_is_plain_and_names_the_app(self):
         texts = list(switcher.PROMPTS.values()) + [

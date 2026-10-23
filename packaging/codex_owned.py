@@ -139,8 +139,16 @@ def _detached(text, recorded, restored):
     return {'detached': True}
 
 
-def _verified(text, recorded=None, removing=False, restored=''):
+def _verified(text, recorded=None, removing=False, restored='', absent=False):
     import tomllib
+    if absent:
+        _verified(recorded, recorded)
+        if BEGIN in text or END in text:
+            raise ValueError('markers')
+        actual = tomllib.loads(text)
+        if CONNECTION_KEYS.intersection(actual):
+            raise ValueError('connection')
+        return {'picks': [key for key in PICKS if key in actual]}
     if recorded is None:
         tomllib.loads(text)
         return {}
@@ -192,15 +200,16 @@ def _verified(text, recorded=None, removing=False, restored=''):
             'end': sum(map(len, lines[:last + 1])), 'keep': keep}
 
 
-def inspect(text, recorded=None, removing=False, restored=''):
+def inspect(text, recorded=None, removing=False, restored='', absent=False):
     try:
         if HAS_TOML:
-            return _verified(text, recorded, removing, restored)
+            return _verified(text, recorded, removing, restored, absent)
         python = parser_python()
         if not python:
             raise ValueError('interpreter')
         result = run([python, str(Path(__file__).resolve()), '--verify'],
-                     input=json.dumps({'text': text, 'recorded': recorded, 'removing': removing, 'restored': restored}),
+                     input=json.dumps({'text': text, 'recorded': recorded, 'removing': removing,
+                                       'restored': restored, 'absent': absent}),
                      capture_output=True, text=True, timeout=15)
         if not result.stdout or len(result.stdout) > 65536:
             raise ValueError('verifier')
@@ -216,7 +225,11 @@ def inspect(text, recorded=None, removing=False, restored=''):
             raise OwnershipConflict(reason if reason in allowed else 'parser_failed')
         if recorded is None and reply:
             raise ValueError('verifier')
-        if recorded is not None and not (removing and reply == {'detached': True}):
+        if absent:
+            if (set(reply) != {'picks'} or not isinstance(reply['picks'], list)
+                    or any(key not in PICKS for key in reply['picks'])):
+                raise ValueError('verifier')
+        elif recorded is not None and not (removing and reply == {'detached': True}):
             if (set(reply) != {'start', 'end', 'keep'}
                     or type(reply['start']) is not int or type(reply['end']) is not int
                     or not 0 <= reply['start'] < reply['end'] <= len(text)
@@ -264,7 +277,8 @@ def write(path, before, after, writer):
 if __name__ == '__main__':
     try:
         request = json.load(sys.stdin)
-        print(json.dumps(_verified(request['text'], request.get('recorded'), request.get('removing', False), request.get('restored', ''))))
+        print(json.dumps(_verified(request['text'], request.get('recorded'), request.get('removing', False),
+                                   request.get('restored', ''), request.get('absent', False))))
     except (ValueError, KeyError, StopIteration) as exc:
         print(json.dumps({'error': _reason(exc)}))
         raise SystemExit(1) from None

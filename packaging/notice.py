@@ -1,19 +1,11 @@
-"""Best-effort desktop notice after a router update (runs on Python 3.9+).
+"""Best-effort desktop notice after a healthy update (Python 3.9+).
 
-The installer records the new version once a healthy update lands, and the
-installer CLI shows a dialog offering to restart the client (the picker is
-read at startup, so a running Codex never sees the new models). "Quit and
-reopen" quits the desktop app and launches it again: the macOS bundle
-``com.openai.codex``, the Windows Store package ``OpenAI.Codex``, and the
-Linux preview app ``chatgpt``. Linux only offers the restart when that app
-is installed; on macOS and Windows the button is harmless without it, and
-the dialog always carries "Later". Only one dialog is ever on screen: the
-pid of the dialog we spawned is remembered, and a later notice is folded
-into that dialog instead of stacking a second one. A dialog that dies at
-once -- a service context with no display -- leaves the
-notice pending instead of marking it shown, so a later run that can draw
-one still shows it. Every failure is swallowed: the notice must never
-block on the user or fail an update.
+The picker loads at client startup, so the dialog offers Quit and reopen.
+It uses the macOS bundle, Windows Store identity or installed Linux app.
+Later is always available. Linux offers restart only for an installed app.
+Remember the spawned dialog PID so later notices join it rather than stack.
+A dialog that exits immediately, such as without a display, leaves the notice
+pending for a later graphical session. Failures never block or fail an update.
 """
 import json
 import os
@@ -25,15 +17,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import importlib.util as _ilu
-_spec = _ilu.spec_from_file_location(
-    'router_atomic_write', Path(__file__).resolve().parent / 'atomic_write.py')
-_atomic_write = _ilu.module_from_spec(_spec)
-_spec.loader.exec_module(_atomic_write)
 
-_spec = _ilu.spec_from_file_location(
-    'router_notice_text', Path(__file__).resolve().parent / 'notice_text.py')
-_text = _ilu.module_from_spec(_spec)
-_spec.loader.exec_module(_text)
+
+def _load(name):
+    spec = _ilu.spec_from_file_location('router_notice_' + name,
+        Path(__file__).resolve().with_name(name + '.py'))
+    module = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_atomic_write, _text, _native = (_load(name) for name in ('atomic_write', 'notice_text', 'windows_native'))
 # Kept as a module name: the wording is pinned here by callers and tests.
 _message = _text.message
 dialog_names = _text.dialog_names  # the updater lists models the same way
@@ -105,7 +99,7 @@ def _pid_alive(pid):
             out = subprocess.run(['powershell', '-NoProfile', '-Command',
                                   query], stdout=subprocess.PIPE,
                                  stderr=subprocess.DEVNULL, text=True,
-                                 timeout=PROBE_TIMEOUT)
+                                 timeout=PROBE_TIMEOUT, creationflags=0x08000000)
         else:
             out = subprocess.run(['ps', '-p', str(pid), '-o', 'command='],
                                  stdout=subprocess.PIPE,
@@ -160,29 +154,11 @@ def _remember_picker(home, slugs):
 
 
 def record(home, previous, version, clients=None, names=None):
-    """Stage a restart notice when an update adds a picker row.
+    """Stage added models once, retaining pending notices across failed installs.
 
-    The prompt is about the picker, not the version: a release that adds no
-    selectable row is not worth a Codex restart, so the notice is staged
-    only when the merged catalogue gained a slug since the last install
-    that reached this point. That baseline is recorded per install rather
-    than read from the pre-install file, so an attempt that merged rows and
-    then failed still prompts when it is retried. A staged but unshown
-    notice is refreshed with this version instead of left stale, and an
-    unreadable catalogue or baseline keeps the earlier behaviour and
-    stages the notice, so a home this comparison cannot read is never
-    silently skipped. Returns True when a notice is staged. Fresh
-    installs, reinstalls, and versions already shown return False; they
-    record the picker they leave only when nothing is waiting to be
-    announced, and rows that were found but not announced are never
-    recorded, so a failed write is retried by the next install. The pid of
-    a dialog an earlier version left open is carried over so the next
-    show_pending() folds into it instead of stacking a second dialog.
-    `names` stages the same dialog when models are added without a version
-    change; the recorded names keep a later unchanged check quiet.
-    `clients` is the install run's attachment set when it knows one;
-    without it the previous notice's set is kept, and a legacy install
-    reads as Codex-only. A notice never affects installs.
+    Compare the persisted picker baseline, not a possibly half-updated file.
+    Explicit names also stage same-version additions. Fresh installs stay quiet.
+    Preserve an existing dialog pid and the recorded client set.
     """
     try:
         path = Path(home) / NOTICE_FILE
@@ -232,10 +208,31 @@ def record(home, previous, version, clients=None, names=None):
             doc['pid'] = pid
         if named:
             doc['names'] = names
+        if isinstance(existing, dict) and existing.get('attachment'):
+            doc['attachment'] = existing['attachment']
         _atomic_write.replace_json(path, doc)
         # Only a staged notice marks rows as announced; a write that failed
         # leaves the baseline alone so the next install retries.
         _remember_picker(home, picker)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def record_attachment(home, version, event):
+    """One restart offer per verified attachment repair, even without new models."""
+    try:
+        path = Path(home) / NOTICE_FILE
+        try:
+            doc = json.loads(path.read_text())
+        except (OSError, ValueError):
+            doc = {}
+        doc = doc if isinstance(doc, dict) else {}
+        if doc.get('attachment') == event:
+            return False
+        doc.update(version=version, attachment=event, clients='codex', at=_utcnow())
+        doc.pop('shown', None)
+        _atomic_write.replace_json(path, doc)
         return True
     except (OSError, ValueError):
         return False
@@ -306,8 +303,8 @@ def _windows_restart():
         "Start-Sleep -Seconds 3; "
         "foreach ($p in $procs) { "
         "try { if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force } } catch { } }; "
-        "if ($aumid) { Start-Process ('shell:AppsFolder\\' + $aumid) } } "
-        "} catch { }" % WINDOWS_PACKAGE)
+        "if ($aumid) { Start-Process ('%s' + $aumid) } } "
+        "} catch { }" % (WINDOWS_PACKAGE, _native.APPS_FOLDER))
 
 
 def _linux_command(message, icon=None, app=None, restart=True):
@@ -378,7 +375,7 @@ def _windows_script(message, icon=None, restart=True):
 
 
 def dialog_command(version, platform_name=None, which=None, icon=None,
-                   clients='codex', names=()):
+                   clients='codex', names=(), attachment=False):
     """argv for a one-shot dismissible restart dialog, or None.
 
     None means the platform is unknown or its dialog tool is missing, so
@@ -397,7 +394,7 @@ def dialog_command(version, platform_name=None, which=None, icon=None,
         icon = str(ICON)
     clients = _text.clients(clients)
     restart = clients in ('codex', 'both')
-    message = _message(version, clients, names)
+    message = _message(version, clients, names, attachment)
     if platform_name == 'darwin':
         if which('osascript') is None:
             return None
@@ -420,7 +417,7 @@ def _spawn(cmd):
     """Launch the dialog detached and return its pid; never waits."""
     if sys.platform == 'win32':
         flags = (getattr(subprocess, 'DETACHED_PROCESS', 0)
-                 | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0))
+                 | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0) | 0x08000000)
         proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
                                 stdout=subprocess.DEVNULL,
                                 stderr=subprocess.DEVNULL,
@@ -440,17 +437,8 @@ def _dialog_up(pid, pid_alive):
 
 
 def show_pending(home, spawn=None, pid_alive=None, names=None):
-    """Show the pending restart notice; True once it is shown.
-
-    A missing dialog tool leaves the notice pending so a later GUI run
-    retries; the file is marked shown only once the spawned dialog is still
-    up after a short grace. While the dialog from an earlier version is
-    still open, this notice is marked shown rather than stacked on top of
-    it. Any failure returns False and never surfaces to the installer.
-    `ROUTER_NO_NOTICE=1` silences the dialog for unattended installs and for
-    tests that run the real CLI. `names` are the added models to list; without
-    them the stored names are used, then the running router is asked; with
-    none the update stays silent, and whatever a dialog lists is marked seen.
+    """Show once; missing tools and failed presentation leave the notice pending.
+    Fold model additions into an open dialog; attachment repairs wait their turn.
     """
     if os.environ.get('ROUTER_NO_NOTICE') == '1':
         return False
@@ -475,15 +463,20 @@ def show_pending(home, spawn=None, pid_alive=None, names=None):
         if not isinstance(names, list):
             names = _text.pending_names(home)
         names = [name for name in names if isinstance(name, str) and name]
-        if not names:
+        attachment = bool(doc.get('attachment'))
+        if not names and not attachment:
             return False
         cmd = dialog_command(version, icon=_home_icon(home) or '',
-                             clients=doc.get('clients', 'codex'), names=names)
+                             clients=doc.get('clients', 'codex'), names=names, attachment=attachment)
         if cmd is None:
             return False
         shown = {'version': version, 'shown': True, 'at': _utcnow()}
+        if attachment:
+            shown['attachment'] = doc['attachment']
         pid = _dialog_pid(doc)
         if pid and pid_alive(pid):
+            if attachment:
+                return False  # Wait until the older dialog closes; this reason was not shown.
             shown['pid'] = pid
             _atomic_write.replace_json(path, shown)
             return False
@@ -494,7 +487,8 @@ def show_pending(home, spawn=None, pid_alive=None, names=None):
                 return False
             shown['pid'] = pid
         _atomic_write.replace_json(path, shown)
-        _text.acknowledge(home, names)
+        if names:
+            _text.acknowledge(home, names)
         return True
     except (OSError, ValueError):
         return False

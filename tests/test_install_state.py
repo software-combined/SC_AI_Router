@@ -82,11 +82,11 @@ class InstallStateTests(unittest.TestCase):
             (tmp / 'ai_router').mkdir()
             for name in ('service.py', 'launchd.py', 'feed.py',
                          'feed_verify.py', 'atomic_write.py', 'notice.py',
-                         'notice_text.py', 'download_auth.py', 'download_oauth.py',
+                         'notice_text.py', 'windows_native.py', 'download_auth.py', 'download_oauth.py',
                          'download_session.py'):
                 shutil.copy(root / 'packaging' / name, tmp / 'packaging' / name)
             for name in ('subscription_roster.py', 'retired_slugs.py',
-                         'atomic_write.py', 'state.py', 'winacl.py'):
+                         'atomic_write.py', 'state.py', 'winacl.py', 'winsecurity.py'):
                 shutil.copy(root / 'ai_router' / name, tmp / 'ai_router' / name)
             spec = importlib.util.spec_from_file_location(
                 'relocated_service', tmp / 'packaging' / 'service.py')

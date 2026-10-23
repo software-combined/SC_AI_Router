@@ -37,17 +37,7 @@ def result(home, delivery, successful, cancelled=False):
     components = state.get('component_repairs')
     if not isinstance(components, dict):
         components = state['component_repairs'] = {}
-    report = service.load('router_delivery_classification',
-        Path(__file__).resolve().parents[1] / 'tools/classify_attachments.py').classify(
-            home, python=delivery.get('python'))
-    entries = report.get('clients', {})
-    if report.get('receipt') == 'readable' and entries:
-        owned = all(row.get('classification') == 'owned' for row in entries.values())
-        components['assistants'] = 'ready' if owned else 'failed'
-    elif report.get('receipt') == 'missing' and state.get('clients') == 'none':
-        components['assistants'] = 'ready'
-    else:
-        components['assistants'] = 'failed' if report.get('receipt') == 'conflict' else 'unknown'
+    components['assistants'] = assistant_status(home, state, delivery.get('python'))
     if delivery.get('maintenance_done'):
         status.verified(state, delivery['latest'], delivery['feed'], status.channel(home), None)
     current = service.current_version(home)
@@ -55,6 +45,18 @@ def result(home, delivery, successful, cancelled=False):
     status.record(state, error=None if cancelled else '' if successful else 'installer_failed',
                   applied=current if successful else None, repaired=repaired)
     service._write_state(home, state)
+
+
+def assistant_status(home, state, python=None):
+    report = _load('service').load('router_delivery_classification',
+        Path(__file__).resolve().parents[1] / 'tools/classify_attachments.py').classify(home, python=python)
+    entries = report.get('clients', {})
+    if report.get('receipt') == 'readable' and entries:
+        owned = all(row.get('classification') == 'owned' for row in entries.values())
+        return 'ready' if owned else 'failed'
+    elif report.get('receipt') == 'missing' and state.get('clients') == 'none':
+        return 'ready'
+    return 'failed' if report.get('receipt') == 'conflict' else 'unknown'
 
 
 def clients(home, state):
@@ -167,6 +169,8 @@ def run_install(args, install, *, run, fetch):
         rc = install(delivery)
         return rc
     finally:
+        if not args.dry_run:
+            _record_install(Path(args.home).expanduser(), delivery, rc)
         if not args.dry_run and (rc == 0 or delivery.get('maintenance_done')):
             try:
                 finish(Path(args.home).expanduser(), run=run, native=delivery or None,
@@ -181,3 +185,20 @@ def run_install(args, install, *, run, fetch):
                            getattr(args, 'repair_cancelled', False))
                 except (Exception, SystemExit):
                     print('The repair result could not be verified; run setup again.')
+
+
+def _record_install(home, delivery, rc):
+    """Only the health-verified core completion may claim installation success."""
+    version = _load('update_status').version(delivery.get('installed_version'))
+    if not version or _load('service').current_version(home) != version:
+        return
+    evidence = _load('update_reconcile')
+    try:
+        (home / 'logs').mkdir(exist_ok=True)
+        with (home / 'logs/update.log').open('a', encoding='utf-8') as stream:
+            stream.write('installed %s; health verified\n' % version)
+        evidence.log(home, 'install', 'completed', version=version, status=0)
+        if rc != 0:
+            evidence.log(home, 'install', 'attachment_failed', status=rc if type(rc) is int else 1)
+    except OSError:
+        evidence.log(home, 'install', 'evidence_failed', status=1)

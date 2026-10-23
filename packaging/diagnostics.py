@@ -211,6 +211,8 @@ def _update_line(summary):
         parts.append('applied ' + summary['last_applied_version'])
     if summary['last_error']:
         parts.append('last error ' + summary['last_error'])
+    if summary.get('retry_pending'):
+        parts.append('updates will retry automatically')
     if summary['required_action']:
         parts.append('run setup to ' + summary['required_action'])
     if parked:

@@ -29,6 +29,7 @@ _spec.loader.exec_module(_svc)
 _models = _svc.load('router_control_models', Path(__file__).with_name('control_models.py'))
 _resources = _svc.load('router_native_resources', Path(__file__).with_name('native_resources.py'))
 _status = _svc.load('router_update_status', Path(__file__).with_name('update_status.py'))
+_reconcile = _svc.load('router_update_reconcile', Path(__file__).with_name('update_reconcile.py'))
 
 MAX_VERSION_FAILURES = 3
 ANNOUNCE_TIMEOUT_S = 5
@@ -310,10 +311,7 @@ def _verified_feed(feed, body, _fetch):
 
 
 def _up_to_date(home, announce, etag_path=None, etag=None, feed=None):
-    """Report a check that installs nothing, then offer any new models.
-
-    Plan 135: refresh-added rows ride an ordinary check; express never does.
-    """
+    """Record an unchanged regular check, then offer any new models."""
     if etag_path is not None and etag:
         etag_path.write_text(etag + '\n')
     _record_pass(home, error='')
@@ -333,8 +331,7 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     sync_seams()
     express_only = getattr(args, 'express_only', False)
     feed = args.feed or _svc.channel_feed(home)
-    # Feeds and bundles come from the public feed origin; an injected fake
-    # keeps its one-argument shape.
+    # Injected fetchers retain their one-argument contract.
     injected = _fetch
     _fetch = injected or _svc.fetch
     _models.refresh(home, _fetch)
@@ -374,28 +371,29 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     if not isinstance(latest, dict) or not _status.version(latest.get('version')):
         raise UpdateError('feed_invalid', 'feed document has no valid version')
     _persist_models_url(home, latest)
-    if express_only and latest.get('express') is not True:
-        return 0  # Leave ETag/serial untouched so the regular job still sees it.
     try:
         _svc.check_serial(home, latest, pinned=bool(args.feed))
     except SystemExit as exc:
         raise UpdateError('feed_serial', str(exc) or 'feed document refused')
-    if not args.feed:
+    if not args.feed and (not express_only or latest.get('express') is True):
         _models.accept(home, latest)
         _models.refresh(home, _fetch)
     bundle_url = _svc.sibling_bundle(feed, latest.get('url', ''))
     if not _svc.trusted_origin(bundle_url):
         raise UpdateError('feed_untrusted',
                           'feed points off the trusted update origin; refusing')
-    if not newer(latest['version'], _svc.current_version(home)):
+    if express_only and latest.get('express') is not True or not newer(latest['version'], _svc.current_version(home)):
         if express_only:
-            return 0  # The pointer may be mid-install; do not mask a later rollback.
+            if (_svc._state.read(_svc._state.path(home)) or {}).get('last_error') in _status.FEED_ERRORS:
+                _record_pass(home, latest=latest, feed=feed, etag=None, channel=channel)
+            return 0  # Feed recovery cannot claim an applied release or clear install failures.
         _record_pass(home, latest=latest, feed=feed, etag=etag, channel=channel)
-        with _svc.install_lock(home) as held:
-            if not held:
-                print('deferred: another router operation is in progress')
-                return 0
-            _resources.deliver(home, latest, feed, injected)
+        if not _resources.ready(home):
+            with _svc.install_lock(home) as held:
+                if not held:
+                    print('deferred: another router operation is in progress')
+                    return 0
+                _resources.deliver(home, latest, feed, injected)
         _up_to_date(home, _announce, etag_path, etag, feed)
         return 0
     _record_pass(home, latest=latest, feed=feed, etag=etag, channel=channel)
@@ -492,20 +490,21 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
 
 
 def do_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
-    """Scheduled pass: check the feed and apply a newer release.
-
-    Records recency and a closed-set error code, then re-raises for the timer.
-    """
+    """Apply updates, reconcile attachments, and record closed-set outcomes."""
     import random
     home = Path(args.home).expanduser()
     _svc._feed.configure_home(home)
     sleep = _sleep or time.sleep
     sleep(random.uniform(0, 10 if getattr(args, 'express_only', False) else 120))
+    task, result = ('express' if getattr(args, 'express_only', False) else 'regular'), 0
+    _reconcile.log(home, task, 'launched')
     with _svc.install_lock(home, 'update.lock') as held:
         if not held:
+            _reconcile.log(home, task, 'completed', outcome='deferred')
             return 0
         try:
-            return _apply_update(args, home, sleep, _fetch, _read_feed, _announce)
+            result = _apply_update(args, home, sleep, _fetch, _read_feed, _announce)
+            return result
         except UpdateError as exc:
             _record_pass(home, error=exc.error_code)
             raise
@@ -523,6 +522,8 @@ def do_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
             _record_pass(home, error='update_failed')
             raise
         finally:
+            _reconcile.run(home, _svc)
+            _reconcile.log(home, task, 'failed' if sys.exc_info()[0] or result else 'completed')
             _offer_notices(home)
 
 

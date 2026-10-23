@@ -1,8 +1,4 @@
-"""Restart-notice delivery: showing the pending dialog, and the installer
-paths that stage and trigger it.
-
-The command construction itself lives in `test_notice.py`.
-"""
+"""Restart notices from direct and scheduled installation entry points."""
 import contextlib
 import io
 import json
@@ -307,22 +303,27 @@ class ShowPendingTests(unittest.TestCase):
 
 class InstallNoticeTests(unittest.TestCase):
     @unix_only
-    def test_first_install_stages_no_notice(self):
+    def test_first_attach_stages_a_restart_notice(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             rc, _, _, _ = _run_install(self, tmp, home, '1.0.0')
             self.assertEqual(rc, 0)
-            self.assertFalse((home / 'update-notice.json').exists())
+            doc = json.loads((home / 'update-notice.json').read_text())
+            self.assertTrue(doc['attachment'])
+            self.assertNotIn('shown', doc)
 
     @unix_only
     def test_upgrade_with_an_unchanged_picker_stays_silent(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             _run_install(self, tmp, home, '1.0.0')
+            path = home / 'update-notice.json'
+            doc = dict(json.loads(path.read_text()), shown=True)
+            path.write_text(json.dumps(doc))
             rc, _, _, _ = _run_install(self, tmp, home, '1.0.1')
             self.assertEqual(rc, 0)
-            self.assertFalse((home / 'update-notice.json').exists(),
-                             'a version bump alone is not worth a restart')
+            self.assertEqual(json.loads(path.read_text()), doc,
+                             'a version bump alone does not repeat a completed attachment notice')
 
     @unix_only
     def test_upgrade_stages_notice_when_the_picker_gains_a_row(self):
@@ -345,6 +346,7 @@ class InstallNoticeTests(unittest.TestCase):
             home = Path(tmp) / 'home'
             _run_install(self, tmp, home, '1.0.0')
             real_launcher = install_mod.install_launcher
+            before = (home / 'update-notice.json').read_bytes()
             calls = []
 
             def flaky_launcher(home_dir, release):
@@ -357,7 +359,7 @@ class InstallNoticeTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 _run_install(self, tmp, home, '1.0.1',
                              write_catalogue=_adding_catalogue('openrouter/new-model'))
-            self.assertFalse((home / 'update-notice.json').exists())
+            self.assertEqual((home / 'update-notice.json').read_bytes(), before)
             rc, _, _, _ = _run_install(
                 self, tmp, home, '1.0.1',
                 write_catalogue=_adding_catalogue('openrouter/new-model'))

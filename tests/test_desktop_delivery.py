@@ -26,13 +26,16 @@ class DesktopDeliveryTests(unittest.TestCase):
         original = owner.load
         def install(home, permanent, python):
             (home / 'setup-current').write_text(permanent.name + '\n')
+        owners = dict(native_shortcuts=SimpleNamespace(install=install),
+                      runtime_rebind=SimpleNamespace(reconcile=lambda _: 'inactive'))
         return mock.patch.object(owner, 'load', side_effect=lambda name:
-            SimpleNamespace(install=install) if name == 'native_shortcuts' else original(name))
+                                 owners.get(name) or original(name))
 
     def update(self, owner, home, latest, data, reader):
         args = SimpleNamespace(home=str(home), feed='file:///latest.json', express_only=False)
         fetch = mock.Mock(return_value=data)
         with mock.patch.object(owner._models, 'refresh'), self.shortcuts(owner._resources), \
+                mock.patch.object(owner._reconcile, 'run'), \
                 mock.patch.object(owner, '_offer_notices'), contextlib.redirect_stdout(io.StringIO()):
             rc = owner.do_update(args, _fetch=fetch, _read_feed=reader,
                                  _sleep=lambda _: None, _announce=lambda *_: None)

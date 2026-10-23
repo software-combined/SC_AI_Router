@@ -2,41 +2,29 @@
 
 SID-based counterpart to the POSIX mode-bit gate in credentials.py.
 The check runs wherever a key is read; protection at write time lives in
-the Windows platform backend. `run` is injectable for offline contract tests.
+the Windows platform backend. `query` is injectable for offline contract tests.
 """
 import json
-import os
+import importlib.util
+import logging
 import re
 import subprocess
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 
-VERDICT_TTL_S = 30
-_VERDICTS = {}
 _OS_SIDS = {'S-1-5-18', 'S-1-5-32-544'}  # SYSTEM and Administrators.
-_QUERY = r"""
-$ErrorActionPreference = 'Stop'
-Set-StrictMode -Version Latest
-try {
-    $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
-    $result = @{user = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value}
-    if ($null -ne $request.path) {
-        $acl = Get-Acl -LiteralPath $request.path
-        $raw = [Security.AccessControl.RawSecurityDescriptor]::new($acl.GetSecurityDescriptorBinaryForm(), 0)
-        $result.owner = $raw.Owner.Value
-        $result.dacl = ($null -ne $raw.DiscretionaryAcl) -and (($raw.ControlFlags -band 4) -ne 0)
-        $result.rules = @(foreach ($ace in $raw.DiscretionaryAcl) {
-            @{sid = $ace.SecurityIdentifier.Value; type = [int]$ace.AceType;
-              mask = [long]$ace.AccessMask; flags = [int]$ace.AceFlags}
-        })
-    }
-    $result | ConvertTo-Json -Depth 5 -Compress
-} catch { exit 1 }
-"""
+_spec = importlib.util.spec_from_file_location('router_winsecurity', Path(__file__).with_name('winsecurity.py'))
+_native = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_native)
 
 
-def reset():
-    """Drop cached verdicts (tests and diagnostics reruns)."""
-    _VERDICTS.clear()
+class VerificationUnavailable(PermissionError):
+    """The OS could not supply permission facts; never a usable key verdict."""
+
+
+class _QueryUnavailable(SystemExit):
+    """Keep direct native checks compatible with installer refusal handling."""
 
 
 def _run(cmd, **kwargs):
@@ -46,31 +34,9 @@ def _run(cmd, **kwargs):
     return subprocess.run(cmd, **kwargs)
 
 
-def check(path, run=None, _now=None, *, fresh=False):
-    """Refuse grants outside the current user and trusted Windows accounts.
-
-    The verdict is cached per file for a short interval so one key read does
-    not spawn PowerShell every time; the entry expires and re-checks,
-    so a permission change is honoured at the next expiry. The key includes
-    the runner identity, and the entry holds a reference to it, so two
-    different seams probing one path never share a verdict.
-    Protection writes pass `fresh=True` to verify their actual result.
-    """
-    run = run or _run
-    key = (str(path), id(run))
-    now = time.monotonic() if _now is None else _now
-    cached = _VERDICTS.get(key)
-    if (not fresh and cached is not None and cached[0] is run
-            and now - cached[1] < VERDICT_TTL_S):
-        if cached[2] is not None:
-            raise SystemExit(cached[2])
-        return
-    try:
-        _verify(path, run)
-    except SystemExit as exc:
-        _VERDICTS[key] = (run, now, str(exc))
-        raise
-    _VERDICTS[key] = (run, now, None)
+def check(path, query=None, *, fresh=False):
+    """Refuse unsafe permissions; every check reads current native facts."""
+    _verify(path, query)
 
 
 def _sid(value):
@@ -83,31 +49,31 @@ def _sid(value):
     return value
 
 
-def _query(path, run):
-    try:
-        # PowerShell 7 can pass incompatible module paths through Python.
-        # Let Windows PowerShell build its defaults in the child only.
-        env = {key: value for key, value in os.environ.items()
-               if key.upper() != 'PSMODULEPATH'}
-        result = run(['powershell', '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', _QUERY],
-                     input=json.dumps({'path': None if path is None else str(path)}),
-                     capture_output=True, text=True, timeout=15, env=env)
-        if result.returncode != 0:
-            raise ValueError('ACL query failed')
-        doc = json.loads(result.stdout)
-        _sid(doc['user'])
-        return doc
-    except (OSError, subprocess.SubprocessError, ValueError, TypeError, KeyError):
-        raise SystemExit('cannot verify Windows permissions for %s' % (path or 'current user'))
+def _query(path, query=None):
+    started = time.monotonic()
+    for attempt in range(2):
+        try:
+            doc = (query or _native.query)(path)
+            _sid(doc['user'])
+            return doc
+        except OSError as exc:
+            logging.getLogger('codex_router').info(json.dumps(dict(
+                ts=datetime.now(timezone.utc).isoformat(), event='permission_query_failed',
+                operation=getattr(exc, 'operation', 'query'), winerror=exc.errno,
+                attempt=attempt + 1, elapsed_ms=round((time.monotonic() - started) * 1000, 1))))
+            if attempt:
+                raise _QueryUnavailable('Windows permission check is temporarily unavailable') from None
+        except (ValueError, TypeError, KeyError):
+            raise SystemExit('cannot verify Windows permissions for %s' % (path or 'current user')) from None
 
 
-def current_sid(run=None):
+def current_sid(query=None):
     """The effective Windows identity; never fall back to a display name."""
-    return _query(None, run or _run)['user']
+    return _query(None, query)['user']
 
 
-def _verify(path, run):
-    doc = _query(path, run)
+def _verify(path, query):
+    doc = _query(path, query)
     try:
         allowed = _OS_SIDS | {doc['user']}
         owner = _sid(doc['owner'])
@@ -164,6 +130,8 @@ def require_owner_only(path, windows=None):
     if on_windows:
         try:
             check(path)
+        except _QueryUnavailable as exc:
+            raise VerificationUnavailable(str(exc)) from None
         except SystemExit as exc:
             raise PermissionError(str(exc))
         return

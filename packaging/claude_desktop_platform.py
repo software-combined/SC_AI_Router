@@ -1,10 +1,4 @@
-"""Native Claude identity, graceful lifecycle, dialogs and owned shortcuts.
-
-The lifecycle helpers also serve Switch Codex: `app` names the app
-to find, quit and reopen, and defaults to Claude. Windows resolves installed
-packages and Linux resolves desktop entries. `install_mac_app` builds the owned launcher apps:
-Switch Claude, Open Claude and Switch Codex.
-"""
+"""Desktop identity, lifecycle, dialogs and owned shortcuts; `app` defaults to Claude."""
 import collections
 import importlib.util
 import json
@@ -30,6 +24,8 @@ _atomic = _load('router_claude_desktop_atomic', 'atomic_write.py')
 _policy = _load('router_claude_desktop_policy', 'claude_desktop_policy.py')
 _linux_identity = _load('router_claude_desktop_linux', 'desktop_linux.py')
 _windows_identity = _load('router_desktop_windows', 'desktop_windows.py')
+_windows_codex = _load('router_windows_codex', 'windows_codex.py')
+_windows_dialogs = _load('router_windows_dialog', 'windows_dialog.py')
 _dialogs = _load('router_client_dialog', 'client_dialog.py')
 TITLE = 'SCG Router'
 ICON = Path(__file__).parent / 'assets' / 'router-icon.png'
@@ -56,32 +52,11 @@ def _ps(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 
-def _windows_dialog(message, confirm, labels=('Continue', 'Cancel')):
-    # Match client_dialog's bitmap icon and layout containers; constrain text width.
-    return (
-        "$ErrorActionPreference='Stop';Add-Type -AssemblyName System.Windows.Forms,System.Drawing;"
-        "$f=New-Object System.Windows.Forms.Form;$f.Text='SCG Router';"
-        "$f.Icon=[System.Drawing.Icon]::FromHandle((New-Object System.Drawing.Bitmap %s).GetHicon());"
-        "$f.AutoSize=$true;$f.AutoSizeMode='GrowAndShrink';"
-        "$p=New-Object System.Windows.Forms.FlowLayoutPanel;"
-        "$p.FlowDirection='TopDown';$p.WrapContents=$false;$p.AutoSize=$true;"
-        "$p.Padding=New-Object System.Windows.Forms.Padding(12);"
-        "$l=New-Object System.Windows.Forms.Label;$l.Text=%s;"
-        "$l.MaximumSize=New-Object System.Drawing.Size(440,0);$l.AutoSize=$true;"
-        "$r=New-Object System.Windows.Forms.FlowLayoutPanel;$r.AutoSize=$true;"
-        "$r.FlowDirection='LeftToRight';$r.WrapContents=$false;"
-        "%s$c=New-Object System.Windows.Forms.Button;$c.Text=%s;"
-        "$c.AutoSize=$true;$c.DialogResult='Cancel';$r.Controls.Add($c);"
-        "$f.CancelButton=$c;$p.Controls.Add($l);$p.Controls.Add($r);$f.Controls.Add($p);"
-        "if($f.ShowDialog() -eq 'OK'){exit 0}else{exit 1}"
-        % (_ps(ICON), _ps(message), (
-            "$b=New-Object System.Windows.Forms.Button;$b.Text=%s;"
-            "$b.AutoSize=$true;$b.DialogResult='OK';$r.Controls.Add($b);"
-        ) % _ps(labels[0]) if confirm else '', _ps(labels[-1])))
+_windows_dialog = _windows_dialogs.script
 
-
-def _run(command, run, timeout=5):
-    return run(command, capture_output=True, text=True, timeout=timeout)
+def _run(command, run, timeout=5, platform_name=None):
+    flags = {'creationflags': 0x08000000} if (platform_name or sys.platform) == 'win32' else {}
+    return run(command, capture_output=True, text=True, timeout=timeout, **flags)
 
 
 def _dialog(message, platform_name, confirm, run, tool_path=None, detailed=False,
@@ -97,18 +72,22 @@ def _dialog(message, platform_name, confirm, run, tool_path=None, detailed=False
                 '--ok-label', labels[0] if confirm else labels[-1]]
         if confirm:
             argv += ['--cancel-label', labels[1]]
-    answer = _run(argv, run, 120)
+    answer = _run(argv, run, 120, platform_name)
     if detailed:
         return answer
     return answer.returncode == 0 and (platform_name != 'darwin' or not confirm
                                       or 'button returned:' + labels[0] in answer.stdout)
 
 
-def confirm(message, platform_name, run=subprocess.run):
+def confirm(message, platform_name, run=subprocess.run, *, home=None):
+    if platform_name == 'win32' and home is not None:
+        return _windows_dialogs.show(message, home, True, run)
     return _dialog(message, platform_name, True, run)
 
 
-def show_message(message, platform_name, run=subprocess.run):
+def show_message(message, platform_name, run=subprocess.run, *, home=None):
+    if platform_name == 'win32' and home is not None:
+        return _windows_dialogs.show(message, home, False, run, labels=('OK',))
     return _dialog(message, platform_name, False, run, labels=('OK',))
 
 
@@ -116,15 +95,16 @@ def policy_disabled(platform_name, run=subprocess.run, *, profile=None):
     return _policy.policy_disabled(platform_name, profile)
 
 
-def _json_command(script, run):
-    answer = _run(['powershell', '-NoProfile', '-Command',
-                   "$ErrorActionPreference='Stop';" + script], run)
-    if answer.returncode:
-        raise OSError('Claude identity could not be checked')
+error_facts = _windows_identity.error_facts
+_json_command = _windows_identity.json_command
+
+
+def timed(record, stage, operation):
+    started = time.monotonic()
     try:
-        return json.loads(answer.stdout)
-    except ValueError as exc:
-        raise OSError('Claude identity could not be checked') from exc
+        return operation()
+    finally:
+        record.setdefault('stages_ms', {})[stage] = round((time.monotonic() - started) * 1000, 1)
 
 
 def app_identity(platform_name, run=subprocess.run, app=CLAUDE):
@@ -136,7 +116,10 @@ def app_identity(platform_name, run=subprocess.run, app=CLAUDE):
             return _linux_identity.app_identity('codex')
         raise OSError('only a known desktop app can be checked')
     if platform_name == 'win32':
-        return _windows_identity.identity(app.bundle_id, lambda script: _json_command(script, run))
+        if app.bundle_id == 'com.openai.codex':
+            return _windows_codex.identity()
+        return _windows_identity.identity(app.bundle_id,
+            lambda script: _json_command(script, run, timeout=30, operation='app_identity'))
     if platform_name == 'darwin':
         # AppleScript's app-path lookup launches a closed Claude. Spotlight
         # resolves the bundle without undoing the stopped-app safety check.
@@ -157,17 +140,11 @@ def app_identity(platform_name, run=subprocess.run, app=CLAUDE):
     return dict(root=str(root), exe=str(exe), user=str(os.getuid()))
 
 
-def _snapshot(platform_name, identity, run):
+def _snapshot(platform_name, identity, run, *, tracked=(), names=(), timeout=60):
     if platform_name == 'win32':
-        rows = _json_command(
-            "$sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;"
-            "$rows=@(foreach($p in Get-CimInstance Win32_Process){"
-            "if($p.SessionId -ne (Get-Process -Id $PID).SessionId){continue};"
-            "$o=Invoke-CimMethod -InputObject $p -MethodName GetOwnerSid;"
-            "if($o.ReturnValue -ne 0){throw 'owner'};"
-            "if($o.Sid -eq $sid){@{pid=[int]$p.ProcessId;parent=[int]$p.ParentProcessId;"
-            "user=$o.Sid;born=$p.CreationDate.ToString('o');exe=$p.ExecutablePath}}});"
-            "ConvertTo-Json -InputObject $rows -Compress", run)
+        if identity.get('family') == _windows_codex.FAMILY:
+            return _windows_codex.snapshot(identity, tracked, names)
+        rows = _json_command(_windows_identity.snapshot_script(identity, tracked, names), run, timeout=timeout)
     else:
         command = ['/bin/ps', '-axo', 'pid=,ppid=,uid=,lstart=,stat=,comm=']
         if platform_name == 'linux':
@@ -196,6 +173,8 @@ def _snapshot(platform_name, identity, run):
 def _writers(rows, identity, seen, platform_name, names=CLAUDE.writers):
     norm = (lambda s: s.replace('\\', '/').casefold()) if platform_name == 'win32' else str
     root, exe = norm(identity['root']).rstrip('/') + '/', norm(identity['exe'])
+    if platform_name == 'win32':
+        names = tuple(name.casefold() for name in names) + (exe.rsplit('/', 1)[-1],)
     browser_host = root + 'Contents/Helpers/chrome-native-host' if platform_name == 'darwin' else None
     for pid, old in seen.items():
         # A new parent is expected when a writer outlives the main app, and a new
@@ -209,7 +188,8 @@ def _writers(rows, identity, seen, platform_name, names=CLAUDE.writers):
         path = norm(row['exe'])
         # Browser-owned native messaging hosts outlive Claude. Actual app
         # descendants still enter and remain in seen through the walk below.
-        if path == exe or (path.startswith(root) and path != browser_host):
+        if (path == exe or (path.startswith(root) and path != browser_host)
+                or identity.get('family') and row.get('family') == identity['family']):
             seen[pid] = row
     while True:
         children = {pid: row for pid, row in live.items()
@@ -225,67 +205,94 @@ def _writers(rows, identity, seen, platform_name, names=CLAUDE.writers):
 
 def is_running(platform_name, run=subprocess.run, app=CLAUDE):
     identity = app_identity(platform_name, run, app=app)
-    return _writers(_snapshot(platform_name, identity, run), identity, {}, platform_name,
+    return _writers(_snapshot(platform_name, identity, run, names=app.writers), identity, {}, platform_name,
                     app.writers)
 
 
-def request_stop(platform_name, run=subprocess.run, timeout=65, app=CLAUDE):
+def _checked_identity(platform_name, run, app, expected):
+    if platform_name == 'win32' and expected and expected.get('family') == _windows_codex.FAMILY:
+        _windows_codex.validate(expected)
+        return expected
     identity = app_identity(platform_name, run, app=app)
+    if expected is not None and identity != expected:
+        raise OSError('desktop app identity changed')
+    return identity
+
+
+def request_stop(platform_name, run=subprocess.run, timeout=65, app=CLAUDE, *, identity=None,
+                 allow_terminate=False, record=None):
+    identity = _checked_identity(platform_name, run, app, identity)
+    if platform_name == 'win32' and identity.get('family') == _windows_codex.FAMILY:
+        return _windows_codex.stop(identity, lambda rows, seen: _writers(
+            rows, identity, seen, platform_name, app.writers), allow_terminate=allow_terminate,
+            record=record)
     seen = {}
-    if not _writers(_snapshot(platform_name, identity, run), identity, seen, platform_name,
+    if not _writers(_snapshot(platform_name, identity, run, names=app.writers), identity, seen, platform_name,
                     app.writers):
         return True
     deadline = time.monotonic() + max(0, timeout)
     if platform_name == 'darwin':
         argv = ['/usr/bin/osascript', '-e', 'tell application id "%s" to quit' % app.bundle_id]
     elif platform_name == 'win32':
-        norm = lambda value: value.replace('\\', '/').casefold()
-        roots = [str(pid) for pid, row in seen.items() if norm(row['exe']) == norm(identity['exe'])]
-        births = ';'.join('%s=%s' % (pid, _ps(seen[int(pid)]['born'])) for pid in roots)
-        script = "$ErrorActionPreference='Stop';$births=@{%s};foreach($n in @(%s)){" % (births, ','.join(roots))
-        script += '$c=Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$n";'
-        script += "$o=Invoke-CimMethod -InputObject $c -MethodName GetOwnerSid;"
-        script += "if($c.CreationDate.ToString('o') -ne $births[$n] -or $o.ReturnValue -ne 0 "
-        script += "-or $o.Sid -ne %s){throw 'identity'};" % _ps(identity['user'])
-        script += "$p=Get-Process -Id $n -ErrorAction Stop;"
-        script += "if($p.Path -ne %s){throw 'identity'};" % _ps(identity['exe'])
-        script += "$p.CloseMainWindow() | Out-Null}"
-        argv = ['powershell', '-NoProfile', '-Command', script]
+        argv = _windows_identity.close_command(identity, seen)
     else:
         name = 'Codex' if app.bundle_id == 'com.openai.codex' else 'Claude'
         if not confirm('Please quit %s, then choose Continue.' % name, platform_name, run):
             return False
         argv = None
     try:
-        if argv and _run(argv, run, max(0.1, min(30, timeout))).returncode:
+        if argv and _run(argv, run, max(0.1, min(30, timeout)), platform_name).returncode:
             return False
     except subprocess.TimeoutExpired:
         pass  # Claude may still close, for example after its own confirmation; the wait decides.
+    probe_error = None
     while True:
         try:
-            if not _writers(_snapshot(platform_name, identity, run), identity, seen,
+            if not _writers(_snapshot(platform_name, identity, run, tracked=seen, names=app.writers,
+                            timeout=min(60, max(0.1, deadline - time.monotonic()))), identity, seen,
                             platform_name, app.writers):
                 return True
-        except (OSError, subprocess.SubprocessError):
-            pass  # Quitting processes can fail a check; only a clean one ends the wait.
+            probe_error = None
+        except (OSError, subprocess.SubprocessError) as exc:
+            probe_error = exc  # A clean subsequent scan can still confirm shutdown.
         if time.monotonic() >= deadline:
+            if isinstance(probe_error, _windows_identity.QueryError):
+                try:
+                    open_app(platform_name, run=run, app=app, identity=identity)
+                except (OSError, subprocess.SubprocessError):
+                    pass
+                raise probe_error
             return False
         time.sleep(min(0.25, max(0, deadline - time.monotonic())))
 
 
-def open_app(platform_name, run=subprocess.run, app=CLAUDE):
-    identity = app_identity(platform_name, run, app=app)
+def open_app(platform_name, run=subprocess.run, app=CLAUDE, *, identity=None):
+    identity = _checked_identity(platform_name, run, app, identity)
     if platform_name == 'darwin':
         argv = ['/usr/bin/open', identity['root']]
     elif platform_name == 'win32':
+        if identity.get('family') == _windows_codex.FAMILY:
+            return _windows_codex.open_app(identity)
         argv = ['powershell', '-NoProfile', '-Command',
-                "$ErrorActionPreference='Stop';Start-Process " + _ps('shell:AppsFolder:' + identity['app'])]
+                "$ErrorActionPreference='Stop';Start-Process " + _ps(
+                    _windows_codex._native.app_uri(identity['app']))]
     else:
         argv = ['gtk-launch', identity['desktop_id']]
-    answer = _run(argv, run, 10)
+    answer = _run(argv, run, 10, platform_name)
     if answer.returncode:
         raise subprocess.CalledProcessError(answer.returncode, 'open Claude')
     return answer
+
+
+def running_names(root, run):
+    """Basenames, never arguments or paths, of surviving POSIX app processes."""
+    try:
+        answer = run(['/bin/ps', '-axo', 'comm='], capture_output=True, text=True, timeout=5)
+        prefix = str(root).rstrip('/') + '/'
+        return sorted(Path(line).name for line in answer.stdout.splitlines()
+                      if line.startswith(prefix))
+    except Exception:
+        return None
 
 
 def _desktop_arg(value):
@@ -315,7 +322,7 @@ def install_launcher(home, python, action='switch', applications=None,
                   "$s.TargetPath=%s;$s.Arguments=%s;$s.Description=%s;$s.IconLocation=%s;$s.Save()"
                   % tuple(map(_ps, (path, path, marker, arguments, python, arguments, marker, ICON))))
         applications.mkdir(parents=True, exist_ok=True)
-        answer = _run(['powershell', '-NoProfile', '-Command', script], run, 15)
+        answer = _run(['powershell', '-NoProfile', '-Command', script], run, 15, platform_name)
         if answer.returncode:
             raise OSError('unowned or unavailable Claude launcher')
     elif platform_name != 'darwin':

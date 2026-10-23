@@ -20,6 +20,8 @@ notices remain pending until a window appears.
 discovery. Attachment conflicts cannot block its controller, stable launchers
 or Linux scheduler repair. Plugin and native controls delivery remain separate
 from routing health, on both full and same-version installs.
+The health-verified completion also owns installation evidence. Attachment failures
+have separate events. `assistant_status` shares attachment classification with outer reconciliation.
 `client_choice` resolves explicit additions, receipt-owned attachments and saved
 choices. It persists Claude choices in `anthropic_mode`; the runtime keeps its
 existing policy reader. Same-version mode changes use the service repair
@@ -46,6 +48,18 @@ again after preparing the temporary file.
 pointer. `update_launch` selects that controller across runtime rollback.
 Linux reloads and reads back the effective stable updater command before
 pruning. Loaded jobs and a running legacy updater retain their release files.
+`runtime_rebind` uses verified retained resource metadata after `setup-current`
+advances. The Windows task adapter snapshots all three owned definitions,
+changes only the executable and verifies its exact path, enabled and pending states.
+Its JSON subprocess contract uses explicit UTF-8 output and decoding for Unicode paths and saved XML.
+A failed readback restores attempted definitions. Both runtimes remain retained.
+The outer maintenance cadence checks owned task paths without the installation lock.
+Only a required repair repeats verification and changes tasks under that lock.
+`desktop_menu` records helper exit codes and controller exception types.
+It retries an unexpected helper exit once after one second within the controller.
+Quit and removal stop it. Resource replacement uses the existing reload path.
+Resource advancement launches with `--after-update`, bypassing only sign-in preferences.
+That path never opens a chooser or warning. A held session lock leaves reload to its owner.
 `feed` downloads public software without credentials. Legacy `download_auth`,
 `download_oauth` and `download_session` helpers are retained for compatibility,
 but the installer and updater no longer require them. `control_models` checks
@@ -56,14 +70,38 @@ download grants for legacy consumers. It cannot change model routing or provider
 `update_status` owns verified channel facts, cache identity and repair summaries.
 Only a verified release for the same channel and source can support a cached
 current-version response. Diagnostics and controls read those facts without
-changing state. A successful feed check cannot clear an incomplete installation.
+changing state. A successful feed check clears only earlier feed-verification or
+transport errors. Unchanged Express checks record that recovery without claiming
+installation success or consuming a regular update. Rejected data never reaches installation.
+Temporary failures and missed checks remain visible as automatic retries.
+A successful feed check cannot clear an incomplete installation or failed component.
 `update_warning` offers a detached repair dialog after an applying check or when
-controls open. Its separate receipt records presentation time only; it cannot
+controls open, only for incomplete installations, failed components or parked installers.
+Its separate receipt records presentation time only; it cannot
 clear verified facts or interfere with installation. Missing dialogs leave
 the warning pending. Controls bind manual-check results to installed version,
 channel and source before displaying them.
 
 ## Domains and direction
+
+`update_reconcile` runs after applying-update installation locks close, including
+unchanged regular and Express checks. Read-only preflight does not take the installation lock.
+An attachment repair, runtime repair or changed attention result takes the lock without waiting
+and repeats verification. Healthy unchanged checks do not acquire it.
+Restart-notice presentation runs after the lock closes.
+`codex_recovery` repairs only an absent block under a valid, active receipt and
+healthy Router. `codex_owned` validates absence, connection conflicts and TOML.
+Configuration and receipt writes compare their prior contents and verify readback.
+Original uninstall evidence remains intact. The receipt retains a repair event
+until `notice` can offer its configuration-only restart reason.
+Normal attachment uses the same receipt event after configuration and receipt readback.
+Unsafe active recovery marks assistant attention without replacing configuration or other component results.
+The Windows task launcher records task kind, time, numeric status and safe failure classes.
+
+`winsecurity` reads Windows security descriptors through the operating system.
+`winacl` owns the permitted identities and rejects unsupported rules. Checks
+have no verdict cache, so permission changes apply on the next key read.
+Temporary operating-system failures cannot grant access or open key setup.
 
 Desktop connection commands accept explicit destinations. The switch owner
 rechecks the current selection while holding the installation lock, followed
@@ -526,6 +564,17 @@ restore snapshot. A matching owned attachment keeps the user's selected
 subscription or gateway mode on subsequent setup and update runs.
 `desktop_windows.py` resolves the current user's registered Claude Store
 package and its virtualized roaming profile; the gateway profile stays separate.
+`windows_native.py` binds package, process, token and window APIs with explicit
+pointer types. It owns native handles and returns identity facts to desktop policy.
+It performs no discovery, shutdown or activation on import.
+`windows_codex.py` owns fresh Store package discovery, process selection and
+verified Windows Codex lifecycle policy. It reuses the desktop writer tracker.
+Termination requires explicit consent from its caller and rechecks one open
+handle's creation time, account, session, package and executable before use.
+Query handles remain open through shutdown; a second snapshot checks parent metadata
+before selection, preventing a reused process ID from adopting an unrelated app.
+`windows_dialog.py` verifies the retained compiled helper for switch confirmation
+and progress. The helper owns presentation; Python owns consent and configuration.
 `claude_desktop_switch.py` owns the switch lifecycle. After Claude exits normally,
 it shares the current account's local tasks and changes the mode only when all
 required copies succeed. Open and Switch share one transition lock, held before
@@ -683,11 +732,27 @@ settings as they are.
 moves an attached install to the other variant, holding the installer lock
 throughout, and a hand-edited block refuses before anything is asked. Each
 run appends one line to `logs/codex-switch.log` (docs/runtime-files.md).
+`codex_switch_transaction.py` owns pending markers, proof and restoration of the owned settings.
+Its Windows rollback guard verifies exit again if reopening may have launched the app.
+An unavailable rollback shutdown keeps the pending marker and preserves the current configuration.
+Windows Codex discovers the current Store package through native APIs and checks
+registration before lifecycle actions. Process snapshots use Toolhelp metadata
+and native token reads; they do not start PowerShell. A busy installation offers a Cancel window while
+Switch Codex waits up to sixty seconds, before discovering the current app and settings.
+Its process snapshot queries owners only for package processes, named writers,
+descendants and previously tracked PIDs. Vanished processes do not invalidate a scan;
+an unreadable relevant process still refuses. Windows CLI selection checks the package
+boundary, executable header and `codex-cli` version before preflight and proof share it.
+Only package-relative selection diagnostics enter the log; no Codex install path is persisted.
+Windows confirmation names the full close and stopped tasks. Shutdown allows five seconds
+for window closure, then ends verified surviving processes within a fifteen-second deadline.
+Settings remain pending until proof and a visible reopened package window succeed.
+Failure restores the previous owned settings and attempts fresh-package reopening.
 
 `switched` is strict. It needs `codex_route.ready`, a subscription install
 (no-subscription mode already runs without sign-in), exactly one ChatGPT app
-(Codex) with its bundled CLI at the verified platform installation, and a graceful
-quit. It then writes a pending marker, calls `codex_switch_config.switch` and
+(Codex) with its bundled CLI at the verified platform installation, and a verified
+exit. It then writes a pending marker, calls `codex_switch_config.switch` and
 proves the result with `codex_config_proof`: that CLI, started as an app
 server on `~/.codex`, must load the config and report no managed
 `model_provider` and no account. Any doubt refuses before the dialog; a failed
@@ -698,17 +763,14 @@ config.toml held it, the owner's latest model pick included, through
 Switching back is the only way out of `switched`, since detach, uninstall and
 rollback refuse while switched, so it depends on nothing it can lose. It runs
 no proof: it only returns to the install's own block plus the provider entry.
-With exactly one app found it quits the app and reopens it after; if the app
-does not close, it is reopened and the switch still refuses, since the person
-can quit it and retry. With the app missing or not identifiable (two copies,
-a Spotlight failure), the dialog asks the person to quit it first and the
-closing message to open it again.
+Windows requires a current package identity and verified exit in both directions.
+Mac and Linux retain their manual quit and reopen path when the app cannot be identified.
 
 A switch that refused before writing needs no undo, and any refusal after the
 quit reopens the app unchanged. A marker left by a run that stopped halfway is
 kept when its switch was written and needs no proof or proves; anything else
-is rolled back before the next run does anything else, so a way back cut
-short before its writes is simply offered again.
+is rolled back. Windows first obtains consent and verifies exit, then settles the
+pending configuration and verifies reopening. Cancellation leaves the marker pending.
 
 `packaging/codex_switch_offer.py` owns the automatic offers. The updater
 calls it after every pass that holds the update lock, the minute Express job
@@ -748,6 +810,7 @@ On Mac, a session-scoped reopen request tells that shell to open its menu.
 Fallback windows run one selected action and then close.
 It serializes actions in a worker, while native menus stay responsive.
 `desktop_startup.py` owns per-user startup entries and the persistent preference.
+Only explicit choices write that preference. Windows defaults missing or invalid choices to On.
 `desktop_launch.py` follows retained setup resources, independently of inference rollback.
 Closing the shell never stops routing. Polling is silent and makes no model calls.
 `native_resources.py` consumes only this target's signed Resources descriptor.

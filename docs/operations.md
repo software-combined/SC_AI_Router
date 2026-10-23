@@ -339,10 +339,16 @@ Switch Codex asks before it changes anything, then quits and reopens the
 ChatGPT app. It keeps the switch only after Codex has loaded the new settings,
 so a switch that fails changes nothing.
 
+On Windows, closing the window can leave Codex running in the tray.
+The confirmation explains that Codex will fully close and running tasks will stop.
+Finish active work before choosing Continue. Cancel leaves the app unchanged.
+The switch verifies exit before writing settings and reopening before keeping them.
+If reopening fails, it restores the previous connection and tries to reopen that connection.
+
 When the limit resets, SCG Router offers the way back once. Choose **Open
-Switch Codex** again, or open it yourself. Switching back does not depend on
-the ChatGPT app: if Switch Codex cannot check the app, it asks you to quit the
-app first and to open it again afterwards.
+Switch Codex** again, or open it yourself. Switching back needs no bundled command or proof.
+Windows still requires a verified app identity and exit before it changes settings.
+On Mac and Linux, an unavailable app can use the manual quit and reopen path.
 
 While Codex is switched:
 
@@ -424,6 +430,18 @@ version-only updates stay silent, and an unverified or out-of-policy row is
 never announced.
 
 ## How to test first
+
+If the release changes anything under `packaging/`, run the installer tests
+locally before you tag the beta:
+
+```sh
+SCG_RUN_INSTALLER_TESTS=1 python3.14 -m unittest discover -s tests -t .
+```
+
+The default discovery run skips them, and a beta does not wait for the `main`
+checks that run them. The release workflow's native packaging step runs them
+and stops the release when one fails. On 21 October 2026 AEDT this stopped
+`v1.3.12-beta` before it published anything.
 
 Merge the release candidate into `development` through its PR, then tag the
 resulting `development` commit `v<VERSION>-beta`. A beta waits only for that PR's

@@ -2,6 +2,82 @@
 
 ## Unreleased
 
+## 1.3.18
+
+- Retry temporary update-check failures quietly on the existing schedule.
+  Keep rejected updates blocked and show retry status without opening repair dialogs.
+- Clear a recovered feed error after a verified unchanged Express check.
+  Preserve incomplete installations, failed components and parked installer failures.
+- Offer Repair only for installation faults, failed components or parked installers.
+  Missed checks alone do not ask for repair after a computer wakes from sleep.
+
+## 1.3.17
+
+- Discover Windows Store Codex through native package APIs on every switch.
+  Check package processes and tracked descendants without PowerShell owner scans.
+  Recheck open handles before lifecycle actions and verify a visible window after reopening.
+- Correct the Windows AppsFolder activation command used to reopen Claude desktop.
+- Confirm that Windows Codex will fully close and running tasks will stop.
+  Give the app five seconds to close, then end only its verified surviving processes.
+  Keep settings only after Codex reopens; restore the prior connection on failure.
+- Use the verified native helper for Switch Codex confirmation and waiting windows.
+  Record stage durations and distinguish an app still running from an unavailable check.
+- Preserve the original owned settings' line endings when a Codex switch rolls back.
+
+## 1.3.16
+
+- Allow sixty seconds for Windows process snapshots on busy Codex and Claude desktops.
+  Keep each shutdown probe within the remaining graceful-close deadline.
+- Wait up to sixty seconds for an active update before switching Codex.
+  Show a waiting window with Cancel; cancellation leaves Codex and settings unchanged.
+- Inspect attachments and scheduled runtime paths without the installation lock.
+  Healthy unchanged regular and Express checks leave foreground switching free.
+  Recheck every repair under the lock and present restart notices after releasing it.
+
+## 1.3.15
+
+- Switch Windows Store Codex without querying owners of unrelated protected processes.
+  Keep tracking app descendants and refuse an unreadable relevant process.
+- Allow thirty seconds for Store identity discovery and record safe failure reasons.
+- Select and verify the bundled Windows executable before switching.
+  Discover each updated package afresh; ignore Windows `CODEX_BIN` overrides.
+- Default missing or invalid Windows startup preferences to On. Preserve saved Off choices.
+  Installation maintenance never saves a startup choice.
+- Relaunch the menu quietly after verified resource advancement, independently of sign-in startup.
+  Keep one controller per session and leave unchanged checks and removal quiet.
+  Keep resource reload independent of a changed sign-in choice.
+- Offer Restart Codex after verified attachment changes, including same-version setup.
+  Preserve pending offers and expose unsafe recovery through the existing repair warning.
+- Record every Windows task launch and completion or safe failure classification.
+  Write installation evidence only after verified health, across direct and scheduled installs.
+
+## 1.3.14
+
+- Preserve Unicode task paths and saved definitions across Windows PowerShell.
+- Move all three owned Windows tasks to the verified retained runtime after delivery.
+  Preserve schedules and disabled states. Restore prior definitions if verification fails.
+- Record tray helper exits and controller failures. Retry an unexpected helper exit once.
+  Keep Quit, removal and the saved startup choice effective.
+- Explain which component needs repair when the installed and latest versions match.
+  Record safe warning facts for support and hide the repair command's console window.
+- Recognize Windows **Later** even when PowerShell returns extra output.
+  Keep the daily warning limit and leave unconfirmed dialogs pending.
+
+- Reconnect an active Codex attachment when its complete Router block is missing.
+  Preserve model choices and original settings evidence. Conflicts stay unchanged.
+  Offer a dismissible restart notice even when no version or model changed.
+- Record regular and Express update launches, completion, failure and repair outcomes.
+
+- Find the bundled Codex command beside the verified Windows Store app.
+  Keep the same app identity during switching and recovery.
+- Hide console windows during Windows app checks, setup choices and notices.
+
+- Read Windows key permissions directly instead of starting PowerShell. A
+  temporary permission-query failure now retries briefly and asks the client
+  to retry, rather than rejecting requests for 30 seconds or requesting a new key.
+
+## 1.3.13
+
 - Point the setup-script links in the agent install prompt, the Claude Code
   guide and the operations guide at `https://dist.softwarecombined.com/install/`,
   where each release publishes the current scripts. The prompt named a folder

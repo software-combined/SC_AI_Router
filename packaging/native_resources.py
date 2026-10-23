@@ -120,9 +120,12 @@ def unpack(archive, destination):
 def reconcile(home, latest, feed_url, fetch=None):
     """Caller holds the installation lock and has verified the channel document."""
     home = Path(home)
+    if (home / '.router-removed').exists():
+        return False
     row = descriptor(latest)
     if row is None or load('service').current_version(home) != latest['version']:
         return False
+    previous = None
     try:
         previous = current(home)
         doc = metadata(previous)
@@ -132,6 +135,7 @@ def reconcile(home, latest, feed_url, fetch=None):
         if (doc.get('menu_sha256') and doc['sha256'] == row['bundle_sha256']
                 and isinstance(record, dict) and record.get('status') == 'ready'
                 and record.get('sha256') == row['sha256']):
+            load('runtime_rebind').reconcile(home)
             return True
     except (OSError, ValueError, KeyError):
         pass
@@ -148,7 +152,9 @@ def reconcile(home, latest, feed_url, fetch=None):
         permanent = retained(resources, home, repair=True)
         try:
             load('native_shortcuts').install(home, permanent, permanent / 'runtime' / doc['runtime_exec'])
-            load('desktop_menu').start(home, permanent, autostart=True)
+            load('runtime_rebind').reconcile(home)
+            if previous != permanent:
+                load('desktop_menu').start(home, permanent, after_update=True)
         except (Exception, SystemExit):
             if before is None:
                 pointer.unlink(missing_ok=True)

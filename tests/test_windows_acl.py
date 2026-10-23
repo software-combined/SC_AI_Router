@@ -80,43 +80,21 @@ def _structured(doc, calls=None):
 
 
 class WinAclCheckTests(unittest.TestCase):
-    def setUp(self):
-        winacl.reset()  # verdicts are cached per file across calls
-
-    def test_the_verdict_is_cached_for_a_short_interval(self):
-        calls = []
-        run = _structured(_acl(), calls)
-        winacl.check('C:\\keys\\openrouter.key', run=run, _now=100.0)
-        winacl.check('C:\\keys\\openrouter.key', run=run, _now=100.0 + 5)
-        self.assertEqual(len(calls), 1, 'one structured query, then cached')
-        winacl.check('C:\\keys\\openrouter.key', run=run,
-                     _now=100.0 + winacl.VERDICT_TTL_S + 1)
-        self.assertEqual(len(calls), 2, 'the cache expires and re-checks')
-
-    def test_a_cached_refusal_is_raised_without_respawning(self):
-        calls = []
-        run = _structured(_acl([_rule('S-1-1-0')]), calls)
-        with self.assertRaisesRegex(SystemExit, 'readable by'):
-            winacl.check('C:\\keys\\openrouter.key', run=run, _now=200.0)
-        with self.assertRaisesRegex(SystemExit, 'readable by'):
-            winacl.check('C:\\keys\\openrouter.key', run=run, _now=200.0 + 1)
-        self.assertEqual(len(calls), 1, 'the refusal is cached too')
-
     def test_sids_allow_equivalent_english_and_french_system_rules(self):
         for label, owner in (('NT AUTHORITY\\SYSTEM', SID), ('AUTORITE NT\\Système', SID),
                              ('SYSTEM', 'S-1-5-18'), ('Administrateurs', 'S-1-5-32-544')):
             rules = [_rule(), dict(_rule('S-1-5-18'), name=label),
                      _rule('S-1-5-32-544'), _rule('S-1-3-4'), _rule('S-1-1-0', kind=1)]
-            winacl.check('C:\\keys\\openrouter.key', run=_structured(dict(_acl(rules), owner=owner)))
+            winacl.check('key', query=lambda path: dict(_acl(rules), owner=owner))
 
     def test_broad_or_foreign_grants_and_foreign_owner_are_refused(self):
         for sid in ('S-1-1-0', 'S-1-5-11', 'S-1-5-32-545', 'S-1-5-21-4-5-6-1001'):
             with self.subTest(sid=sid), self.assertRaisesRegex(SystemExit, 'readable by'):
-                winacl.check('key', run=_structured(_acl([_rule(), _rule(sid)])))
+                winacl.check('key', query=lambda path: _acl([_rule(), _rule(sid)]))
         doc = _acl([_rule('S-1-3-4')])
         doc['owner'] = 'S-1-5-21-4-5-6-1001'
         with self.assertRaisesRegex(SystemExit, 'owner'):
-            winacl.check('key', run=_structured(doc))
+            winacl.check('key', query=lambda path: doc)
 
     def test_malformed_null_and_unknown_rules_fail_closed(self):
         invalid = [None, {}, dict(_acl(), dacl=False), dict(_acl(), rules=[]),
@@ -126,58 +104,15 @@ class WinAclCheckTests(unittest.TestCase):
                    dict(_acl(), rules=[_rule(mask=512)]), dict(_acl(), user=SID.replace('-1-', '-01-', 1))]
         for doc in invalid:
             with self.subTest(doc=doc), self.assertRaisesRegex(SystemExit, 'cannot verify'):
-                winacl.check('key', run=_structured(doc))
-
-    def test_empty_or_failed_query_is_refused(self):
-        for rc in (0, 1):
-            run = lambda *a, **kw: SimpleNamespace(returncode=rc, stdout='', stderr='')
-            with self.subTest(rc=rc), self.assertRaisesRegex(SystemExit, 'cannot verify'):
-                winacl.check('key', run=run)
-
-    def test_unreadable_or_timed_out_query_is_refused(self):
-        for error in (OSError('unavailable'), winacl.subprocess.TimeoutExpired('powershell', 15)):
-            with self.subTest(error=error), self.assertRaisesRegex(SystemExit, 'cannot verify'):
-                winacl.check('key', run=mock.Mock(side_effect=error))
-
-    def test_path_is_json_data_and_default_runner_is_windowless(self):
-        path = "C:\\keys\\é [$value]'; (test) &.key"
-        with mock.patch.object(winacl.subprocess, 'run', return_value=_structured(_acl())(['powershell'])) as run:
-            winacl.check(path)
-        command, options = run.call_args.args[0], run.call_args.kwargs
-        self.assertNotIn(path, ' '.join(command))
-        self.assertEqual(json.loads(options['input']), {'path': path})
-        self.assertEqual(options['creationflags'], getattr(winacl.subprocess, 'CREATE_NO_WINDOW', 0))
-        self.assertGreater(options['timeout'], 0)
-
-    def test_acl_child_removes_powershell7_module_path_without_changing_parent(self):
-        def powershell(command, **options):
-            environment = options.get('env', os.environ)
-            inherited = any(key.upper() == 'PSMODULEPATH' for key in environment)
-            # Windows PowerShell cannot load Get-Acl from PowerShell 7 modules.
-            if json.loads(options['input'])['path'] is not None and inherited:
-                return SimpleNamespace(returncode=1, stdout='', stderr='module load failed')
-            return _structured(_acl())(command)
-
-        for spelling in ('PSModulePath', 'PSMODULEPATH', 'psmodulepath', None):
-            environment = {'SystemRoot': r'C:\Windows', 'PATH': 'system-tools',
-                           'KEEP_SENTINEL': 'preserve-this-value'}
-            if spelling:
-                environment[spelling] = r'C:\Program Files\PowerShell\7\Modules'
-            with self.subTest(spelling=spelling), \
-                    mock.patch.dict(os.environ, environment, clear=True), \
-                    mock.patch.object(winacl.subprocess, 'run', side_effect=powershell) as run:
-                before = dict(os.environ)
-                self.assertEqual(winacl.current_sid(), SID)
-                winacl.check(r'C:\synthetic\owned', fresh=True)
-                self.assertEqual(dict(os.environ), before)
-                expected = {key: value for key, value in before.items()
-                            if key.upper() != 'PSMODULEPATH'}
-                self.assertEqual(run.call_count, 2)
-                for call in run.call_args_list:
-                    self.assertEqual(dict(call.kwargs.get('env', os.environ)), expected)
+                winacl.check('key', query=lambda path: doc)
 
 
 class WinProtectTests(unittest.TestCase):
+    def setUp(self):
+        patch = mock.patch.object(backend._winacl._native, 'query', side_effect=lambda path: _acl())
+        patch.start()
+        self.addCleanup(patch.stop)
+
     def test_protect_restricts_parent_first_then_verifies(self):
         order = []
         with tempfile.TemporaryDirectory() as tmp:
@@ -208,7 +143,8 @@ class WinProtectTests(unittest.TestCase):
             refused = []
             with mock.patch.dict(os.environ, {'USERNAME': 'testuser'}), \
                     self.assertRaisesRegex(SystemExit, 'cannot verify'):
-                backend.protect_file(target, run=_structured({'user': ''}, refused))
+                backend.protect_file(target, run=_structured({'user': ''}, refused),
+                                     query=lambda path: {'user': ''})
             self.assertFalse(any(command[0] == 'icacls' for command, _ in refused))
 
     def test_protect_rechecks_a_cached_pass_after_granting(self):
@@ -216,10 +152,10 @@ class WinProtectTests(unittest.TestCase):
         run = _structured(doc)
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / 'key'
-            backend._winacl.check(target, run=run)
+            backend._winacl.check(target, query=lambda path: doc)
             doc['rules'].append(_rule('S-1-1-0'))
             with self.assertRaisesRegex(SystemExit, 'readable by'):
-                backend.protect_file(target, run=run)
+                backend.protect_file(target, run=run, query=lambda path: doc)
 
     def test_protect_failure_leaves_no_silent_exposure(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -238,7 +174,8 @@ class WinBackendShapeTests(unittest.TestCase):
     def test_uninstall_failure_names_the_surviving_task(self):
         from tests.test_windows_backend import _fake_run
         with self.assertRaisesRegex(SystemExit, 'CodexMixedModelRouterUpdate'):
-            backend.Backend(service, _fake_run(fail=(backend.UPDATE_TASK,))).uninstall('/home/x')
+            backend.Backend(service, _fake_run(fail=(backend.UPDATE_TASK,)),
+                            query=lambda path: _acl()).uninstall('/home/x')
 
     def test_failed_state_protection_keeps_a_pre_existing_token(self):
         # Gap 0 (PR 55 review): a failed state-file ACL check unlinks only
@@ -299,11 +236,11 @@ class WinBackendShapeTests(unittest.TestCase):
         # the directory, verified, nothing created inside it.
         seen = []
         with tempfile.TemporaryDirectory() as tmp:
-            backend.protect_file(tmp, run=_structured(_acl(), seen))
+            backend.protect_file(tmp, run=_structured(_acl(), seen), query=lambda path: _acl())
         grants = [c for c, _ in seen if '/grant:r' in c]
         self.assertEqual([(c[1], c[c.index('/grant:r') + 1]) for c in grants],
                          [(tmp, '*' + SID + ':(OI)(CI)F')])
-        self.assertEqual(len(seen), 3)  # SID query, grant, structured verification
+        self.assertEqual(len(seen), 1)  # Only the grant starts a process.
 
     def test_install_hardens_the_home_before_minting_the_state_file(self):
         # Protect the home before creating the token, then verify it before service startup.

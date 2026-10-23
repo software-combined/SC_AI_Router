@@ -53,6 +53,7 @@ def install_mod_factory():
     module._client_choice._dialog.tool = lambda *args, **kwargs: None
     module._client_choice._dialog.ask = _unexpected_dialog
     module._delivery.close_assistants = _unexpected_dialog
+    module._svc.notice._spawn = _unexpected_dialog
     module._updater._offer_notices = lambda *_: None
     # Nor build or remove the real Switch Codex app: its location was named
     # before any test moved HOME. tests/test_codex_switch_app.py drives it.
@@ -63,7 +64,7 @@ def install_mod_factory():
 
 
 def _unexpected_dialog(*args, **kwargs):
-    raise AssertionError('real client chooser reached a test')
+    raise AssertionError('real dialog reached a test')
 
 
 install_mod = install_mod_factory()

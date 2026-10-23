@@ -194,7 +194,8 @@ def ask(platform_name=None, tool_path=None, run=None):
         try:
             result = run(argv(tool_path, platform_name, question, options),
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                         text=True, timeout=TIMEOUT_S)
+                         text=True, timeout=TIMEOUT_S,
+                         **({'creationflags': 0x08000000} if platform_name == 'win32' else {}))
         except (OSError, subprocess.SubprocessError):
             return None
         cancel_code = 0 if platform_name == 'darwin' else (

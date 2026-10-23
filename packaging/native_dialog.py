@@ -25,7 +25,8 @@ def choose(question, options, run=subprocess.run, *, labels=('Continue', 'Cancel
     if not tool:
         raise OSError('The setup window is unavailable.')
     result = run(dialog.argv(tool, sys.platform, question, options, labels=labels),
-                 capture_output=True, text=True, timeout=300)
+                 capture_output=True, text=True, timeout=300,
+                 **({'creationflags': 0x08000000} if sys.platform == 'win32' else {}))
     return dialog.answer(sys.platform, result.stdout, options) if result.returncode == 0 else None
 
 
@@ -53,6 +54,12 @@ def confirm_result(text, home=None, run=subprocess.run, *, labels=('Continue', '
             return True
         if result.returncode == 1 and re.search(r'\(-128\)\s*$', stderr):
             return False
+    elif sys.platform == 'win32':
+        markers = [line for line in stdout.splitlines() if line.startswith('SCG_ROUTER_DIALOG_RESULT=')]
+        if result.returncode == 0 and markers == ['SCG_ROUTER_DIALOG_RESULT=accept']:
+            return True
+        if result.returncode == 1 and markers == ['SCG_ROUTER_DIALOG_RESULT=cancel']:
+            return False
     elif result.returncode == 0:
         return True
     elif result.returncode == 1 and not stderr.strip():
@@ -65,8 +72,9 @@ class Progress:
 
     Removal passes an OK button instead: closing the window never stops removal.
     """
-    def __init__(self, text=None, button='Cancel'):
+    def __init__(self, text=None, button='Cancel', *, home=None):
         self.process = None
+        self.home = home
         self.cancelled = False
         self.text = text or ('Setting up SCG Router. This can take a few minutes.\n\n'
                              'Cancel closes setup after the current step finishes.')
@@ -74,6 +82,9 @@ class Progress:
 
     def __enter__(self):
         text, labels = self.text, (self.button,)
+        if sys.platform == 'win32' and self.home is not None:
+            self.process = platform._windows_dialogs.progress(self.home, text, self.button)
+            return self
         if sys.platform == 'darwin':
             args = ['/usr/bin/osascript', '-e', platform.dialog_script(text, labels=labels)]
         elif sys.platform == 'win32':
@@ -84,7 +95,8 @@ class Progress:
                     '--title=' + TITLE, '--window-icon=' + str(ICON),
                     '--text=' + text, '--cancel-label=' + self.button]
         self.process = subprocess.Popen(args, stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.DEVNULL, stdin=subprocess.PIPE)
+                                        stderr=subprocess.DEVNULL, stdin=subprocess.PIPE,
+                                        **({'creationflags': 0x08000000} if sys.platform == 'win32' else {}))
         return self
 
     def __exit__(self, *_):

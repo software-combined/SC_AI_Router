@@ -1,5 +1,93 @@
 # Compatibility
 
+## Updated clients for 1.3.17, 23 October 2026 AEDT
+
+Codex desktop `26.1016.62342` (build `21477`), bundled CLI `0.163.0-alpha.11.2`,
+and Claude Code `2.1.309` require fresh verification after their upgrades.
+Four bounded synthetic tool round trips passed at requested Low effort.
+
+| Client and route | Requested model | Counted work | Result |
+| --- | --- | --- | --- |
+| Codex / OpenRouter | `z-ai/glm-5.3-flash` | 2 upstream attempts | Tool result and final marker passed |
+| Codex / ChatGPT subscription | `gpt-5.6-luna` | 1 tool round trip | Tool result and final marker passed |
+| Claude Code / OpenRouter | `z-ai/glm-5.3-flash` | 2 upstream attempts, 2 client turns | File-read marker passed |
+| Claude Code / Claude subscription | `claude-sonnet-5-5` | 1 incomplete invocation; 2-turn confirmation | File-read marker passed |
+
+The external legs used an isolated candidate Router with one shared twelve-attempt
+cap, 512 KiB input and 65,536 output tokens per request. Four upstream attempts ran.
+Both protocols reported the requested model. Codex reported Low effort; Claude did
+not expose served effort. These are provider reports, not independent attestation.
+Both Claude legs retained separate USD 0.10 client budgets and two-turn results.
+The Claude subscription client report named the requested Sonnet model; served
+effort was not reported. Subscription upstream attempt counts were not retained.
+The Codex subscription probe retained its ninety-second deadline and one allowed
+dynamic tool call. Served identity, effort and upstream subscription counts remain
+unverified. The probes did not edit client settings or copy authentication data.
+Windows Store switching and standard-user acceptance remain separate gates.
+
+## Native Windows switching candidate, 23 October 2026 AEDT
+
+Beta `1.3.16.207` failed an owner-reported test on non-elevated Windows 11.
+Store Codex `26.1016.6573.0` kept its 46-process tray tree after closing its window.
+CIM scans took 14–19 seconds, and the reopen command used an incorrect separator.
+The configuration stayed unchanged, but the app window did not return.
+Earlier beta `1.3.15.206` also encountered the snapshot limit and Express lock contention.
+
+Candidate `1.3.17` replaces Codex identity, process and activation checks with native APIs.
+It confirms full closure and stopped tasks, verifies exit before writing, and rolls back
+through verified reopening. It discovers the current Store package on each switch.
+Native dialogs avoid PowerShell startup on the switch path.
+Synthetic transaction tests cover surviving tray workers, consent, package changes,
+reopen failure and pending recovery. Process-generation tests cover PID reuse.
+Windows integration checks use owned test children and measure a 50-process scan.
+The native-binding foundation passed Windows, macOS, Linux and Python 3.9 CI.
+Those checks do not establish actual Store-app switching or standard-user acceptance.
+Both switch directions, post-Store-update operation, cold reply, repair notice,
+tray survival and sign-in startup remain device acceptance gates.
+The unchanged macOS and Claude request paths retain the bounded evidence below.
+
+## Windows switching follow-up candidate, 23 October 2026 AEDT
+
+The owner reported Store Codex `26.1016.6573.0` with bundled CLI
+`0.163.0-alpha.11` on Windows 11. Beta `1.3.14.205` failed non-elevated
+switching because of protected-process owner queries, a short discovery timeout
+and ELF command selection. These are owner-reported device results.
+Candidate `1.3.15` adds executable CIM fixtures and package-relative CLI tests.
+Actual non-elevated switching and post-Store-update acceptance remain pending.
+The unchanged macOS and Claude request paths retain the bounded evidence below.
+
+## Windows recovery candidate, 23 October 2026 AEDT
+
+The macOS compatibility check used Codex desktop `26.1016.61520`, bundled CLI
+`0.163.0-alpha.11.1`, and Claude Code `2.1.283`. Each leg completed a synthetic
+tool round trip at Low effort. Client settings and authentication files were unchanged.
+
+| Client and route | Requested model | Counted work | Result |
+| --- | --- | --- | --- |
+| Codex / OpenRouter | `z-ai/glm-5.3-flash` | 2 upstream attempts | Tool result and final marker passed |
+| Codex / ChatGPT subscription | `gpt-5.6-luna` | 1 tool round trip | Tool result and final marker passed |
+| Claude Code / OpenRouter | `z-ai/glm-5.3-flash` | 2 upstream attempts, 2 client turns | File-read marker passed |
+| Claude Code / Claude subscription | `claude-sonnet-5-5` | 2 client turns | File-read marker passed |
+
+The external legs used an isolated candidate Router from this branch. Its shared
+budget allowed at most twelve attempts, 512 KiB input and 65,536 output tokens.
+Four upstream attempts ran in the counted confirmation. Both protocols reported
+the exact requested model. Codex also reported Low effort; Claude did not report
+served effort. These are provider reports, not independent attestation.
+
+The subscription legs used the existing client sign-in. Codex's ephemeral
+app-server ran with a ninety-second deadline and exactly one allowed dynamic tool
+call. Claude used at most three turns, 2,048 output tokens, no retries and a
+USD 0.10 client budget. Upstream subscription attempt counts were not retained.
+Claude's client report named the requested Sonnet model. Served identity and
+effort for the Codex subscription leg remain unverified.
+
+Windows native security, installer and affected-PC acceptance remain separate
+release gates. The macOS result does not establish Store-app switching, visible
+console suppression, tray recovery or scheduled-task paths on Windows.
+Test sign-in and account changes only in an isolated Windows profile. Keep only
+configuration-change metadata and launch or exit outcomes; do not copy authentication data.
+
 ## Claude Code without a Claude subscription, 21 October 2026 AEDT
 
 The terminal slice of no-subscription Claude (`claude_mode` `none`) passed a
@@ -20,8 +108,13 @@ provider does not report the effort it applied. Claude Code printed an
 `unrecognized_model` notice for the Luna id and still sent the request. The
 owner's own Claude settings file was not changed. This machine has a stored
 Claude login, so the probe does not show the first-run screen on a machine
-with no login. Claude desktop's OpenRouter mode without a subscription needs
-an owner check, because switching modes restarts the running Claude app.
+with no login.
+
+The desktop slice needed an owner check, because switching modes restarts the
+running Claude app. On 21 October 2026 AEDT the owner reported that Claude
+desktop without a Claude subscription passed on beta `1.3.13.202`. That report
+gave no platform or Claude desktop version. Stable `1.3.13.203` then shipped
+the same router code.
 
 ## MiniMax M3.1 Flash onboarding, 21 October 2026 AEDT
 

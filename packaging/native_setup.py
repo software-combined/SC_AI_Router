@@ -176,6 +176,10 @@ def _check(resources, home, dialog):
         dialog.message('SCG Router needs repair. Open it again and choose Update or repair.')
         return
     update = facts.get('update', {})
+    if update.get('retry_pending'):
+        dialog.message('SCG Router is running. The last update check could not finish. '
+                       'Updates will retry automatically.')
+        return
     if update.get('required_action'):
         dialog.message('SCG Router is running, but updates need attention.\n\n'
             'Running version: %s\nLatest known for this channel: %s\nLast successful check: %s\n\n'
