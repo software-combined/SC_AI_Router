@@ -28,6 +28,11 @@ class QuietRetryTests(unittest.TestCase):
         self.enterContext(mock.patch.object(self.updater, '_FEED_VERIFY_KEY', public))
         self.enterContext(mock.patch.object(self.updater._models, 'refresh'))
         self.enterContext(mock.patch.object(self.updater._resources, 'ready', return_value=True))
+        # This feed fixture has no native resources or scheduled tasks.
+        original = self.updater._reconcile.load
+        runtime = SimpleNamespace(reconcile=mock.Mock(return_value='ready'))
+        self.enterContext(mock.patch.object(self.updater._reconcile, 'load',
+            side_effect=lambda name: runtime if name == 'runtime_rebind' else original(name)))
         self.child = self.enterContext(mock.patch.object(self.updater._svc, 'run'))
         self.spawn = self.enterContext(mock.patch.object(self.warning.subprocess, 'Popen'))
         self.enterContext(mock.patch.object(self.updater, '_offer_notices',
