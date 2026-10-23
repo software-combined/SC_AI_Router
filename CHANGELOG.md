@@ -13,6 +13,7 @@
   Keep settings only after Codex reopens; restore the prior connection on failure.
 - Use the verified native helper for Switch Codex confirmation and waiting windows.
   Record stage durations and distinguish an app still running from an unavailable check.
+- Preserve the original owned settings' line endings when a Codex switch rolls back.
 
 ## 1.3.16
 

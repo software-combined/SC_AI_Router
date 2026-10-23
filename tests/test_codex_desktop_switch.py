@@ -40,11 +40,12 @@ class FakeApp:
             raise self.identity
         return {'root': str(self.root)}
 
-    def confirm(self, message, platform_name, run=None):
+    def confirm(self, message, platform_name, run=None, *, home=None):
         self.calls.append(('confirm', message))
         return self.answer
 
-    def request_stop(self, platform_name, run=None, app=None, *, identity=None):
+    def request_stop(self, platform_name, run=None, app=None, *, identity=None,
+                     allow_terminate=False, record=None):
         self.calls.append(('stop', app.bundle_id))
         if isinstance(self.stops, Exception):
             raise self.stops
@@ -54,7 +55,7 @@ class FakeApp:
         self.calls.append(('open', app.bundle_id))
         return SimpleNamespace(returncode=0)
 
-    def show_message(self, message, platform_name, run=None):
+    def show_message(self, message, platform_name, run=None, *, home=None):
         self.calls.append(('notice', message))
 
 

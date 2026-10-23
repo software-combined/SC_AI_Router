@@ -132,12 +132,10 @@ def managed_block(entry):
 def rollback_entry(entry):
     """Retain the receipt's ownership and only the person's current picker lines."""
     live = managed_block(entry)
-    block = ''.join(line for line in entry['inserted_block'].splitlines(keepends=True)
-                    if _codex._key(line) not in _codex.PICK_KEYS)
-    picks = _codex._picks(live)
-    if picks:
-        block = _codex._insert_root_lines(block, list(picks.values()))
-    return dict(entry, inserted_block=block)
+    proof = _codex._owned.inspect(live, entry['inserted_block'])
+    block = ''.join(line for index, line in enumerate(live.splitlines(keepends=True))
+                    if index not in proof['keep'])
+    return dict(entry, inserted_block=_codex._owned._unique_picks(block))
 
 
 def switch(home, variant):
