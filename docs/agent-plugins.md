@@ -3,7 +3,8 @@
 This repo also hosts the `scg-agent-plugins` marketplace:
 `scg-review` (pre-commit review), `scg-subagents` (subagent coordination),
 `scg-prototypes` (prototype publishing), `scg-finance` (finance analysis) and
-`scg-documentation` (technical writing) and `scg-ponytail` (coding simplicity).
+`scg-documentation` (technical writing), `scg-ponytail` (coding simplicity) and
+`scg-optimise-ci` (measured verification improvements).
 Every plugin works in Codex and Claude
 Code.
 
@@ -25,6 +26,7 @@ marketplace:
 codex plugin marketplace add software-combined/SC_AI_Router --ref main
 codex plugin add scg-ponytail@scg-agent-plugins
 codex plugin add scg-review@scg-agent-plugins
+codex plugin add scg-optimise-ci@scg-agent-plugins
 ```
 
 SCG Review uses the single `scg-ponytail:ponytail` skill for its simplifier

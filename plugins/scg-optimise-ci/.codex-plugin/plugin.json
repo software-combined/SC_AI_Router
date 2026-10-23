@@ -1,0 +1,17 @@
+{
+  "name": "scg-optimise-ci",
+  "version": "0.1.0",
+  "description": "Measure and improve local testing and CI pipelines while preserving required verification and release gates.",
+  "author": {"name": "Software Combined"},
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "SCG CI Optimisation",
+    "shortDescription": "Measure and shorten verification waits.",
+    "longDescription": "Find measured bottlenecks in local testing, continuous integration and deployment verification. Validate equivalent workloads and preserve required checks, approvals and release evidence.",
+    "developerName": "Software Combined",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Use the optimise-ci skill to measure and improve this repository's verification pipeline."
+  },
+  "repository": "https://github.com/software-combined/SC_AI_Router"
+}
