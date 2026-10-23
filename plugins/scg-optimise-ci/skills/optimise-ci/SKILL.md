@@ -97,7 +97,20 @@ Reuse results only when tested inputs and the relevant environment remain equiva
 
 Freeze each candidate during measurement. Keep setup environments outside scanned source directories.
 Compare equivalent workloads and disclose changed conditions, including added regression tests.
-Record warm-up, failed attempts and reruns separately.
+Freeze application code, tests and verification inputs independently of the execution layout.
+A separate harness can vary orchestration while keeping inspected CI definitions identical.
+Record the harness revision and actual checkout; diagnostic runs must not satisfy release acceptance.
+Compare test identifiers, resolved suite selections, skips and platform matrices, not counts alone.
+Distinguish discovery inventories from observed execution results and retain reported skips.
+Neither inventories nor summary counts establish line or branch coverage.
+
+Set a finite sampling and replacement rule before execution. Interleave comparable runs when practical.
+Record every warm-up, failed attempt and rerun.
+Start a new comparison cohort after correcting measured source or execution inputs.
+Pin relevant runtime versions for the comparison when practical; moving selectors can resolve differently across runner images.
+Check actual toolchain and runner-image versions. Matching labels do not establish equal environments.
+Disclose changed conditions or analyse separate cohorts. Keep instrumentation from warming only one candidate.
+Define elapsed time through the last relevant completion; dependency waiting is not pure queue time.
 For affected verification, compare a full control with representative selections on the same candidate and runner profile.
 Include a multi-domain selection check.
 
@@ -106,7 +119,7 @@ Confirm reports identify the intended candidate, expected suites, skips and comp
 A simulation proves its model; it does not prove provider execution or deployment.
 Verify the integrated tree matches the passing candidate before claiming integration complete.
 
-Report elapsed time and aggregate execution separately, with sample counts and cache limitations.
+Report elapsed time and aggregate execution separately, with every sample, medians, ranges and cache limitations as applicable.
 Explain tradeoffs: overlap can reduce waiting while adding setup and runner use.
 Label one successful pair as observed evidence, not typical savings or reliability proof.
 Use additional comparable samples when variability could change the decision; avoid rerunning solely for reassurance.
