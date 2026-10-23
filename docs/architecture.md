@@ -562,6 +562,10 @@ package and its virtualized roaming profile; the gateway profile stays separate.
 `windows_native.py` binds package, process, token and window APIs with explicit
 pointer types. It owns native handles and returns identity facts to desktop policy.
 It performs no discovery, shutdown or activation on import.
+`windows_codex.py` owns fresh Store package discovery, process selection and
+verified Windows Codex lifecycle policy. It reuses the desktop writer tracker.
+Termination requires explicit consent from its caller and rechecks one open
+handle's creation time, account, session, package and executable before use.
 `claude_desktop_switch.py` owns the switch lifecycle. After Claude exits normally,
 it shares the current account's local tasks and changes the mode only when all
 required copies succeed. Open and Switch share one transition lock, held before
@@ -719,10 +723,9 @@ settings as they are.
 moves an attached install to the other variant, holding the installer lock
 throughout, and a hand-edited block refuses before anything is asked. Each
 run appends one line to `logs/codex-switch.log` (docs/runtime-files.md).
-Windows discovers the current Store package for each operation. The Windows adapter
-allows thirty seconds for identity discovery and records content-free failure facts.
-Windows process snapshots have a separate sixty-second budget. Shutdown probes also respect
-the remaining graceful-close deadline. A busy installation offers a Cancel window while
+Windows Codex discovers the current Store package through native APIs and checks
+registration before lifecycle actions. Process snapshots use Toolhelp metadata
+and native token reads; they do not start PowerShell. A busy installation offers a Cancel window while
 Switch Codex waits up to sixty seconds, before discovering the current app and settings.
 Its process snapshot queries owners only for package processes, named writers,
 descendants and previously tracked PIDs. Vanished processes do not invalidate a scan;

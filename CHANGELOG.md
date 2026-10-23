@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Discover Windows Store Codex through native package APIs on every switch.
+  Check package processes and tracked descendants without PowerShell owner scans.
+  Recheck open handles before lifecycle actions and verify a visible window after reopening.
+- Correct the Windows AppsFolder activation command used to reopen Claude desktop.
+
 ## 1.3.16
 
 - Allow sixty seconds for Windows process snapshots on busy Codex and Claude desktops.

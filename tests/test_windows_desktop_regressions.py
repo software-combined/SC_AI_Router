@@ -90,10 +90,14 @@ class WindowsDesktopTests(unittest.TestCase):
             ops.app_identity.return_value = identity
             ops.confirm.return_value = True
             error = switcher._platform._windows_identity.QueryError(operation, 'timeout', elapsed_ms=30000)
+            if operation == 'request_stop':
+                error.reopen_failed = True
             getattr(ops, operation).side_effect = error
             with mock.patch.object(switcher.sys, 'platform', 'win32'), \
-                    self.assertRaises(switcher.SwitchError):
+                    self.assertRaises(switcher.SwitchError) as refusal:
                 switcher.switch(home, platform_ops=ops, ready=lambda _: True, run=self.version())
+            if operation == 'request_stop':
+                self.assertIn('Open the ChatGPT app (Codex) to continue.', str(refusal.exception))
             text = (home / 'logs/codex-switch.log').read_text()
             facts = json.loads(text.splitlines()[-1])
             self.assertEqual((facts['operation'], facts['reason']), (operation, 'timeout'))
