@@ -371,22 +371,22 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     if not isinstance(latest, dict) or not _status.version(latest.get('version')):
         raise UpdateError('feed_invalid', 'feed document has no valid version')
     _persist_models_url(home, latest)
-    if express_only and latest.get('express') is not True:
-        return 0  # Leave ETag/serial untouched so the regular job still sees it.
     try:
         _svc.check_serial(home, latest, pinned=bool(args.feed))
     except SystemExit as exc:
         raise UpdateError('feed_serial', str(exc) or 'feed document refused')
-    if not args.feed:
+    if not args.feed and (not express_only or latest.get('express') is True):
         _models.accept(home, latest)
         _models.refresh(home, _fetch)
     bundle_url = _svc.sibling_bundle(feed, latest.get('url', ''))
     if not _svc.trusted_origin(bundle_url):
         raise UpdateError('feed_untrusted',
                           'feed points off the trusted update origin; refusing')
-    if not newer(latest['version'], _svc.current_version(home)):
+    if express_only and latest.get('express') is not True or not newer(latest['version'], _svc.current_version(home)):
         if express_only:
-            return 0  # The pointer may be mid-install; do not mask a later rollback.
+            if (_svc._state.read(_svc._state.path(home)) or {}).get('last_error') in _status.FEED_ERRORS:
+                _record_pass(home, latest=latest, feed=feed, etag=None, channel=channel)
+            return 0  # Feed recovery cannot claim an applied release or clear install failures.
         _record_pass(home, latest=latest, feed=feed, etag=etag, channel=channel)
         if not _resources.ready(home):
             with _svc.install_lock(home) as held:

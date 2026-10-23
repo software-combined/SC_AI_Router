@@ -33,6 +33,8 @@ def menu(facts, *, busy=None, available=None, checked_update=None):
     available = available if _version(available) > _version(facts.get('version')) else None
     if repair:
         rows += [item('Updates need repair', enabled=False)]
+    elif update.get('retry_pending'):
+        rows += [item('Updates will retry automatically', enabled=False)]
     repairs = update.get('component_repairs', {})
     for component, label in (('assistants', 'Assistant connections need repair'),
                               ('controls', 'Router controls need repair')):

@@ -102,6 +102,7 @@ INSTALLER_PATHS = (
     'tests/test_update_announce.py',
     'tests/test_update_channel.py',
     'tests/test_update_status.py',
+    'tests/test_update_retry.py',
     'tests/test_update_warning.py',
     'tests/test_update_cache_recovery.py',
     'tests/test_public_repair.py',
@@ -117,6 +118,7 @@ INSTALLER_PATHS = (
 
 INSTALLER_TESTS = (
     'tests.test_update_status',
+    'tests.test_update_retry',
     'tests.test_update_warning',
     'tests.test_update_cache_recovery',
     'tests.test_public_repair',

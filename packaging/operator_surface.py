@@ -5,7 +5,6 @@ explicitly asks for; the doctor's only I/O is the loopback health probe and
 one `ai_router.catalogue --check` run. Python 3.9-safe and loaded via the
 installer's file-based import pattern, never `import packaging.operator`.
 """
-import calendar
 import json
 import os
 import re
@@ -70,15 +69,6 @@ def bind(**overrides):
 
 
 _utc_stamp = _updater._status.utc_now
-
-
-def _age_hours(stamp):
-    """Hours since one `%Y-%m-%dT%H:%M:%SZ` stamp, or None when unreadable."""
-    try:
-        parsed = time.strptime(stamp, '%Y-%m-%dT%H:%M:%SZ')
-    except (TypeError, ValueError):
-        return None
-    return max(0.0, (time.time() - calendar.timegm(parsed)) / 3600.0)
 
 
 def _row(check, status, detail, fix=None):
@@ -268,10 +258,9 @@ def _doctor_rows(args, home, state):
                      're-run the installer to re-render the scheduled command'))
     summary = _diag._update_summary(state, version, _svc.channel_feed(home),
                                    _updater._status.channel(home))
-    age = _age_hours(summary['last_check_at']) if summary['last_check_at'] else None
-    warning = bool(summary['required_action']) or bool(summary['last_check_at']
-                  and (age is None or age > 8.25))
+    warning = bool(summary['required_action'] or summary['last_error'] or summary['retry_pending'])
     rows.append(_row('update', WARN if warning else OK, _diag._update_line(summary),
+                     'updates will retry automatically' if summary['retry_pending'] else
                      'run the current public setup to update or repair' if warning else None))
     return rows
 
@@ -341,6 +330,7 @@ def _support_document(doc, now=None):
             'latest_known_channel': _enum(update.get('latest_known_channel'), ('stable', 'beta')),
             'required_action': _enum(update.get('required_action'), ('repair', 'update')),
             'installation_repair_required': update.get('installation_repair_required') is True,
+            'retry_pending': update.get('retry_pending') is True,
             'component_repairs': _updater._status.components(update),
             'last_applied_version': _version(update.get('last_applied_version')),
             'last_error': error if error in _updater.ERROR_CODES else None,

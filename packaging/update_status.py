@@ -12,6 +12,7 @@ ERROR_CODES = (
     'feed_signature', 'bundle_checksum', 'bundle_invalid', 'installer_timeout',
     'installer_failed', 'update_failed', 'download_signin_required',
 )
+FEED_ERRORS = ('feed_unreachable', 'feed_invalid', 'feed_serial', 'feed_untrusted', 'feed_signature')
 COMPONENTS = ('controller', 'updater_launcher', 'scheduler', 'assistants', 'controls', 'controls_launchers')
 MISSED_AFTER = 2 * 4 * 60 * 60 + 15 * 60
 
@@ -68,6 +69,9 @@ def verified(state, latest, feed, channel, etag, now=None):
     state['latest_verified'] = dict(version=latest['version'], channel=channel,
         source=source(feed), etag=etag if isinstance(etag, str) and etag else None)
     state['last_successful_check_at'] = now or utc_now()
+    if state.get('last_error') in FEED_ERRORS:
+        state.pop('last_error')
+        state['update_failure_streak'] = 0
 
 
 def components(state):
@@ -149,11 +153,9 @@ def summary(state, current=None, feed=None, channel=None, now=None):
     last = seconds(doc.get('last_check_at'))
     overdue = last is not None and (time.time() if now is None else now) - last >= MISSED_AFTER
     parked = active_failures(failed, current)
-    repair = bool(error or install_pending(doc) or parked or 'failed' in repairs.values() or overdue)
-    streak = doc.get('update_failure_streak', 0)
-    blocked = (install_pending(doc) or 'failed' in repairs.values()
-               or any(count >= 3 for count in parked.values())
-               or error not in (None, 'feed_unreachable', 'update_failed'))
+    repair = bool(install_pending(doc) or 'failed' in repairs.values()
+                  or any(count >= 3 for count in parked.values()))
+    retry = bool(not repair and (parked or overdue or error not in (None, 'download_signin_required')))
     return dict(last_check_at=stamp(doc.get('last_check_at')),
         last_successful_check_at=stamp(doc.get('last_successful_check_at')) if known else None,
         last_applied_version=version(doc.get('last_applied_version')), last_error=error,
@@ -162,5 +164,5 @@ def summary(state, current=None, feed=None, channel=None, now=None):
         latest_known_channel=known['channel'] if known else None,
         installation_repair_required=install_pending(doc),
         component_repairs=repairs, missed_scheduled_checks=overdue,
-        offer_repair=bool(repair and (blocked or overdue or type(streak) is int and streak >= 2)),
-        required_action='repair' if repair else 'update' if available else None)
+        retry_pending=retry, offer_repair=repair,
+        required_action='repair' if repair else 'update' if available and not retry and not error else None)

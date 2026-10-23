@@ -24,9 +24,16 @@ Windows updates verify the executable paths of all three owned scheduled tasks.
 Failed verification restores prior definitions and retries on the next maintenance pass.
 Both runtime folders remain available. Do not remove old setup folders during recovery.
 
+Temporary network, update-signature and download failures retry on the existing schedule.
+The current Router keeps running. Rejected updates cannot install.
+The menu shows **Updates will retry automatically**; these failures do not open Repair dialogs.
+A verified successful feed check clears its earlier feed error, including an unchanged Express check.
+If retry status persists, run **Check for updates** and share the safe error code with IT.
+
 A repair warning can show matching running and latest versions.
-It means a saved installation component needs repair, or scheduled checks were missed.
-A successful version check does not verify those components.
+It means an installation is incomplete, a saved component failed, or an installer repeatedly failed.
+A successful version check does not verify those components or clear a pending installation repair.
+Missed checks alone do not require repair; the computer may have been asleep.
 The dialog names failed components; `logs/maintenance.jsonl` records their names and your choice.
 **Later** delays the next displayed warning for 24 hours. It keeps the repair pending.
 If it returns sooner, the log distinguishes an unconfirmed dialog from a failed receipt write.

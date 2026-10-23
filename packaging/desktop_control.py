@@ -74,6 +74,7 @@ def snapshot(home):
         last_successful_check=owner.display_time(updates.get('last_successful_check_at')),
         last_successful_check_at=owner.stamp(updates.get('last_successful_check_at')),
         required_action=updates.get('required_action') if updates.get('required_action') in ('update', 'repair') else None,
+        retry_pending=updates.get('retry_pending') is True,
         component_repairs=owner.components({'component_repairs': updates.get('component_repairs')}))
     delivery = 'unknown'
     try:
