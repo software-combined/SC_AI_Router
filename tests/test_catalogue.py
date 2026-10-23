@@ -240,11 +240,11 @@ class CatalogueFlagTests(unittest.TestCase):
         from unittest import mock
         from dataclasses import replace
         from ai_router import catalogue as catalogue_mod
-        target = replace(by_slug('moonshotai/kimi-k3'), listed=False)
+        target = replace(by_slug('moonshotai/kimi-k3.1-pro'), listed=False)
         rows = tuple(target if m.slug == target.slug else m for m in MODELS)
         with mock.patch.object(catalogue_mod, 'MODELS', rows):
             merged = merge({'models': []}, client='codex')
-            self.assertNotIn('moonshotai/kimi-k3',
+            self.assertNotIn('moonshotai/kimi-k3.1-pro',
                              {m['slug'] for m in merged['models']})
 
     def test_check_rejects_hidden_rows_left_in_catalogue(self):

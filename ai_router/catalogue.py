@@ -66,7 +66,7 @@ ROW_TEMPLATE = {
 RETIRED_SLUGS = {'~anthropic/claude-sonnet-latest', '~anthropic/claude-fable-latest',
                  '~anthropic/claude-haiku-latest', '~anthropic/claude-opus-latest',
                  '~google/gemini-flash-latest', '~google/gemini-pro-latest',
-                 '~x-ai/grok-latest', 'x-ai/grok-4.6', 'anthropic/claude-opus-5',
+                 '~x-ai/grok-latest', 'x-ai/grok-4.6', 'moonshotai/kimi-k3', 'anthropic/claude-opus-5',
                  'anthropic/claude-sonnet-5', 'anthropic/claude-haiku-4.5',
                  'openai/gpt-5.6-sol', 'openai/gpt-6-sol', 'deepseek/deepseek-v4.1-flash',
                  'openai/gpt-5.6-luna', 'openai/gpt-5.6-terra', 'deepseek/deepseek-v4-pro',

@@ -20,7 +20,7 @@ from tests.harness import (auth_file, isolated_home, post, start_server, test_st
 from tests.test_claude_ingress import _messages
 
 RESPONSES_SLUG = 'google/gemini-3.1-pro-preview'
-MESSAGES_SLUG = 'moonshotai/kimi-k3'
+MESSAGES_SLUG = 'moonshotai/kimi-k3.1-pro'
 NATIVE_HEADERS = {'Authorization': 'Bearer subscription-secret', 'x-api-key': 'client-secret',
                   'chatgpt-account-id': 'acct'}
 OK = (200, b'{"output": [], "model": "served"}', [('Content-Type', 'application/json')])

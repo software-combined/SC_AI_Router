@@ -378,12 +378,12 @@ class ImageProjectionTests(unittest.TestCase):
         self.assertNotIn('input_image', body)
 
     def test_image_capable_models_keep_image_blocks(self):
-        payload = {'model': 'moonshotai/kimi-k3', 'input': [
+        payload = {'model': 'moonshotai/kimi-k3.1-pro', 'input': [
             {'type': 'message', 'role': 'user', 'content': [
                 {'type': 'input_text', 'text': 'look'},
                 {'type': 'input_image', 'image_url': 'data:image/png;base64,AAA'}]}]}
         prepared = _external_responses().prepare(
-            'moonshotai/kimi-k3', '/responses', payload, b'raw', {}, _stub_credentials())
+            'moonshotai/kimi-k3.1-pro', '/responses', payload, b'raw', {}, _stub_credentials())
         kept = json.loads(prepared.body)['input'][0]['content']
         self.assertEqual(len(kept), 2)
         grok_payload = {'model': 'x-ai/grok-4.7', 'input': [

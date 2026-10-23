@@ -111,7 +111,7 @@ The current roster pins exact ids from the
 Sonnet 5.5, Fable 5.1 and Haiku 5.5; Gemini 4 Argon, Gemini 3.8 Flash and
 Gemini 3.1 Pro Preview; Grok 4.7; the Xiaomi MiMo 2.6 Pro and Flash rows; and the DeepSeek
 V4.1 Flash (newest Flash, image-capable) and V4 Pro 0813 (newest Pro,
-text-only) rows; and StepFun Step 5 Preview. The router does not follow
+text-only) rows; MoonshotAI Kimi K3.1 Pro; and StepFun Step 5 Preview. The router does not follow
 upstream `latest` movement on its own: when a new version ships, add its
 pinned row, probe it, and put the superseded slug in `RETIRED_SLUGS` so
 upgrades drop it from the picker. Rows land as `preview` until the isolated
