@@ -13,6 +13,7 @@
   Installation maintenance never saves a startup choice.
 - Relaunch the menu quietly after verified resource advancement, independently of sign-in startup.
   Keep one controller per session and leave unchanged checks and removal quiet.
+  Keep resource reload independent of a changed sign-in choice.
 - Offer Restart Codex after verified attachment changes, including same-version setup.
   Preserve pending offers and expose unsafe recovery through the existing repair warning.
 - Record every Windows task launch and completion or safe failure classification.

@@ -62,6 +62,22 @@ class DesktopRecoveryTests(unittest.TestCase):
         self.assertIn('RuntimeError', text)
         self.assertNotIn('/private/fixture', text)
 
+    def test_resource_reload_keeps_the_update_reason_after_startup_is_turned_off(self):
+        preference = self.home / 'desktop-preferences.json'
+        for flags in ([], ['--autostart'], ['--after-update']):
+            with self.subTest(flags=flags):
+                preference.write_text('{"autostart":true}')
+                def advanced(*_, **__):
+                    preference.write_text('{"autostart":false}')
+                    return 75
+                with mock.patch.object(self.menu, 'run_menu', side_effect=advanced), \
+                        mock.patch.object(self.menu.os, 'execv') as reload:
+                    self.assertEqual(self.menu.main(self.args + flags), 75)
+                command = reload.call_args.args[1]
+                self.assertEqual(command[-1], '--after-update')
+                self.assertNotIn('--autostart', command)
+                self.assertEqual(preference.read_text(), '{"autostart":false}')
+
     def test_helper_exit_code_is_logged_and_quit_is_not_retried(self):
         (self.home / 'control').mkdir()
         (self.home / 'control' / ('scg-router-menu.exe' if os.name == 'nt' else 'scg-router-menu')).touch()

@@ -302,11 +302,7 @@ def main(argv=None):
         _log(args.home, 'controller_failed', error=type(exc).__name__)
         return 1
     if rc == 75:
-        command = [sys.executable, str(args.home / 'desktop_launch.py')]
-        if args.after_update:
-            command.append('--after-update')
-        elif args.autostart:
-            command.append('--autostart')
+        command = [sys.executable, str(args.home / 'desktop_launch.py'), '--after-update']
         os.execv(sys.executable, command)
     return rc
 

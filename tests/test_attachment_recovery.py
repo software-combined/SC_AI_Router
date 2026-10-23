@@ -21,9 +21,12 @@ class AttachmentRecoveryTests(unittest.TestCase):
         (self.home / 'current').write_text('1.0.0')
         (self.home / 'releases/1.0.0').mkdir(parents=True)
         self.recovery, self.maintenance = module('codex_recovery'), module('update_reconcile')
+        runtime = mock.Mock()
+        runtime.reconcile.return_value = 'inactive'
+        modules = {'codex_recovery': self.recovery, 'runtime_rebind': runtime}
         real_load = self.maintenance.load
         self.enterContext(mock.patch.object(self.maintenance, 'load', side_effect=lambda name:
-                          self.recovery if name == 'codex_recovery' else real_load(name)))
+                          modules[name] if name in modules else real_load(name)))
         self.svc = install_mod._svc
         self.enterContext(mock.patch.object(self.svc, 'health', return_value={
             'status': 'ok', 'version': '1.0.0'}))
