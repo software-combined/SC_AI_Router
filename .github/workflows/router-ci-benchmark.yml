@@ -1,0 +1,367 @@
+name: Router CI benchmark
+run-name: Router CI benchmark ${{ github.ref_name }}
+
+# Temporary measurement harness. All jobs test one immutable Router commit.
+# This workflow cannot publish or satisfy the protected Check acceptance path.
+on:
+  push:
+    branches:
+      - 'cyril/router-ci-benchmark-serial-*'
+      - 'cyril/router-ci-benchmark-parallel-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  # Each sample has a separate ref; no sample cancels another.
+  group: router-ci-benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Change scope
+    # Force identical full native scope for both benchmark layouts.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      installer: ${{ steps.scope.outputs.installer }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          # The diff needs the base branch, so fetch full history.
+          fetch-depth: 0
+          ref: bc2920a6688cceb9eed3caf40847fef4dc031f39
+          persist-credentials: false
+      - name: Installer scope
+        id: scope
+        # Both arms exercise all native checks, independent of changed paths.
+        run: |
+          set -o pipefail
+          printf '%s\n' '.github/workflows/check.yml' | python3 tools/ci_scope.py --installer >> "$GITHUB_OUTPUT"
+
+  installer-macos:
+    name: Installer (macOS)
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: bc2920a6688cceb9eed3caf40847fef4dc031f39
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Native installer tests
+        shell: bash
+        run: python -m unittest $(python tools/ci_scope.py --installer-tests)
+      - name: Native suite inventory
+        shell: bash
+        run: python tools/ci_scope.py --installer-tests
+
+  installer-windows:
+    name: Installer (Windows)
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: bc2920a6688cceb9eed3caf40847fef4dc031f39
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Native installer tests
+        shell: bash
+        run: python -m unittest $(python tools/ci_scope.py --installer-tests)
+      - name: Native suite inventory
+        shell: bash
+        run: python tools/ci_scope.py --installer-tests
+      - name: Native packaging contracts (PowerShell)
+        shell: pwsh
+        run: python -m unittest tests.test_native_stage tests.test_native_packages tests.test_native_setup tests.test_native_readiness tests.test_native_menu_build
+      - name: Native ACL contract (PowerShell)
+        shell: pwsh
+        run: python -m unittest tests.test_windows_acl_native
+
+  installer-python39:
+    name: Installer (Python 3.9)
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
+    # Pinned: actions/python-versions publishes no 3.9 build for Ubuntu 26.04,
+    # which ubuntu-latest now resolves to; 24.04 still has 3.9.25.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: bc2920a6688cceb9eed3caf40847fef4dc031f39
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python-version: "3.9"
+      - name: Installer surface imports on 3.9
+        run: python tools/check_installer_python39.py
+
+  unit-suite:
+    name: Offline unit suite (parallel)
+    # Independent of native acceptance. Starting both together avoids paying
+    # for their durations in series; Test still requires every result.
+    if: startsWith(github.ref, 'refs/heads/cyril/router-ci-benchmark-parallel-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: bc2920a6688cceb9eed3caf40847fef4dc031f39
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Unit suite (offline)
+        env:
+          SCG_RUN_INSTALLER_TESTS: '1'
+        run: python -m unittest discover -s tests -t .
+      - name: Frozen suite inventory
+        shell: bash
+        env:
+          SCG_RUN_INSTALLER_TESTS: '1'
+        run: |
+          python - <<'PY'
+          import hashlib, json, subprocess, unittest
+          def flatten(suite):
+              for test in suite:
+                  if isinstance(test, unittest.TestSuite):
+                      yield from flatten(test)
+                  else:
+                      yield test.id()
+          revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+          assert revision == 'bc2920a6688cceb9eed3caf40847fef4dc031f39', revision
+          assert tree == '2b6076c122282b315b3ef724bcf0cc673745589a', tree
+          cases = sorted(flatten(unittest.defaultTestLoader.discover('tests', top_level_dir='.')))
+          digest = hashlib.sha256(json.dumps(cases, separators=(',', ':')).encode()).hexdigest()
+          print(json.dumps({'checkout': revision, 'tree': tree, 'cases': len(cases),
+                            'case_ids_sha256': digest, 'case_ids': cases}, sort_keys=True))
+          PY
+
+  test:
+    # Diagnostic result only; this does not carry the required Test name.
+    name: Benchmark verification
+    # The required gate fails when a prerequisite fails or is cancelled.
+    # Installer jobs may be skipped when scope finds no installer paths;
+    # release-only prerequisites are skipped on development runs.
+    # !cancelled() lets the failure guard run after a failed prerequisite.
+    needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter, unit-suite]
+    if: ${{ !cancelled() }}
+    # Serial runs the suite here; parallel requires the independent suite.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Required jobs
+        # Every expected result is mandatory; only serial omits unit-suite.
+        env:
+          BENCHMARK_RESULTS: ${{ toJSON(needs) }}
+          BENCHMARK_LAYOUT: ${{ startsWith(github.ref, 'refs/heads/cyril/router-ci-benchmark-parallel-') && 'parallel' || 'serial' }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          results = json.loads(os.environ['BENCHMARK_RESULTS'])
+          expected = {'changes', 'installer-macos', 'installer-windows',
+                      'installer-python39', 'desktop-menus', 'plugin-schedulers',
+                      'hook-adapter', 'unit-suite'}
+          assert set(results) == expected, results
+          for name, result in results.items():
+              status = ('skipped' if name == 'unit-suite' and
+                        os.environ['BENCHMARK_LAYOUT'] == 'serial' else 'success')
+              assert result['result'] == status, (name, result)
+          assert results['changes']['outputs']['installer'] == 'true'
+          PY
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: bc2920a6688cceb9eed3caf40847fef4dc031f39
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Unit suite (offline)
+        if: startsWith(github.ref, 'refs/heads/cyril/router-ci-benchmark-serial-')
+        env:
+          SCG_RUN_INSTALLER_TESTS: '1'
+        run: python -m unittest discover -s tests -t .
+      - name: Frozen suite inventory
+        if: startsWith(github.ref, 'refs/heads/cyril/router-ci-benchmark-serial-')
+        shell: bash
+        env:
+          SCG_RUN_INSTALLER_TESTS: '1'
+        run: |
+          python - <<'PY'
+          import hashlib, json, subprocess, unittest
+          def flatten(suite):
+              for test in suite:
+                  if isinstance(test, unittest.TestSuite):
+                      yield from flatten(test)
+                  else:
+                      yield test.id()
+          revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+          assert revision == 'bc2920a6688cceb9eed3caf40847fef4dc031f39', revision
+          assert tree == '2b6076c122282b315b3ef724bcf0cc673745589a', tree
+          cases = sorted(flatten(unittest.defaultTestLoader.discover('tests', top_level_dir='.')))
+          digest = hashlib.sha256(json.dumps(cases, separators=(',', ':')).encode()).hexdigest()
+          print(json.dumps({'checkout': revision, 'tree': tree, 'cases': len(cases),
+                            'case_ids_sha256': digest, 'case_ids': cases}, sort_keys=True))
+          PY
+      - name: Shell syntax
+        shell: bash
+        # The bootstrap and installer shells ship to every host; a syntax
+        # error should fail here, not on a recipient's machine.
+        run: |
+          for f in packaging/*.sh; do
+            sh -n "$f" || { echo "$f failed sh -n"; exit 1; }
+          done
+      - name: PowerShell parse
+        shell: pwsh
+        # Real parser validation, not a lint pass: a .ps1 syntax error is
+        # otherwise only discovered on a Windows host.
+        run: |
+          foreach ($f in Get-ChildItem packaging/*.ps1) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $f.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Host "::error file=$($f.Name)::$($_.Message)" }
+              exit 1
+            }
+          }
+      - run: python -m compileall -q ai_router tools tests packaging
+      - name: Lint (F401/F811)
+        # python -m ruff: the script location differs by platform, the module
+        # import does not. Version + wheel hash pinned (repo convention for
+        # CI inputs); both Ubuntu and macOS wheels are listed so the same pin
+        # works for manual runs.
+        run: |
+          python -m pip install --user --require-hashes --only-binary :all: \
+            -r .github/requirements-lint.txt
+          # Explicit --select, not just pyproject: CI pins the enforced rule
+          # set so loosening the local config cannot widen this gate.
+          python -m ruff check --select F401,F811 ai_router packaging tools tests
+      - run: python tools/check_source_limits.py
+      - name: CloudFormation lint
+        # The feed stack is the fleet's code-execution path; lint it on the
+        # same runner that would deploy it. Pinned: lint results change with
+        # the rule set, and an unpinned rule would fail unrelated PRs.
+        run: |
+          python -m pip install --disable-pip-version-check cfn-lint==1.56.3
+          cfn-lint infra/*.yaml
+      - name: Model registry check (offline)
+        # Live-model check needs network; offline mode pins the registry
+        # shape deterministically on every runner.
+        run: python -m ai_router.models check --offline
+      - name: Catalogue merge check
+        run: |
+          python -m ai_router.catalogue --merge ./ci-catalogue.json
+          python -m ai_router.catalogue --check ./ci-catalogue.json
+      - name: Policy scans
+        # Single owner (Plan 134): tools/check_policy_scans.py implements the
+        # request-cap and secrets greps, so the same scan runs locally and in
+        # CI. Behaviour and failure messages match the inline steps it
+        # replaces.
+        run: python tools/check_policy_scans.py
+
+  desktop-menus:
+    name: Desktop menu (${{ matrix.target }})
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {target: darwin/arm64, runner: macos-15}
+          - {target: darwin/x86_64, runner: macos-15-intel}
+          - {target: windows/x86_64, runner: windows-2025}
+          - {target: linux/x86_64, runner: ubuntu-24.04}
+          - {target: linux/arm64, runner: ubuntu-24.04-arm}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: bc2920a6688cceb9eed3caf40847fef4dc031f39
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Pinned Linux menu toolchain
+        if: runner.os == 'Linux'
+        run: rustup toolchain install 1.90.0 --profile minimal
+      - name: Compile native helper
+        run: python tools/check_native_menu_build.py --target ${{ matrix.target }}
+      - name: Native compiler identity
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, subprocess, sys
+          from pathlib import Path
+          if sys.platform == 'darwin':
+              print(subprocess.check_output(['xcrun', 'swiftc', '--version'], text=True))
+          elif sys.platform == 'win32':
+              compiler = Path(os.environ['WINDIR']) / 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+              version = subprocess.check_output(['pwsh', '-NoProfile', '-NonInteractive', '-Command',
+                  "(Get-Item ($env:WINDIR + '/Microsoft.NET/Framework64/v4.0.30319/csc.exe')).VersionInfo.FileVersion"], text=True)
+              print(json.dumps({'compiler': 'Framework64/csc.exe', 'version': version.strip(),
+                                'sha256': hashlib.sha256(compiler.read_bytes()).hexdigest()}))
+          else:
+              print(subprocess.check_output(['rustc', '+1.90.0', '--version', '--verbose'], text=True))
+              print(subprocess.check_output(['cargo', '+1.90.0', '--version'], text=True))
+          PY
+
+  plugin-schedulers:
+    name: Plugin schedulers
+    # Native plugin schedules and Router recovery use real service managers
+    # on disposable runners. Run for main acceptance; development stays lightweight.
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: bc2920a6688cceb9eed3caf40847fef4dc031f39
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Start the disposable Linux user manager
+        if: runner.os == 'Linux'
+        run: |
+          scheduler_uid="$(id -u)"
+          sudo systemctl start "user@${scheduler_uid}.service"
+          echo "XDG_RUNTIME_DIR=/run/user/${scheduler_uid}" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${scheduler_uid}/bus" >> "$GITHUB_ENV"
+      - name: Native scheduler migration
+        run: python -m unittest tests.test_scheduling_native -v
+        env:
+          SCG_TEST_NATIVE_SCHEDULER: '1'
+
+      - name: Native Router update recovery
+        if: runner.os == 'Linux'
+        run: python -m unittest tests.test_router_scheduler_native -v
+        env:
+          SCG_TEST_NATIVE_ROUTER_SCHEDULER: '1'
+
+  hook-adapter:
+    name: Hook adapter portability
+    # The SCG hook adapter ships to every host and claims native Windows
+    # support for the receipt gate, the shims and the scanner. No other job
+    # runs its tests, so this is their only executor: without the matrix, the
+    # Windows claim would be asserted rather than exercised. Main acceptance
+    # only, like the scheduler job above.
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: bc2920a6688cceb9eed3caf40847fef4dc031f39
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Hook adapter tests
+        # The receipt gate, the interpreter selection and the shims run on
+        # both platforms. Tests needing a POSIX scanner stub stay
+        # POSIX-only; the portability module covers the scanner here.
+        run: python -m unittest discover -s plugins/scg-review/support/git-hooks/tests -v
