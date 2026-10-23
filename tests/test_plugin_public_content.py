@@ -24,6 +24,7 @@ PLUGIN_SURFACES = {
     },
 }
 PUBLIC_METADATA = (
+    ROOT / "AGENTS.md",
     ROOT / ".github/ISSUE_TEMPLATE/config.yml",
     ROOT / ".mailmap",
     ROOT / "README.md",

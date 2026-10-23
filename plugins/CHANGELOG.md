@@ -1,5 +1,15 @@
 # Changelog
 
+## scg-optimise-ci 0.1.1 (2026-10-23)
+
+- Apply the measured method across languages, build tools and CI providers.
+  Inspect the critical path, actual input dependencies, acceptance results,
+  runner capacity and timeout boundaries before changing the job graph.
+- Record the actual tested checkout and tree, separate waiting time from
+  runner use, and collect Git change states separately for affected checks.
+- Retain Router CI as the only benchmark, with one successful sample per
+  candidate and explicit limits on savings and reliability claims.
+
 ## scg-optimise-ci 0.1.0 (2026-10-23)
 
 - Package the measured CI optimisation skill for Codex and Claude Code.
