@@ -104,6 +104,23 @@ jobs:
       - name: Installer surface imports on 3.9
         run: python tools/check_installer_python39.py
 
+  unit-suite:
+    name: Offline unit suite
+    # Independent of native acceptance. Starting both together avoids paying
+    # for their durations in series; Test still requires every result.
+    if: (github.event.action != 'edited' || github.event.changes.base) && ((github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Unit suite (offline)
+        env:
+          SCG_RUN_INSTALLER_TESTS: '1'
+        run: python -m unittest discover -s tests -t .
+
   test:
     # The rulesets require a check named Test. A skipped job reports success
     # and the newest check of a name is the one that counts, so a skipped
@@ -115,11 +132,10 @@ jobs:
     # Installer jobs may be skipped when scope finds no installer paths;
     # release-only prerequisites are skipped on development runs.
     # !cancelled() lets the failure guard run after a failed prerequisite.
-    needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter]
+    needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter, unit-suite]
     if: ${{ !cancelled() && (github.event.action != 'edited' || github.event.changes.base) }}
-    # Develop PRs and branch pushes keep the fast static checks. The full
-    # offline suite is the release acceptance gate on PRs targeting main and
-    # pushes to main; local tests and review remain required before every commit.
+    # Development keeps the fast static checks. Main acceptance waits for
+    # the full offline suite and native checks running in parallel.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -134,11 +150,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-      - name: Unit suite (offline)
-        if: (github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-        env:
-          SCG_RUN_INSTALLER_TESTS: '1'
-        run: python -m unittest discover -s tests -t .
       - name: Shell syntax
         shell: bash
         # The bootstrap and installer shells ship to every host; a syntax
