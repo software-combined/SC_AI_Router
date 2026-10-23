@@ -537,11 +537,13 @@
     "priority": 116
   },
   {
-    "slug": "moonshotai/kimi-k3",
+    "slug": "moonshotai/kimi-k3.1-pro",
     "provider": "openrouter",
-    "display_name": "MoonshotAI: Kimi K3 \u00b7 OpenRouter",
+    "upstream_id": "",
+    "display_name": "MoonshotAI: Kimi K3.1 Pro \u00b7 OpenRouter",
     "vendor": "MoonshotAI",
     "reasoning": [
+      "none",
       "low",
       "high",
       "max"
@@ -557,13 +559,14 @@
     "max_tools": null,
     "drop_images": false,
     "context_window": 1048576,
-    "priority": 117,
     "max_output_tokens": 943718,
     "reasoning_summary": "none",
     "apply_patch": "freeform",
     "experimental_tools": [],
-    "web_search": true,
-    "tier": "verified"
+    "web_search": false,
+    "tier": "verified",
+    "listed": true,
+    "priority": 117
   },
   {
     "slug": "openai/gpt-6-astra",

@@ -30,7 +30,7 @@ class ApplyTests(unittest.TestCase):
     def test_modality_refresh_follows_live_metadata(self):
         out = apply(catalog(), live(image=False))
         by_slug = {m['slug']: m for m in out['models']}
-        self.assertEqual(by_slug['moonshotai/kimi-k3']['input_modalities'], ['text'])
+        self.assertEqual(by_slug['moonshotai/kimi-k3.1-pro']['input_modalities'], ['text'])
 
     def test_fallback_when_live_lacks_model(self):
         data = live()

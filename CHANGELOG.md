@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.3.19
+
+- Replace Kimi K3 with Kimi K3.1 Pro in Codex and Claude Code.
+  Retire K3 from saved pickers and model caches.
+
 ## 1.3.18
 
 - Retry temporary update-check failures quietly on the existing schedule.

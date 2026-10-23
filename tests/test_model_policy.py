@@ -12,7 +12,7 @@ from ai_router.catalogue import merge
 from ai_router import providers
 from ai_router import model_policy
 
-ALLOWED = ('z-ai/glm-5.3-flash', 'moonshotai/kimi-k3')
+ALLOWED = ('z-ai/glm-5.3-flash', 'moonshotai/kimi-k3.1-pro')
 
 needs_posix = unittest.skipIf(os.name == 'nt', 'POSIX permission bits only')
 
@@ -23,7 +23,7 @@ class ModelPolicyTests(unittest.TestCase):
         subset = {m['slug'] for m in
                   merge({'models': []}, allowed=ALLOWED)['models']}
         self.assertIn('z-ai/glm-5.3-flash', subset)
-        self.assertIn('moonshotai/kimi-k3', subset)
+        self.assertIn('moonshotai/kimi-k3.1-pro', subset)
         self.assertNotIn('meta/muse-spark-1.3', subset)
         self.assertTrue(subset < full)
 
@@ -148,7 +148,7 @@ class ModelPolicyTests(unittest.TestCase):
     def test_department_subset_invariant(self):
         # Synthetic grant rows: a department list must stay within its
         # portco list; the machine enforces the resolved list only.
-        portco = ['z-ai/glm-5.3-flash', 'moonshotai/kimi-k3']
+        portco = ['z-ai/glm-5.3-flash', 'moonshotai/kimi-k3.1-pro']
         department = ['z-ai/glm-5.3-flash', 'meta/muse-spark-1.3']
         self.assertTrue(set(department) - set(portco))
         merged = merge({'models': []}, allowed=tuple(portco))['models']

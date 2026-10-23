@@ -1,5 +1,35 @@
 # Compatibility
 
+## Kimi K3.1 Pro replacement, 24 October 2026 AEDT
+
+The candidate replaces `moonshotai/kimi-k3` with `moonshotai/kimi-k3.1-pro`.
+Codex desktop `26.1016.62342`, bundled CLI `0.163.0-alpha.11.2`, and
+Claude Code `2.1.309` match the preceding client compatibility gate.
+The unchanged subscription routes reuse that gate's evidence.
+
+The final isolated candidate run passed both routes at requested Low effort:
+Codex completed a streamed tool round trip, image recognition and compaction
+in four upstream attempts; Claude Code completed two sequential file reads
+and their matching tool results in three attempts. Both routes reported the
+exact requested model. Codex reported Low effort; Claude did not expose effort.
+The structured record is in `acceptance-ledger.json` and binds the capability
+row, Python runtime and both client versions. These are provider reports,
+not independent model attestation.
+
+A separate six-attempt Codex diagnostic also verified freeform `apply_patch`:
+one file-change item changed synthetic `note.txt` from `alpha` to `beta`.
+It also passed the tool, image and compaction checks. The earlier candidate
+run reached the right model but failed the Codex tool round trip; its failed
+record remains in the ledger. The focused diagnostic and final candidate
+confirmation passed without a runtime change.
+
+Each isolated run allowed at most twelve upstream attempts, 512 KiB input
+and 65,536 output tokens per request. Claude retained a USD 0.25 client cap.
+Only synthetic task data was used. The initial access-blocked run made no
+inference requests. Model access became available after the owner approved
+Moonshot AI in the global and workspace provider allowlists; retention
+settings were unchanged. Source acceptance does not prove release delivery.
+
 ## Updated clients for 1.3.17, 23 October 2026 AEDT
 
 Codex desktop `26.1016.62342` (build `21477`), bundled CLI `0.163.0-alpha.11.2`,

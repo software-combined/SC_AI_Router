@@ -204,7 +204,7 @@ class RegistryTests(unittest.TestCase):
     def test_merge_preserves_replaces_appends_without_dupes(self):
         from ai_router.catalogue import merge
         native = {'slug': 'gpt-6-astra', 'display_name': 'Native'}
-        stale = {'slug': 'moonshotai/kimi-k3', 'display_name': 'Stale',
+        stale = {'slug': 'moonshotai/kimi-k3.1-pro', 'display_name': 'Stale',
                  'priority': 1, 'context_window': 1, 'max_context_window': 1,
                  'input_modalities': ['text'], 'default_reasoning_level': 'low',
                  'supported_reasoning_levels': [], 'description': 'stale'}
@@ -214,9 +214,9 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(slugs[0], 'gpt-6-astra')
         self.assertEqual({key: out['models'][0][key] for key in native}, native)
         self.assertTrue(CATALOGUE_FIELDS <= out['models'][0].keys())
-        kimi = out['models'][slugs.index('moonshotai/kimi-k3')]
-        self.assertEqual(kimi['display_name'], 'MoonshotAI: Kimi K3 · OpenRouter')
-        self.assertEqual(kimi['priority'], by_slug('moonshotai/kimi-k3').priority)
+        kimi = out['models'][slugs.index('moonshotai/kimi-k3.1-pro')]
+        self.assertEqual(kimi['display_name'], 'MoonshotAI: Kimi K3.1 Pro · OpenRouter')
+        self.assertEqual(kimi['priority'], by_slug('moonshotai/kimi-k3.1-pro').priority)
         self.assertEqual(len(slugs), len(set(slugs)))
         self.assertEqual(len(slugs), 1 + len(models_for(MODELS, 'codex')))
 
@@ -271,7 +271,7 @@ class RegistryTests(unittest.TestCase):
                             for label in pinned.values()))
 
     def test_by_slug_and_external_slugs(self):
-        self.assertEqual(by_slug('moonshotai/kimi-k3').vendor, 'MoonshotAI')
+        self.assertEqual(by_slug('moonshotai/kimi-k3.1-pro').vendor, 'MoonshotAI')
         self.assertIsNone(by_slug('unknown/model'))
         self.assertEqual(external_slugs(),
                          {m.slug for m in MODELS
@@ -289,8 +289,8 @@ class RegistryTests(unittest.TestCase):
                            vendor='OpenAI', reasoning=('low',), default_reasoning='low')
         self.assertTrue(visible_for(openai_sub, 'codex'))
         self.assertTrue(visible_for(openai_sub, 'claude'))
-        self.assertTrue(visible_for(by_slug('moonshotai/kimi-k3'), 'codex'))
-        self.assertTrue(visible_for(by_slug('moonshotai/kimi-k3'), 'claude'))
+        self.assertTrue(visible_for(by_slug('moonshotai/kimi-k3.1-pro'), 'codex'))
+        self.assertTrue(visible_for(by_slug('moonshotai/kimi-k3.1-pro'), 'claude'))
         self.assertTrue(visible_for(by_slug('openai/gpt-6-astra'), 'claude'))
         self.assertTrue(visible_for(by_slug('anthropic/claude-sonnet-5.5'), 'codex'))
 
@@ -334,7 +334,7 @@ class RegistryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             models_for(MODELS, 'other')
         with self.assertRaises(ValueError):
-            visible_for(by_slug('moonshotai/kimi-k3'), 'other')
+            visible_for(by_slug('moonshotai/kimi-k3.1-pro'), 'other')
 
     def test_codex_picker_lists_openai_twins_without_include_twins(self):
         twins = {m.slug for m in models_for(MODELS, 'codex')
