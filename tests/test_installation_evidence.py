@@ -1,0 +1,104 @@
+"""Scheduled launches and health-verified installs leave content-free evidence."""
+import contextlib
+import io
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
+
+from tests import test_client_choice as fixtures
+from tests.install_fixtures import _craft_bundle
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class TaskEvidenceTests(unittest.TestCase):
+    def test_launch_completion_and_pre_target_failures_preserve_status_without_exception_text(self):
+        for script, text, status, reason in (
+                ('router_launch.py', 'pass', 0, None),
+                ('update_launch.py', 'raise SystemExit(7)', 7, 'target_exit'),
+                ('express_launch.py', None, 1, 'missing_target'),
+                ('express_launch.py', "raise RuntimeError('private settings')", 1, 'target_failed')):
+            with self.subTest(script=script, text=text), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary)
+                (home / 'task_launch.py').write_bytes((ROOT / 'packaging/task_launch.py').read_bytes())
+                if text is not None:
+                    (home / script).write_text(text)
+                result = subprocess.run([sys.executable, str(home / 'task_launch.py'), 'task.log', script],
+                                        capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, status)
+                raw = (home / 'logs/task.log').read_text()
+                rows = [json.loads(line) for line in raw.splitlines()]
+                self.assertEqual(rows[0]['event'], 'launch')
+                self.assertEqual(rows[-1]['event'], 'completed' if status == 0 else 'failed')
+                self.assertEqual(rows[-1]['status'], status)
+                self.assertEqual(rows[-1].get('error'), reason)
+                self.assertEqual(rows[0]['task'], {'router_launch.py': 'router',
+                    'update_launch.py': 'regular', 'express_launch.py': 'express'}[script])
+                self.assertNotIn('private settings', raw)
+                self.assertNotIn(str(home), raw)
+                self.assertTrue(all(set(row) <= {'at', 'task', 'event', 'status', 'error'} for row in rows))
+
+
+class InstallationEvidenceTests(unittest.TestCase):
+    def test_direct_regular_express_and_beta_installs_share_the_verified_completion_record(self):
+        installer = fixtures.install_mod
+        for route in ('direct', 'regular', 'express', 'beta'):
+            with self.subTest(route=route), tempfile.TemporaryDirectory() as temporary:
+                home = fixtures._home(temporary)
+                def child(*_, **__):
+                    rc = fixtures._full_install(self, temporary, home, '1.0.1', ['--clients', 'codex'])[0]
+                    return SimpleNamespace(returncode=rc, stdout='', stderr='')
+                with mock.patch.object(installer, 'platform_backend'), contextlib.redirect_stdout(io.StringIO()):
+                    if route == 'direct':
+                        child()
+                    else:
+                        blob, latest = _craft_bundle('1.0.1')
+                        latest['express'] = True
+                        feed = 'file:///beta/latest.json' if route == 'beta' else 'file:///latest.json'
+                        args = installer.build_parser().parse_args(['--home', str(home), '--feed', feed, '--update'])
+                        args.express_only = route == 'express'
+                        with mock.patch.object(installer._svc, 'run', side_effect=child), \
+                                mock.patch.object(installer._updater, '_offer_notices'), \
+                                mock.patch.object(installer._svc.notice, 'show_pending'):
+                            self.assertEqual(installer._updater.do_update(args, _fetch=lambda _: blob,
+                                _read_feed=lambda *_: (200, json.dumps(latest).encode(), None),
+                                _sleep=lambda _: None, _announce=lambda *_: None), 0)
+                text = (home / 'logs/update.log').read_text()
+                self.assertIn('installed 1.0.1; health verified', text)
+                before = text
+                with mock.patch.object(installer, 'platform_backend'):
+                    fixtures._install(temporary, home, [])
+                self.assertEqual((home / 'logs/update.log').read_text(), before)
+
+    def test_unhealthy_or_rolled_back_completion_never_claims_an_install(self):
+        delivery = fixtures.install_mod._delivery
+        for healthy in (False, True):
+            with self.subTest(healthy=healthy), tempfile.TemporaryDirectory() as temporary:
+                home = fixtures._home(temporary)
+                args = SimpleNamespace(home=str(home), dry_run=False)
+                def install(record):
+                    if healthy:
+                        record['installed_version'] = '1.0.1'  # The current pointer stayed on 1.0.0.
+                    return 1
+                self.assertEqual(delivery.run_install(args, install, run=mock.Mock(), fetch=mock.Mock()), 1)
+                self.assertFalse((home / 'logs/update.log').exists())
+
+    def test_attachment_failure_keeps_health_evidence_and_records_failure_separately(self):
+        delivery = fixtures.install_mod._delivery
+        with tempfile.TemporaryDirectory() as temporary:
+            home = fixtures._home(temporary)
+            args = SimpleNamespace(home=str(home), dry_run=False)
+            def install(record):
+                record['installed_version'] = '1.0.0'
+                raise SystemExit('private configuration')
+            with self.assertRaises(SystemExit):
+                delivery.run_install(args, install, run=mock.Mock(), fetch=mock.Mock())
+            self.assertIn('installed 1.0.0; health verified', (home / 'logs/update.log').read_text())
+            text = (home / 'logs/maintenance.jsonl').read_text()
+            self.assertIn('attachment_failed', text)
+            self.assertNotIn('private configuration', text)

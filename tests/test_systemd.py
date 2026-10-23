@@ -158,6 +158,8 @@ class SystemdTests(unittest.TestCase):
 
     def test_deferred_child_keeps_etag_and_does_not_report_success(self):
         self.install('0.6.2.0')
+        log = self.home / 'logs/update.log'
+        before = log.read_bytes()
         blob, latest = _craft_bundle('0.6.6.0')
         # check-update needs an installer member; the child invocation is mocked.
         from tests.install_fixtures import _tarball
@@ -180,7 +182,7 @@ class SystemdTests(unittest.TestCase):
             updater_mod._FEED_VERIFY_KEY = old_key
         self.assertIn('deferred:', output.getvalue())
         self.assertEqual((self.home / 'update-etag').read_text(), 'old')
-        self.assertFalse((self.home / 'logs' / 'update.log').exists())
+        self.assertEqual(log.read_bytes(), before)
 
 
 if __name__ == '__main__':

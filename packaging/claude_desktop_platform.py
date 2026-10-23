@@ -118,15 +118,11 @@ def policy_disabled(platform_name, run=subprocess.run, *, profile=None):
     return _policy.policy_disabled(platform_name, profile)
 
 
-def _json_command(script, run):
-    answer = _run(['powershell', '-NoProfile', '-Command',
-                   "$ErrorActionPreference='Stop';" + script], run, platform_name='win32')
-    if answer.returncode:
-        raise OSError('Claude identity could not be checked')
-    try:
-        return json.loads(answer.stdout)
-    except ValueError as exc:
-        raise OSError('Claude identity could not be checked') from exc
+error_facts = _windows_identity.error_facts
+
+
+def _json_command(script, run, timeout=5, operation='process_snapshot'):
+    return _windows_identity.json_command(script, run, timeout=timeout, operation=operation)
 
 
 def app_identity(platform_name, run=subprocess.run, app=CLAUDE):
@@ -138,7 +134,8 @@ def app_identity(platform_name, run=subprocess.run, app=CLAUDE):
             return _linux_identity.app_identity('codex')
         raise OSError('only a known desktop app can be checked')
     if platform_name == 'win32':
-        return _windows_identity.identity(app.bundle_id, lambda script: _json_command(script, run))
+        return _windows_identity.identity(app.bundle_id,
+            lambda script: _json_command(script, run, 30, 'app_identity'))
     if platform_name == 'darwin':
         # AppleScript's app-path lookup launches a closed Claude. Spotlight
         # resolves the bundle without undoing the stopped-app safety check.
@@ -159,17 +156,9 @@ def app_identity(platform_name, run=subprocess.run, app=CLAUDE):
     return dict(root=str(root), exe=str(exe), user=str(os.getuid()))
 
 
-def _snapshot(platform_name, identity, run):
+def _snapshot(platform_name, identity, run, *, tracked=(), names=()):
     if platform_name == 'win32':
-        rows = _json_command(
-            "$sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;"
-            "$rows=@(foreach($p in Get-CimInstance Win32_Process){"
-            "if($p.SessionId -ne (Get-Process -Id $PID).SessionId){continue};"
-            "$o=Invoke-CimMethod -InputObject $p -MethodName GetOwnerSid;"
-            "if($o.ReturnValue -ne 0){throw 'owner'};"
-            "if($o.Sid -eq $sid){@{pid=[int]$p.ProcessId;parent=[int]$p.ParentProcessId;"
-            "user=$o.Sid;born=$p.CreationDate.ToString('o');exe=$p.ExecutablePath}}});"
-            "ConvertTo-Json -InputObject $rows -Compress", run)
+        rows = _json_command(_windows_identity.snapshot_script(identity, tracked, names), run)
     else:
         command = ['/bin/ps', '-axo', 'pid=,ppid=,uid=,lstart=,stat=,comm=']
         if platform_name == 'linux':
@@ -198,6 +187,8 @@ def _snapshot(platform_name, identity, run):
 def _writers(rows, identity, seen, platform_name, names=CLAUDE.writers):
     norm = (lambda s: s.replace('\\', '/').casefold()) if platform_name == 'win32' else str
     root, exe = norm(identity['root']).rstrip('/') + '/', norm(identity['exe'])
+    if platform_name == 'win32':
+        names = tuple(name.casefold() for name in names) + (exe.rsplit('/', 1)[-1],)
     browser_host = root + 'Contents/Helpers/chrome-native-host' if platform_name == 'darwin' else None
     for pid, old in seen.items():
         # A new parent is expected when a writer outlives the main app, and a new
@@ -227,7 +218,7 @@ def _writers(rows, identity, seen, platform_name, names=CLAUDE.writers):
 
 def is_running(platform_name, run=subprocess.run, app=CLAUDE):
     identity = app_identity(platform_name, run, app=app)
-    return _writers(_snapshot(platform_name, identity, run), identity, {}, platform_name,
+    return _writers(_snapshot(platform_name, identity, run, names=app.writers), identity, {}, platform_name,
                     app.writers)
 
 
@@ -241,7 +232,7 @@ def _checked_identity(platform_name, run, app, expected):
 def request_stop(platform_name, run=subprocess.run, timeout=65, app=CLAUDE, *, identity=None):
     identity = _checked_identity(platform_name, run, app, identity)
     seen = {}
-    if not _writers(_snapshot(platform_name, identity, run), identity, seen, platform_name,
+    if not _writers(_snapshot(platform_name, identity, run, names=app.writers), identity, seen, platform_name,
                     app.writers):
         return True
     deadline = time.monotonic() + max(0, timeout)
@@ -270,14 +261,22 @@ def request_stop(platform_name, run=subprocess.run, timeout=65, app=CLAUDE, *, i
             return False
     except subprocess.TimeoutExpired:
         pass  # Claude may still close, for example after its own confirmation; the wait decides.
+    probe_error = None
     while True:
         try:
-            if not _writers(_snapshot(platform_name, identity, run), identity, seen,
+            if not _writers(_snapshot(platform_name, identity, run, tracked=seen, names=app.writers), identity, seen,
                             platform_name, app.writers):
                 return True
-        except (OSError, subprocess.SubprocessError):
-            pass  # Quitting processes can fail a check; only a clean one ends the wait.
+            probe_error = None
+        except (OSError, subprocess.SubprocessError) as exc:
+            probe_error = exc  # A clean subsequent scan can still confirm shutdown.
         if time.monotonic() >= deadline:
+            if isinstance(probe_error, _windows_identity.QueryError):
+                try:
+                    open_app(platform_name, run=run, app=app, identity=identity)
+                except (OSError, subprocess.SubprocessError):
+                    pass
+                raise probe_error
             return False
         time.sleep(min(0.25, max(0, deadline - time.monotonic())))
 

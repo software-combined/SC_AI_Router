@@ -202,7 +202,7 @@ class TaskLauncherTests(unittest.TestCase):
             (logs / 'update.log').write_bytes(b'x' * (1048576 + 1))
             self.assertEqual(self._run(home).returncode, 0)
             self.assertTrue((logs / 'update.log.1').exists())
-            self.assertEqual((logs / 'update.log').read_text().strip(), 'fresh')
+            self.assertIn('\nfresh\n', (logs / 'update.log').read_text())
 
     def test_launcher_still_starts_when_rotation_is_refused(self):
         # A held-open or otherwise unrenamable log is hygiene lost, never a
@@ -215,7 +215,7 @@ class TaskLauncherTests(unittest.TestCase):
             (logs / 'update.log').write_bytes(b'x' * (1048576 + 1))
             (logs / 'update.log.1').mkdir()  # os.replace onto a directory fails
             self.assertEqual(self._run(home).returncode, 0)
-            self.assertIn(b'started', (logs / 'update.log').read_bytes()[-16:])
+            self.assertIn(b'started', (logs / 'update.log').read_bytes()[-512:])
 
 
 class InstallTests(unittest.TestCase):

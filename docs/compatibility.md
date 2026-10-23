@@ -1,5 +1,15 @@
 # Compatibility
 
+## Windows switching follow-up candidate, 23 October 2026 AEDT
+
+The owner reported Store Codex `26.1016.6573.0` with bundled CLI
+`0.163.0-alpha.11` on Windows 11. Beta `1.3.14.205` failed non-elevated
+switching because of protected-process owner queries, a short discovery timeout
+and ELF command selection. These are owner-reported device results.
+Candidate `1.3.15` adds executable CIM fixtures and package-relative CLI tests.
+Actual non-elevated switching and post-Store-update acceptance remain pending.
+The unchanged macOS and Claude request paths retain the bounded evidence below.
+
 ## Windows recovery candidate, 23 October 2026 AEDT
 
 The macOS compatibility check used Codex desktop `26.1016.61520`, bundled CLI

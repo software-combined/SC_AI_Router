@@ -45,7 +45,7 @@ def message(version, clients='codex', names=(), attachment=False):
         action = 'Quit and reopen Codex'
     if attachment:
         listed = '\nNew models:\n' + '\n'.join('- %s' % name for name in names) if names else ''
-        return 'SCG Router was reconnected.%s\n%s to load the changes.' % (listed, action)
+        return 'Restart Codex to load SCG Router.%s' % listed
     if names:
         listed = '\n'.join('- %s' % name for name in names)
         return ('SCG Router was updated to %s.\nNew models:\n%s\n%s to use them.'

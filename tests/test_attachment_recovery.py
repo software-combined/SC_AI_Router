@@ -165,6 +165,18 @@ class AttachmentRecoveryTests(unittest.TestCase):
         self.assertEqual(entry['previous_sha256'], self.evidence['previous_sha256'])
         self.assertIn('old-model', self.config.read_text())
 
+    def test_unsafe_recovery_exposes_attention_and_verified_repair_clears_only_its_component(self):
+        self.config.write_text('model_provider = "foreign"\n')
+        self.assertEqual(self.run_recovery()['attachment'], 'conflict')
+        state = json.loads((self.home / 'mixed-router-state.json').read_text())
+        self.assertEqual(state['component_repairs']['assistants'], 'failed')
+        state['component_repairs']['controls'] = 'failed'
+        (self.home / 'mixed-router-state.json').write_text(json.dumps(state))
+        self.config.write_bytes(self.before)
+        self.assertEqual(self.run_recovery()['attachment'], 'repaired')
+        state = json.loads((self.home / 'mixed-router-state.json').read_text())
+        self.assertEqual(state['component_repairs'], {'assistants': 'ready', 'controls': 'failed'})
+
 
 if __name__ == '__main__':
     unittest.main()

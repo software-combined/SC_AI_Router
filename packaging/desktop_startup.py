@@ -12,14 +12,16 @@ from native_payload import load, metadata
 IDENTITY = 'com.softwarecombined.router.menu'
 
 
-def enabled(home):
+def enabled(home, *, platform_name=None):
+    default = (platform_name or sys.platform) == 'win32'
     try:
         doc = json.loads((Path(home) / 'desktop-preferences.json').read_text())
-        return doc.get('autostart') is True
+        value = doc.get('autostart')
+        return value if type(value) is bool else default
     except FileNotFoundError:
         return True
     except (OSError, ValueError, AttributeError):
-        return False
+        return default
 
 
 def _owned(path, home, kind):
@@ -62,11 +64,11 @@ def configure(home, resources, on, *, platform_name=None, user_home=None, run=su
     with load('service').install_lock(Path(home), '.desktop-startup.lock') as held:
         if not held:
             raise ValueError('SCG Router startup is already changing. Try again shortly.')
-        return _configure(home, resources, enabled(home) if on is None else on,
-                          platform_name=platform_name, user_home=user_home, run=run)
+        return _configure(home, resources, enabled(home, platform_name=platform_name) if on is None else on,
+                          platform_name=platform_name, user_home=user_home, run=run, save=on is not None)
 
 
-def _configure(home, resources, on, *, platform_name=None, user_home=None, run=subprocess.run):
+def _configure(home, resources, on, *, platform_name=None, user_home=None, run=subprocess.run, save=True):
     home, resources = Path(home).resolve(), Path(resources).resolve()
     platform_name, user_home = platform_name or sys.platform, Path(user_home or Path.home())
     if type(on) is not bool or any(c in str(home) for c in '\r\n'):
@@ -101,7 +103,8 @@ def _configure(home, resources, on, *, platform_name=None, user_home=None, run=s
             atomic.replace_text(target, content.decode())
         else:
             target.unlink(missing_ok=True)
-    atomic.replace_json(home / 'desktop-preferences.json', {'autostart': on})
+    if save:
+        atomic.replace_json(home / 'desktop-preferences.json', {'autostart': on})
 
 
 def remove(home, *, user_home=None, platform_name=None, run=subprocess.run):

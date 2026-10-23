@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from tests.test_notice import notice_mod as notice
+from tests import test_client_choice as installs
 
 
 class AttachmentNotices(unittest.TestCase):
@@ -23,7 +24,7 @@ class AttachmentNotices(unittest.TestCase):
         self.assertTrue(notice.record_attachment(self.home, '1.0.0', 'a' * 32))
         command = notice.dialog_command('1.0.0', 'win32', which=lambda _: 'powershell',
                                         attachment=True)
-        self.assertIn('was reconnected', command[-1])
+        self.assertIn('Restart Codex to load SCG Router', command[-1])
         self.assertIn('Quit and reopen', command[-1])
         self.assertIn('Later', command[-1])
         with mock.patch.object(notice, 'dialog_command', return_value=command), \
@@ -52,6 +53,25 @@ class AttachmentNotices(unittest.TestCase):
         with mock.patch.object(notice, 'dialog_command', return_value=['dialog']):
             self.assertFalse(notice.show_pending(self.home, pid_alive=lambda _: True))
         self.assertNotIn('shown', json.loads(self.path.read_text()))
+
+    def test_normal_and_same_version_attaches_record_verified_notices(self):
+        for full in (False, True):
+            with self.subTest(full=full), tempfile.TemporaryDirectory() as temporary:
+                home = installs._home(temporary)
+                with mock.patch.object(installs.install_mod, 'platform_backend'):
+                    if full:
+                        result = installs._full_install(self, temporary, home, '1.0.1', ['--clients', 'codex'])
+                    else:
+                        result = installs._install(temporary, home, ['--clients', 'codex'])
+                self.assertEqual(result[0], 0)
+                entry = installs.install_mod._codex_config.codex_attachment(home)
+                staged = json.loads((home / notice.NOTICE_FILE).read_text())
+                self.assertEqual(staged['attachment'], entry['repair_notice'])
+                self.assertNotIn('shown', staged)
+                before = (home / notice.NOTICE_FILE).read_bytes()
+                with mock.patch.object(installs.install_mod, 'platform_backend'):
+                    installs._install(temporary, home, [])
+                self.assertEqual((home / notice.NOTICE_FILE).read_bytes(), before)
 
 
 if __name__ == '__main__':
