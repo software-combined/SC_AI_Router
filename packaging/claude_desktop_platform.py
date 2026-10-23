@@ -156,9 +156,9 @@ def app_identity(platform_name, run=subprocess.run, app=CLAUDE):
     return dict(root=str(root), exe=str(exe), user=str(os.getuid()))
 
 
-def _snapshot(platform_name, identity, run, *, tracked=(), names=()):
+def _snapshot(platform_name, identity, run, *, tracked=(), names=(), timeout=60):
     if platform_name == 'win32':
-        rows = _json_command(_windows_identity.snapshot_script(identity, tracked, names), run)
+        rows = _json_command(_windows_identity.snapshot_script(identity, tracked, names), run, timeout)
     else:
         command = ['/bin/ps', '-axo', 'pid=,ppid=,uid=,lstart=,stat=,comm=']
         if platform_name == 'linux':
@@ -264,7 +264,8 @@ def request_stop(platform_name, run=subprocess.run, timeout=65, app=CLAUDE, *, i
     probe_error = None
     while True:
         try:
-            if not _writers(_snapshot(platform_name, identity, run, tracked=seen, names=app.writers), identity, seen,
+            if not _writers(_snapshot(platform_name, identity, run, tracked=seen, names=app.writers,
+                            timeout=min(60, max(0.1, deadline - time.monotonic()))), identity, seen,
                             platform_name, app.writers):
                 return True
             probe_error = None

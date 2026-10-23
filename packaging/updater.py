@@ -331,8 +331,7 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
     sync_seams()
     express_only = getattr(args, 'express_only', False)
     feed = args.feed or _svc.channel_feed(home)
-    # Feeds and bundles come from the public feed origin; an injected fake
-    # keeps its one-argument shape.
+    # Injected fetchers retain their one-argument contract.
     injected = _fetch
     _fetch = injected or _svc.fetch
     _models.refresh(home, _fetch)
@@ -389,11 +388,12 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
         if express_only:
             return 0  # The pointer may be mid-install; do not mask a later rollback.
         _record_pass(home, latest=latest, feed=feed, etag=etag, channel=channel)
-        with _svc.install_lock(home) as held:
-            if not held:
-                print('deferred: another router operation is in progress')
-                return 0
-            _resources.deliver(home, latest, feed, injected)
+        if not _resources.ready(home):
+            with _svc.install_lock(home) as held:
+                if not held:
+                    print('deferred: another router operation is in progress')
+                    return 0
+                _resources.deliver(home, latest, feed, injected)
         _up_to_date(home, _announce, etag_path, etag, feed)
         return 0
     _record_pass(home, latest=latest, feed=feed, etag=etag, channel=channel)

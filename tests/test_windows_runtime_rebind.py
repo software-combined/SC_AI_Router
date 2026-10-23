@@ -90,6 +90,17 @@ class RuntimeRebindTests(unittest.TestCase):
             self.assertEqual(scheduler.rows, before)
             self.assertTrue(any(operation == 'restore' for _, operation in scheduler.calls))
 
+    def test_read_only_runtime_checks_do_not_snapshot_or_rewrite_tasks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            scheduler = Scheduler(home)
+            before = {name: dict(row) for name, row in scheduler.rows.items()}
+            obj = backend.Backend(service, scheduler, query=lambda _: {'user': USER})
+            self.assertTrue(obj.runtime_matches(OLD, home))
+            self.assertFalse(obj.runtime_matches(NEW, home))
+            self.assertEqual(scheduler.rows, before)
+            self.assertTrue(all(operation == 'query' for _, operation in scheduler.calls))
+
     def test_native_delivery_rebinds_only_after_the_verified_pointer_advances(self):
         with tempfile.TemporaryDirectory() as temporary:
             owner, home, latest, data = native_fixtures.NativeResourcesTests().fixture(Path(temporary))
@@ -134,6 +145,12 @@ class RuntimeRebindTests(unittest.TestCase):
                 self.assertEqual(owner.reconcile(home), 'deferred')
                 platforms.select.assert_not_called()
                 doc['version'] = '1.3.14.204'
+                before = (home / 'mixed-router-state.json').read_bytes()
+                for matches, outcome in ((True, 'ready'), (False, 'repairable')):
+                    adapter.runtime_matches.return_value = matches
+                    self.assertEqual(owner.reconcile(home, apply=False), outcome)
+                adapter.rebind_runtime.assert_not_called()
+                self.assertEqual((home / 'mixed-router-state.json').read_bytes(), before)
                 adapter.rebind_runtime.side_effect = SystemExit('synthetic readback failed')
                 self.assertEqual(owner.reconcile(home), 'failed')
                 adapter.rebind_runtime.assert_called_once_with(str(home / 'setup/new/runtime/pythonw.exe'), home)

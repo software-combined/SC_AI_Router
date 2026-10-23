@@ -1,5 +1,21 @@
 # Compatibility
 
+## Busy Windows switching candidate, 23 October 2026 AEDT
+
+The owner tested beta `1.3.15.206` on a real, non-elevated Windows PC.
+Store identity discovery, executable selection and filtered process selection worked.
+The 46-process tree took 12.3 seconds to read, exceeding the five-second snapshot limit.
+Express reconciliation also held the installation lock during three refused switch attempts.
+These are owner-reported results; end-to-end switching did not pass.
+
+Candidate `1.3.16` gives snapshots a separate sixty-second limit and makes switching wait
+for the installation lock. Unchanged maintenance inspects attachments and runtime paths
+outside that lock. Applying a repair repeats all checks under the lock.
+Regression fixtures cover a 46-process tree, update contention, cancellation, timeout,
+unchanged regular and Express feeds, and detach between preflight and repair.
+Actual non-elevated switching with the Express timer running remains pending.
+The unchanged macOS and Claude request paths retain the bounded evidence below.
+
 ## Windows switching follow-up candidate, 23 October 2026 AEDT
 
 The owner reported Store Codex `26.1016.6573.0` with bundled CLI

@@ -162,6 +162,15 @@ def _matches(current, previous, executable):
             and all(current[key] == previous[key] for key in ('enabled', 'pending')))
 
 
+def runtime_matches(call, home, executable, names):
+    """Inspect owned actions without taking snapshots or registering tasks."""
+    for name in names:
+        current = call(name, home)
+        if current is None or current['executable'] != executable:
+            return False
+    return True
+
+
 def rebind(call, home, executable, names):
     """Snapshot all definitions before mutation; restore every attempted change on failure."""
     previous = {name: call(name, home, 'snapshot') for name in names}

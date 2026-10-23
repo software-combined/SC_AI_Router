@@ -1,4 +1,5 @@
 """A missing owned block repairs only under the original attachment's authority."""
+import contextlib
 import json
 import tempfile
 import unittest
@@ -179,6 +180,72 @@ class AttachmentRecoveryTests(unittest.TestCase):
         self.assertEqual(self.run_recovery()['attachment'], 'repaired')
         state = json.loads((self.home / 'mixed-router-state.json').read_text())
         self.assertEqual(state['component_repairs'], {'assistants': 'ready', 'controls': 'failed'})
+
+    def test_unchanged_reconcile_does_not_take_the_installation_lock(self):
+        self.assertEqual(self.run_recovery()['attachment'], 'repaired')
+        before = self.config.read_bytes(), self.receipt.read_bytes()
+        with mock.patch.object(self.svc, 'install_lock', side_effect=AssertionError('no mutation')):
+            self.assertEqual(self.run_recovery()['attachment'], 'unchanged')
+        self.assertEqual((self.config.read_bytes(), self.receipt.read_bytes()), before)
+
+    def test_unchanged_checks_can_finish_while_a_foreground_operation_owns_the_lock(self):
+        self.assertEqual(self.run_recovery()['attachment'], 'repaired')
+        with self.svc.install_lock(self.home) as held:
+            self.assertTrue(held)
+            self.assertEqual(self.run_recovery()['attachment'], 'unchanged')
+
+    def test_restart_notice_and_runtime_inspection_leave_the_installation_lock_free(self):
+        available = []
+        def inspect_lock(*_, **__):
+            with self.svc.install_lock(self.home) as held:
+                available.append(held)
+            return 'inactive'
+        runtime = self.maintenance.load('runtime_rebind')
+        runtime.reconcile.side_effect = inspect_lock
+        with mock.patch.object(self.svc.notice, 'show_pending', side_effect=inspect_lock):
+            self.assertEqual(self.run_recovery()['attachment'], 'repaired')
+            self.assertEqual(self.run_recovery()['attachment'], 'unchanged')
+        self.assertTrue(available)
+        self.assertTrue(all(available))
+
+    def test_supported_detach_between_preflight_and_lock_prevents_repair(self):
+        original = self.svc.install_lock
+        @contextlib.contextmanager
+        def detach(*args, **kwargs):
+            with original(*args, **kwargs) as held:
+                doc = json.loads(self.receipt.read_text())
+                del doc['clients']['codex']
+                self.receipt.write_text(json.dumps(doc))
+                yield held
+        with mock.patch.object(self.svc, 'install_lock', side_effect=detach):
+            self.assertEqual(self.run_recovery()['attachment'], 'inactive')
+        self.assertEqual(self.config.read_bytes(), self.before)
+
+    def test_healthy_unchanged_regular_and_express_feeds_never_take_install_lock(self):
+        self.assertEqual(self.run_recovery()['attachment'], 'repaired')
+        updater, feed = install_mod._updater, 'file:///fixture/latest.json'
+        latest = dict(version='1.0.0', url='file:///fixture/bundle.tar.gz', express=True)
+        original = self.svc.install_lock
+        def only_update_lock(home, name='install.lock', **kwargs):
+            self.assertNotEqual(name, 'install.lock')
+            return original(home, name, **kwargs)
+        for express, status in ((False, 200), (True, 200), (False, 304), (True, 304)):
+            with self.subTest(express=express, status=status):
+                state = json.loads((self.home / 'mixed-router-state.json').read_text())
+                updater._status.verified(state, latest, feed, 'stable', 'same')
+                (self.home / 'mixed-router-state.json').write_text(json.dumps(state))
+                (self.home / 'update-etag').write_text('same')
+                args = install_mod.build_parser().parse_args(
+                    ['--home', str(self.home), '--update', '--feed', feed])
+                args.express_only = express
+                with mock.patch.object(self.svc, 'install_lock', side_effect=only_update_lock), \
+                        mock.patch.object(updater._models, 'refresh'), \
+                        mock.patch.object(updater._resources, 'ready', return_value=True), \
+                        mock.patch.object(updater._resources, 'deliver') as deliver:
+                    self.assertEqual(install_mod.do_update(args, _sleep=lambda _: None,
+                        _read_feed=lambda *_: (status, json.dumps(latest).encode(), 'same'),
+                        _announce=lambda *_: None), 0)
+                    deliver.assert_not_called()
 
 
 if __name__ == '__main__':
