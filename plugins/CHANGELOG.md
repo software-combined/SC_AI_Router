@@ -1,5 +1,15 @@
 # Changelog
 
+## scg-optimise-ci 0.1.2 (2026-10-23)
+
+- Replace the historical Router comparison with three samples per layout
+  against identical source, tests and pinned Python versions.
+  Publish each run, discovery digests, test/skip totals, runner use and limits.
+- Separate preliminary runs after floating runtime selectors resolved differently.
+  Teach finite sampling, actual environment checks and separate comparison cohorts.
+- Keep elapsed time distinct from runner use and test inventory distinct from
+  line or branch coverage. Preserve the existing verification and release gates.
+
 ## scg-optimise-ci 0.1.1 (2026-10-23)
 
 - Apply the measured method across languages, build tools and CI providers.
