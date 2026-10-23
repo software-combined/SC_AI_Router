@@ -131,7 +131,7 @@ Windows); read `<version>` from `<home>/current`.
   new models. See [update and recovery instructions](docs/operations.md).
 
 The router also delivers SCG tools for code review, agent coordination,
-documentation and other work. See [agent plugins](docs/agent-plugins.md).
+documentation, CI optimisation and other work. See [agent plugins](docs/agent-plugins.md).
 Pre-commit review includes a separate, source-only security agent alongside
 correctness, quality and adversarial review. Existing three-lane hook settings
 need the [explicit four-lane migration](plugins/scg-review/references/setup.md#upgrade-from-three-lanes).
