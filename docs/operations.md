@@ -339,10 +339,16 @@ Switch Codex asks before it changes anything, then quits and reopens the
 ChatGPT app. It keeps the switch only after Codex has loaded the new settings,
 so a switch that fails changes nothing.
 
+On Windows, closing the window can leave Codex running in the tray.
+The confirmation explains that Codex will fully close and running tasks will stop.
+Finish active work before choosing Continue. Cancel leaves the app unchanged.
+The switch verifies exit before writing settings and reopening before keeping them.
+If reopening fails, it restores the previous connection and tries to reopen that connection.
+
 When the limit resets, SCG Router offers the way back once. Choose **Open
-Switch Codex** again, or open it yourself. Switching back does not depend on
-the ChatGPT app: if Switch Codex cannot check the app, it asks you to quit the
-app first and to open it again afterwards.
+Switch Codex** again, or open it yourself. Switching back needs no bundled command or proof.
+Windows still requires a verified app identity and exit before it changes settings.
+On Mac and Linux, an unavailable app can use the manual quit and reopen path.
 
 While Codex is switched:
 

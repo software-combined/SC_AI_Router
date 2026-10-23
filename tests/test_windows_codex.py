@@ -241,7 +241,8 @@ class WindowsCodexTests(unittest.TestCase):
         self.api.closed.clear()
         with mock.patch.object(self.api, 'entries', side_effect=native.NativeError('process_snapshot', code=5)):
             with self.assertRaises(OSError):
-                self.policy.stop(self.identity, lambda *_: None, api=self.api)
+                self.policy.stop(self.identity, lambda *_: None, api=self.api,
+                                 record={'shutdown_started': True})
         self.assertFalse(self.api.visible)
 
     def test_activation_without_a_visible_window_is_a_distinct_failure(self):

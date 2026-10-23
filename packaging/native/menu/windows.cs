@@ -133,10 +133,71 @@ internal sealed class RouterMenu : ApplicationContext {
         base.ExitThreadCore();
     }
 
-    [STAThread] static void Main(string[] args) {
-        if (args.Length != 1) return;
-        SetProcessDPIAware();
-        Application.EnableVisualStyles();
-        Application.Run(new RouterMenu(args[0]));
+    static int Dialog(string path, bool progress) {
+        Console.SetIn(new System.IO.StreamReader(Console.OpenStandardInput(),
+            new System.Text.UTF8Encoding(false)));
+        Console.SetOut(new System.IO.StreamWriter(Console.OpenStandardOutput(),
+            new System.Text.UTF8Encoding(false)) { AutoFlush = true });
+        var parser = new JavaScriptSerializer { MaxJsonLength = 65536 };
+        string line = Console.ReadLine();
+        if (line == null || line.Length > 65536) return 2;
+        var doc = parser.DeserializeObject(line) as Dictionary<string, object>;
+        if (doc == null) return 2;
+        var labels = doc["labels"] as object[];
+        string text = Convert.ToString(doc["text"]);
+        if (labels == null || labels.Length < 1 || labels.Length > 2 || text.Length > 4000) return 2;
+        using (var form = new Form())
+        using (var image = new Bitmap(path)) {
+            IntPtr handle = image.GetHicon();
+            using (var productIcon = (Icon)Icon.FromHandle(handle).Clone()) {
+                DestroyIcon(handle);
+                form.Text = "SCG Router";
+                form.Icon = productIcon;
+                form.StartPosition = FormStartPosition.CenterScreen;
+                form.AutoSize = true;
+                form.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+                form.MinimizeBox = false;
+                form.MaximizeBox = false;
+                var panel = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown,
+                    WrapContents = false, AutoSize = true, Padding = new Padding(12) };
+                panel.Controls.Add(new Label { Text = text, AutoSize = true,
+                    MaximumSize = new Size(440, 0) });
+                var buttons = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
+                for (int index = 0; index < labels.Length; index++) {
+                    string label = Convert.ToString(labels[index]);
+                    bool accept = labels.Length == 2 && index == 0 || label == "OK";
+                    var button = new Button { Text = label, AutoSize = true,
+                        DialogResult = accept ? DialogResult.OK : DialogResult.Cancel };
+                    buttons.Controls.Add(button);
+                    if (accept) form.AcceptButton = button;
+                    else form.CancelButton = button;
+                }
+                panel.Controls.Add(buttons);
+                form.Controls.Add(panel);
+                if (progress) {
+                    var watcher = new Thread(() => {
+                        try { while (Console.ReadLine() != null) { } } catch (Exception) { }
+                        try { form.BeginInvoke((Action)(() => form.Close())); } catch (InvalidOperationException) { }
+                    }) { IsBackground = true };
+                    form.Shown += (s, e) => watcher.Start();
+                }
+                bool accepted = form.ShowDialog() == DialogResult.OK;
+                Console.WriteLine("SCG_ROUTER_DIALOG_RESULT=" + (accepted ? "accept" : "cancel"));
+                Console.Out.Flush();
+                return accepted ? 0 : 1;
+            }
+        }
+    }
+
+    [STAThread] static int Main(string[] args) {
+        try {
+            SetProcessDPIAware();
+            Application.EnableVisualStyles();
+            if (args.Length == 2 && (args[0] == "--dialog" || args[0] == "--progress"))
+                return Dialog(args[1], args[0] == "--progress");
+            if (args.Length != 1) return 2;
+            Application.Run(new RouterMenu(args[0]));
+            return 0;
+        } catch (Exception) { return 2; }
     }
 }

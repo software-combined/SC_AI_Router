@@ -1,19 +1,24 @@
 # Compatibility
 
-## Busy Windows switching candidate, 23 October 2026 AEDT
+## Native Windows switching candidate, 23 October 2026 AEDT
 
-The owner tested beta `1.3.15.206` on a real, non-elevated Windows PC.
-Store identity discovery, executable selection and filtered process selection worked.
-The 46-process tree took 12.3 seconds to read, exceeding the five-second snapshot limit.
-Express reconciliation also held the installation lock during three refused switch attempts.
-These are owner-reported results; end-to-end switching did not pass.
+Beta `1.3.16.207` failed an owner-reported test on non-elevated Windows 11.
+Store Codex `26.1016.6573.0` kept its 46-process tray tree after closing its window.
+CIM scans took 14–19 seconds, and the reopen command used an incorrect separator.
+The configuration stayed unchanged, but the app window did not return.
+Earlier beta `1.3.15.206` also encountered the snapshot limit and Express lock contention.
 
-Candidate `1.3.16` gives snapshots a separate sixty-second limit and makes switching wait
-for the installation lock. Unchanged maintenance inspects attachments and runtime paths
-outside that lock. Applying a repair repeats all checks under the lock.
-Regression fixtures cover a 46-process tree, update contention, cancellation, timeout,
-unchanged regular and Express feeds, and detach between preflight and repair.
-Actual non-elevated switching with the Express timer running remains pending.
+Candidate `1.3.17` replaces Codex identity, process and activation checks with native APIs.
+It confirms full closure and stopped tasks, verifies exit before writing, and rolls back
+through verified reopening. It discovers the current Store package on each switch.
+Native dialogs avoid PowerShell startup on the switch path.
+Synthetic transaction tests cover surviving tray workers, consent, package changes,
+reopen failure and pending recovery. Process-generation tests cover PID reuse.
+Windows integration checks use owned test children and measure a 50-process scan.
+The native-binding foundation passed Windows, macOS, Linux and Python 3.9 CI.
+Those checks do not establish actual Store-app switching or standard-user acceptance.
+Both switch directions, post-Store-update operation, cold reply, repair notice,
+tray survival and sign-in startup remain device acceptance gates.
 The unchanged macOS and Claude request paths retain the bounded evidence below.
 
 ## Windows switching follow-up candidate, 23 October 2026 AEDT

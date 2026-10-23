@@ -2,10 +2,17 @@
 
 ## Unreleased
 
+## 1.3.17
+
 - Discover Windows Store Codex through native package APIs on every switch.
   Check package processes and tracked descendants without PowerShell owner scans.
   Recheck open handles before lifecycle actions and verify a visible window after reopening.
 - Correct the Windows AppsFolder activation command used to reopen Claude desktop.
+- Confirm that Windows Codex will fully close and running tasks will stop.
+  Give the app five seconds to close, then end only its verified surviving processes.
+  Keep settings only after Codex reopens; restore the prior connection on failure.
+- Use the verified native helper for Switch Codex confirmation and waiting windows.
+  Record stage durations and distinguish an app still running from an unavailable check.
 
 ## 1.3.16
 

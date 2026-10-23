@@ -39,7 +39,7 @@ class WindowsSwitchContentionTests(unittest.TestCase):
         self.on_wait, self.cancel_wait = lambda: None, False
         owner = self
         class Progress:
-            def __init__(self, text):
+            def __init__(self, text, **kwargs):
                 owner.waits.append(text)
                 self.cancelled = False
             def __enter__(self):

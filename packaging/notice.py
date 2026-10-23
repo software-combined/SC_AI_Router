@@ -1,19 +1,11 @@
-"""Best-effort desktop notice after a router update (runs on Python 3.9+).
+"""Best-effort desktop notice after a healthy update (Python 3.9+).
 
-The installer records the new version once a healthy update lands, and the
-installer CLI shows a dialog offering to restart the client (the picker is
-read at startup, so a running Codex never sees the new models). "Quit and
-reopen" quits the desktop app and launches it again: the macOS bundle
-``com.openai.codex``, the Windows Store package ``OpenAI.Codex``, and the
-Linux preview app ``chatgpt``. Linux only offers the restart when that app
-is installed; on macOS and Windows the button is harmless without it, and
-the dialog always carries "Later". Only one dialog is ever on screen: the
-pid of the dialog we spawned is remembered, and a later notice is folded
-into that dialog instead of stacking a second one. A dialog that dies at
-once -- a service context with no display -- leaves the
-notice pending instead of marking it shown, so a later run that can draw
-one still shows it. Every failure is swallowed: the notice must never
-block on the user or fail an update.
+The picker loads at client startup, so the dialog offers Quit and reopen.
+It uses the macOS bundle, Windows Store identity or installed Linux app.
+Later is always available. Linux offers restart only for an installed app.
+Remember the spawned dialog PID so later notices join it rather than stack.
+A dialog that exits immediately, such as without a display, leaves the notice
+pending for a later graphical session. Failures never block or fail an update.
 """
 import json
 import os
@@ -25,15 +17,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import importlib.util as _ilu
-_spec = _ilu.spec_from_file_location(
-    'router_atomic_write', Path(__file__).resolve().parent / 'atomic_write.py')
-_atomic_write = _ilu.module_from_spec(_spec)
-_spec.loader.exec_module(_atomic_write)
 
-_spec = _ilu.spec_from_file_location(
-    'router_notice_text', Path(__file__).resolve().parent / 'notice_text.py')
-_text = _ilu.module_from_spec(_spec)
-_spec.loader.exec_module(_text)
+
+def _load(name):
+    spec = _ilu.spec_from_file_location('router_notice_' + name,
+        Path(__file__).resolve().with_name(name + '.py'))
+    module = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_atomic_write, _text, _native = (_load(name) for name in ('atomic_write', 'notice_text', 'windows_native'))
 # Kept as a module name: the wording is pinned here by callers and tests.
 _message = _text.message
 dialog_names = _text.dialog_names  # the updater lists models the same way
@@ -309,8 +303,8 @@ def _windows_restart():
         "Start-Sleep -Seconds 3; "
         "foreach ($p in $procs) { "
         "try { if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force } } catch { } }; "
-        "if ($aumid) { Start-Process ('shell:AppsFolder\\' + $aumid) } } "
-        "} catch { }" % WINDOWS_PACKAGE)
+        "if ($aumid) { Start-Process ('%s' + $aumid) } } "
+        "} catch { }" % (WINDOWS_PACKAGE, _native.APPS_FOLDER))
 
 
 def _linux_command(message, icon=None, app=None, restart=True):
