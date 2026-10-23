@@ -102,7 +102,7 @@ class InstallerCiGateTests(unittest.TestCase):
 
     def test_required_gate_waits_for_all_scoped_jobs(self):
         self.assertIn(
-            'needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter]',
+            'needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter, unit-suite]',
             self.CHECK)
         self.assertIn('if: ${{ !cancelled() && ' + NOT_A_TEXT_EDIT + ' }}', self.CHECK)
         self.assertIn(
@@ -203,11 +203,9 @@ class InstallerCiGateTests(unittest.TestCase):
                         RELEASE.index('name: Build bundle'))
 
     def test_release_acceptance_runs_for_main_pull_requests_and_pushes(self):
-        for name in ('changes', 'plugin-schedulers', 'hook-adapter'):
+        for name in ('changes', 'plugin-schedulers', 'hook-adapter', 'unit-suite'):
             job = re.split(r'\n  \S', self.CHECK.split(f'  {name}:\n', 1)[1], maxsplit=1)[0]
             self.assertIn(f'if: {NOT_A_TEXT_EDIT} && ({MAIN_ACCEPTANCE})', job)
-        step = self.CHECK.split('      - name: Unit suite (offline)\n', 1)[1]
-        self.assertIn(f'if: {MAIN_ACCEPTANCE}', step.split('      - name:', 1)[0])
 
     @unittest.skipUnless(shutil.which('git') and shutil.which('bash'), 'requires git and bash')
     def test_release_requires_an_accepted_commit_for_its_channel(self):
