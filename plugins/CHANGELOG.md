@@ -1,5 +1,15 @@
 # Changelog
 
+## scg-optimise-ci 0.1.3 (2026-10-24)
+
+- Apply the method to existing repository boundaries or full verification.
+  Add complete-command cleanup timing, joined concurrency measurements and
+  real child-process failure and cancellation checks.
+- Preserve standalone preparation, required builds and target configuration.
+  Bind provisioning to the execution plan and distinguish verification scope
+  from artifact rollout, with actual builder and runtime readback evidence.
+- Retain Router as the only benchmark, with its recorded results and limits.
+
 ## scg-optimise-ci 0.1.2 (2026-10-23)
 
 - Replace the historical Router comparison with three samples per layout
