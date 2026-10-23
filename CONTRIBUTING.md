@@ -26,6 +26,13 @@ python3.14 tools/check_policy_scans.py
 All tests run offline; nothing in `tests/` may reach the network or touch a
 real router home.
 
+Main acceptance runs the full offline suite in two isolated processes within
+one Ubuntu job. `tools/ci_unittest.py` splits the discovered order once, between
+modules, so class and module fixtures stay together. It retains duplicate test
+executions and records outcomes and skips. Both workers must finish; a failed
+or interrupted worker fails the job. Use `--workers 1` for an instrumented
+single-process comparison. The local commands above remain the required gates.
+
 On Windows, run the checks with Python's `-X utf8` option so repository
 documentation fixtures use their UTF-8 encoding. The Windows encoding
 regressions explicitly disable UTF-8 mode to cover the default runtime.
