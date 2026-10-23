@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest import mock
 from ai_router import key_store, setup, setup_page
 from tests._platform import requires_posix_perms
+from tests.setup_fixtures import offline_availability
 
 NOW = 1_700_000_000
 
@@ -51,6 +52,8 @@ def _key_rejected():
 
 
 class SetupUnitTests(unittest.TestCase):
+    setUp = offline_availability
+
     def test_nonce_validation(self):
         state = _state(None)
         self.assertTrue(setup.valid_nonce(state, 'n' * 16, NOW))
@@ -62,9 +65,7 @@ class SetupUnitTests(unittest.TestCase):
         self.assertFalse(setup.valid_nonce(state, '\xff', NOW))
 
     def test_setup_pending_moved_verbatim_into_the_state_leaf(self):
-        # Plan 165: the same function object must serve both spellings, and
-        # the expiry/bool rules must survive the move (the keyless-boot gate
-        # in runtime.load_state depends on them).
+        # The boot gate depends on both spellings sharing the same expiry rules.
         from ai_router import state as state_mod
         self.assertIs(setup.setup_pending, state_mod.setup_pending)
         fresh = {'setup': {'nonce': 'n' * 16, 'expires': NOW + 60}}
@@ -164,8 +165,7 @@ class SetupUnitTests(unittest.TestCase):
         self.assertIn('paste a key', payload['error'])
 
     def test_post_with_none_mode_refreshes_picker_to_twins(self):
-        # The setup window fires after the installer wrote the catalogue,
-        # so the mode flip must refresh the picker file itself.
+        # A mode flip must refresh the picker the installer already wrote.
         from ai_router.catalogue import check, external_entry
         from ai_router.registry import by_slug
         home = Path(tempfile.mkdtemp())
@@ -188,8 +188,7 @@ class SetupUnitTests(unittest.TestCase):
                                include_twins=True))
 
     def test_post_on_windows_refuses_unprotectable_key(self):
-        # The nt branch verifies the platform ACL after writing; a failed
-        # check refuses rather than leaving an exposed key.
+        # Windows must refuse a key whose privacy check fails after writing.
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
         state_path = home / 'mixed-router-state.json'
@@ -294,6 +293,7 @@ class SetupUnitTests(unittest.TestCase):
                     load(path)
 
 class KeyWindowTests(unittest.TestCase):
+    setUp = offline_availability
     # Plan 107 Stage 3: keyless boot, first-use window, revoked-key carve-out.
     def _home(self):
         home = Path(tempfile.mkdtemp())
