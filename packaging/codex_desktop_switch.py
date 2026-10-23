@@ -182,9 +182,11 @@ def _switch(home, run, ops, prove, ready, record, target=None):
         try:
             closed = ops.request_stop(sys.platform, run=run, app=CODEX, identity=identity)
         except (OSError, subprocess.SubprocessError) as exc:
-            if target == SWITCHED:
+            if target == SWITCHED or (sys.platform == 'win32' and identity.get('family')):
                 record.update(_platform.error_facts(exc, 'request_stop'))
-                raise SwitchError(FAILED) from exc
+                message = FAILED + (' Open the ChatGPT app (Codex) to continue.'
+                                    if getattr(exc, 'reopen_failed', False) is True else '')
+                raise SwitchError(message) from exc
         if closed is False:
             record.setdefault('reason', 'close_not_confirmed')
             record['open'] = _running(root, run)  # before the reopen starts it again

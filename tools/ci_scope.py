@@ -168,6 +168,8 @@ INSTALLER_TESTS = (
     'tests.test_popup_style',
     'tests.test_claude_desktop_platform',
     'tests.test_windows_native',
+    'tests.test_windows_codex',
+    'tests.test_windows_process_generation',
     'tests.test_windows_process_snapshot',
     'tests.test_windows_switch_contention',
     'tests.test_windows_cli_resolution',

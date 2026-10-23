@@ -75,6 +75,7 @@ load packaging/update_warning.py
 load packaging/platforms/__init__.py
 load packaging/desktop_windows.py
 load packaging/windows_native.py
+load packaging/windows_codex.py
 load packaging/desktop_control.py
 load packaging/desktop_model.py
 load packaging/desktop_menu.py

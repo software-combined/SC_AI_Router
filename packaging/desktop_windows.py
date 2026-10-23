@@ -19,6 +19,16 @@ def error_facts(error, operation):
     while error is not None:
         if isinstance(error, QueryError):
             return dict(error.facts)
+        facts = getattr(error, 'facts', None)
+        if (isinstance(error, OSError) and type(facts) is dict
+                and set(facts) == {'operation', 'reason', 'winerror'}
+                and facts['operation'] in ('app_identity', 'app_open', 'process_open',
+                    'process_owner', 'process_session', 'process_snapshot', 'process_identity',
+                    'process_wait', 'process_end', 'window_query', 'window_close', 'request_stop')
+                and facts['reason'] in ('query_failed', 'invalid_identity', 'invalid_response',
+                    'app_unavailable', 'package_changed', 'identity_changed', 'still_running',
+                    'activation_failed', 'window_unavailable') and type(facts['winerror']) is int):
+            return dict(facts)
         if error.__cause__ is None:
             break
         error = error.__cause__
@@ -100,6 +110,23 @@ $rows=@(foreach($p in $all){
 });
 ConvertTo-Json -InputObject $rows -Compress
 ''')
+
+
+def close_command(identity, seen):
+    """Legacy Claude window-close request; Codex uses its native lifecycle."""
+    quote = lambda value: "'" + str(value).replace("'", "''") + "'"
+    norm = lambda value: value.replace('\\', '/').casefold()
+    roots = [str(pid) for pid, row in seen.items() if norm(row['exe']) == norm(identity['exe'])]
+    births = ';'.join('%s=%s' % (pid, quote(seen[int(pid)]['born'])) for pid in roots)
+    script = "$ErrorActionPreference='Stop';$births=@{%s};foreach($n in @(%s)){" % (births, ','.join(roots))
+    script += '$c=Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$n";'
+    script += "$o=Invoke-CimMethod -InputObject $c -MethodName GetOwnerSid;"
+    script += "if($c.CreationDate.ToString('o') -ne $births[$n] -or $o.ReturnValue -ne 0 "
+    script += "-or $o.Sid -ne %s){throw 'identity'};" % quote(identity['user'])
+    script += "$p=Get-Process -Id $n -ErrorAction Stop;"
+    script += "if($p.Path -ne %s){throw 'identity'};" % quote(identity['exe'])
+    script += "$p.CloseMainWindow() | Out-Null}"
+    return ['powershell', '-NoProfile', '-Command', script]
 
 
 def claude_roaming_root(roaming, local, run=None):

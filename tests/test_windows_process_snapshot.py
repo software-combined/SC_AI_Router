@@ -99,7 +99,7 @@ class WindowsIdentityBudgetTests(unittest.TestCase):
     def test_identity_allows_a_slow_store_query(self):
         run = mock.Mock(return_value=SimpleNamespace(returncode=0,
             stdout=json.dumps(dict(IDENTITY, app='Codex!App')), stderr=''))
-        self.assertEqual(platform.app_identity('win32', run, platform.App('com.openai.codex', ())),
+        self.assertEqual(platform.app_identity('win32', run, platform.CLAUDE),
                          dict(IDENTITY, app='Codex!App'))
         self.assertEqual(run.call_args.kwargs['timeout'], 30)
         self.assertEqual(run.call_args.kwargs['encoding'], 'utf-8')
@@ -108,7 +108,7 @@ class WindowsIdentityBudgetTests(unittest.TestCase):
         run = mock.Mock(side_effect=subprocess.TimeoutExpired('private command', 30,
                                                              stderr='private path'))
         with self.assertRaises(OSError) as error:
-            platform.app_identity('win32', run, platform.App('com.openai.codex', ()))
+            platform.app_identity('win32', run, platform.CLAUDE)
         facts = platform.error_facts(error.exception, 'app_identity')
         self.assertEqual(facts['reason'], 'timeout')
         self.assertEqual(facts['operation'], 'app_identity')
@@ -120,7 +120,7 @@ class WindowsIdentityBudgetTests(unittest.TestCase):
                 (SimpleNamespace(returncode=0, stdout='not JSON', stderr=''), 'invalid_output')):
             with self.subTest(reason=reason), self.assertRaises(OSError) as error:
                 platform.app_identity('win32', mock.Mock(return_value=answer),
-                                      platform.App('com.openai.codex', ()))
+                                      platform.CLAUDE)
             facts = platform.error_facts(error.exception, 'app_identity')
             self.assertEqual(facts['reason'], reason)
             self.assertEqual(facts['exit_code'], answer.returncode)
