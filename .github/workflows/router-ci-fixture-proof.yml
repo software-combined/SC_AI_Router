@@ -1,0 +1,110 @@
+name: Router CI Windows fixture proof
+on:
+  push:
+    branches: ['cyril/router-ci-fixture-proof-*']
+permissions:
+  contents: read
+jobs:
+  native-proof:
+    name: Windows lifecycle fixture proof
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 88a01c658fcbb75b16e4a85c6e529fb89aeaffac
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python-version: '3.14.9'
+      - name: Reproduce timer race and verify isolated fixture
+        shell: python
+        run: |
+          import contextlib
+          import io
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+          import time
+          import types
+          import unittest
+          from unittest import mock
+
+          payload = '88a01c658fcbb75b16e4a85c6e529fb89aeaffac'
+          tree = '127f9171c0f99e156391dc78fc4f92fd366e6b12'
+          baseline = 'b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc'
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == payload
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip() == tree
+          assert sys.version.split()[0] == '3.14.9'
+          root = Path.cwd()
+          sys.path.insert(0, str(root))
+          path = 'tests/test_windows_task_ownership.py'
+          records = []
+          for label, commit in [('before', baseline), ('after', payload)]:
+              source = subprocess.check_output(['git', 'show', commit + ':' + path], text=True)
+              module = types.ModuleType('tests.fixture_proof_' + label)
+              module.__file__ = str(root / path)
+              sys.modules[module.__name__] = module
+              exec(compile(source, module.__file__, 'exec'), module.__dict__)
+              real_invoke = module.backend._tasks.invoke
+              real_launcher = module.write_launcher
+              real_cleanup = module.cleanup
+              sid = module.backend.Backend(module.service, subprocess.run)._identity()
+              record = {'variant': label, 'payload': commit, 'pause_count': 0}
+              def launcher(home, script, lifetime):
+                  # Both variants need a child lifetime longer than the diagnostic idle window.
+                  return real_launcher(home, script, max(lifetime, 180))
+              def invoke(run, owner, name, arguments, operation='query', xml=None, **kwargs):
+                  if (operation == 'disable' and owner == sid and
+                          not arguments.endswith(' foreign') and record['pause_count'] == 0):
+                      before = real_invoke(run, owner, name, arguments)
+                      assert before['state'] == 3 and before['enabled'] and not before['instances']
+                      record['pause_count'] += 1
+                      started = time.monotonic()
+                      time.sleep(65)
+                      observed = real_invoke(run, owner, name, arguments)
+                      record.update(idle_seconds=time.monotonic() - started,
+                                    observed_state=observed['state'],
+                                    observed_instances=len(observed['instances']),
+                                    observed_enabled=observed['enabled'])
+                  return real_invoke(run, owner, name, arguments, operation, xml, **kwargs)
+              def cleanup(*args, **kwargs):
+                  output = io.StringIO()
+                  with contextlib.redirect_stdout(output):
+                      real_cleanup(*args, **kwargs)
+                  text = output.getvalue()
+                  print(text, end='', flush=True)
+                  assert 'Windows fixture cleanup: definitions=0 instances=0 errors=0' in text
+                  record['cleanup_verified'] = True
+              test = module.NativeTaskTests('test_real_ownership_instances_and_parent_survival')
+              result = unittest.TestResult()
+              started = time.monotonic()
+              with mock.patch.object(module, 'write_launcher', launcher), \
+                      mock.patch.object(module, 'cleanup', cleanup), \
+                      mock.patch.object(module.backend._tasks, 'invoke', invoke):
+                  unittest.TestSuite([test]).run(result)
+              record.update(tests_run=result.testsRun, failures=len(result.failures),
+                            errors=len(result.errors), skips=len(result.skipped),
+                            elapsed_seconds=time.monotonic() - started)
+              records.append(record)
+              print('Fixture proof: ' + json.dumps(record, sort_keys=True), flush=True)
+              assert record['pause_count'] == 1 and record.get('cleanup_verified')
+              assert result.testsRun == 1 and not result.errors and not result.skipped
+              if label == 'before':
+                  assert len(result.failures) == 1 and '4 != 1' in result.failures[0][1]
+                  assert record['observed_state'] == 4 and record['observed_instances'] > 0
+              else:
+                  assert result.wasSuccessful(), result.failures
+                  assert record['observed_state'] == 3 and record['observed_instances'] == 0
+          report = {'payload': payload, 'tree': tree, 'baseline': baseline, 'records': records,
+                    'method': 'Real Task Scheduler; 65-second idle window before first legitimate disable; 180-second children in both variants; no synthetic Task.Run'}
+          Path(os.environ['RUNNER_TEMP'], 'fixture-proof.json').write_text(json.dumps(report, indent=2) + '\n')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-fixture-proof
+          path: ${{ runner.temp }}/fixture-proof.json
+          if-no-files-found: error
+          retention-days: 30

@@ -30,7 +30,7 @@ jobs:
         with:
           # The diff needs the base branch, so fetch full history.
           fetch-depth: 0
-          ref: b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc
+          ref: 88a01c658fcbb75b16e4a85c6e529fb89aeaffac
           persist-credentials: false
       - name: Frozen source and environment
         if: always()
@@ -41,8 +41,8 @@ jobs:
           from pathlib import Path
           checkout = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
-          assert checkout == 'b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc', checkout
-          assert tree == '5f111c8ed8ccad2f851e61d0de663d26f140995f', tree
+          assert checkout == '88a01c658fcbb75b16e4a85c6e529fb89aeaffac', checkout
+          assert tree == '127f9171c0f99e156391dc78fc4f92fd366e6b12', tree
           paths = ssl.get_default_verify_paths()
           certificates = ssl.create_default_context().get_ca_certs(binary_form=True)
           tls = {'openssl': ssl.OPENSSL_VERSION, 'default_paths': paths._asdict(),
@@ -92,7 +92,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc
+          ref: 88a01c658fcbb75b16e4a85c6e529fb89aeaffac
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
@@ -116,8 +116,8 @@ jobs:
           from pathlib import Path
           checkout = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
-          assert checkout == 'b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc', checkout
-          assert tree == '5f111c8ed8ccad2f851e61d0de663d26f140995f', tree
+          assert checkout == '88a01c658fcbb75b16e4a85c6e529fb89aeaffac', checkout
+          assert tree == '127f9171c0f99e156391dc78fc4f92fd366e6b12', tree
           paths = ssl.get_default_verify_paths()
           certificates = ssl.create_default_context().get_ca_certs(binary_form=True)
           tls = {'openssl': ssl.OPENSSL_VERSION, 'default_paths': paths._asdict(),
@@ -167,7 +167,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc
+          ref: 88a01c658fcbb75b16e4a85c6e529fb89aeaffac
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
@@ -191,8 +191,8 @@ jobs:
           from pathlib import Path
           checkout = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
-          assert checkout == 'b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc', checkout
-          assert tree == '5f111c8ed8ccad2f851e61d0de663d26f140995f', tree
+          assert checkout == '88a01c658fcbb75b16e4a85c6e529fb89aeaffac', checkout
+          assert tree == '127f9171c0f99e156391dc78fc4f92fd366e6b12', tree
           paths = ssl.get_default_verify_paths()
           certificates = ssl.create_default_context().get_ca_certs(binary_form=True)
           tls = {'openssl': ssl.OPENSSL_VERSION, 'default_paths': paths._asdict(),
@@ -250,7 +250,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc
+          ref: 88a01c658fcbb75b16e4a85c6e529fb89aeaffac
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
@@ -274,8 +274,8 @@ jobs:
           from pathlib import Path
           checkout = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
-          assert checkout == 'b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc', checkout
-          assert tree == '5f111c8ed8ccad2f851e61d0de663d26f140995f', tree
+          assert checkout == '88a01c658fcbb75b16e4a85c6e529fb89aeaffac', checkout
+          assert tree == '127f9171c0f99e156391dc78fc4f92fd366e6b12', tree
           paths = ssl.get_default_verify_paths()
           certificates = ssl.create_default_context().get_ca_certs(binary_form=True)
           tls = {'openssl': ssl.OPENSSL_VERSION, 'default_paths': paths._asdict(),
@@ -319,7 +319,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc
+          ref: 88a01c658fcbb75b16e4a85c6e529fb89aeaffac
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
@@ -343,8 +343,8 @@ jobs:
           from pathlib import Path
           checkout = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
-          assert checkout == 'b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc', checkout
-          assert tree == '5f111c8ed8ccad2f851e61d0de663d26f140995f', tree
+          assert checkout == '88a01c658fcbb75b16e4a85c6e529fb89aeaffac', checkout
+          assert tree == '127f9171c0f99e156391dc78fc4f92fd366e6b12', tree
           paths = ssl.get_default_verify_paths()
           certificates = ssl.create_default_context().get_ca_certs(binary_form=True)
           tls = {'openssl': ssl.OPENSSL_VERSION, 'default_paths': paths._asdict(),
@@ -407,7 +407,7 @@ jobs:
           PY
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc
+          ref: 88a01c658fcbb75b16e4a85c6e529fb89aeaffac
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
@@ -431,8 +431,8 @@ jobs:
           from pathlib import Path
           checkout = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
-          assert checkout == 'b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc', checkout
-          assert tree == '5f111c8ed8ccad2f851e61d0de663d26f140995f', tree
+          assert checkout == '88a01c658fcbb75b16e4a85c6e529fb89aeaffac', checkout
+          assert tree == '127f9171c0f99e156391dc78fc4f92fd366e6b12', tree
           paths = ssl.get_default_verify_paths()
           certificates = ssl.create_default_context().get_ca_certs(binary_form=True)
           tls = {'openssl': ssl.OPENSSL_VERSION, 'default_paths': paths._asdict(),
@@ -541,7 +541,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc
+          ref: 88a01c658fcbb75b16e4a85c6e529fb89aeaffac
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
@@ -565,8 +565,8 @@ jobs:
           from pathlib import Path
           checkout = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
-          assert checkout == 'b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc', checkout
-          assert tree == '5f111c8ed8ccad2f851e61d0de663d26f140995f', tree
+          assert checkout == '88a01c658fcbb75b16e4a85c6e529fb89aeaffac', checkout
+          assert tree == '127f9171c0f99e156391dc78fc4f92fd366e6b12', tree
           paths = ssl.get_default_verify_paths()
           certificates = ssl.create_default_context().get_ca_certs(binary_form=True)
           tls = {'openssl': ssl.OPENSSL_VERSION, 'default_paths': paths._asdict(),
@@ -636,7 +636,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc
+          ref: 88a01c658fcbb75b16e4a85c6e529fb89aeaffac
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
@@ -660,8 +660,8 @@ jobs:
           from pathlib import Path
           checkout = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
-          assert checkout == 'b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc', checkout
-          assert tree == '5f111c8ed8ccad2f851e61d0de663d26f140995f', tree
+          assert checkout == '88a01c658fcbb75b16e4a85c6e529fb89aeaffac', checkout
+          assert tree == '127f9171c0f99e156391dc78fc4f92fd366e6b12', tree
           paths = ssl.get_default_verify_paths()
           certificates = ssl.create_default_context().get_ca_certs(binary_form=True)
           tls = {'openssl': ssl.OPENSSL_VERSION, 'default_paths': paths._asdict(),
@@ -728,7 +728,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc
+          ref: 88a01c658fcbb75b16e4a85c6e529fb89aeaffac
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
@@ -752,8 +752,8 @@ jobs:
           from pathlib import Path
           checkout = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
-          assert checkout == 'b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc', checkout
-          assert tree == '5f111c8ed8ccad2f851e61d0de663d26f140995f', tree
+          assert checkout == '88a01c658fcbb75b16e4a85c6e529fb89aeaffac', checkout
+          assert tree == '127f9171c0f99e156391dc78fc4f92fd366e6b12', tree
           paths = ssl.get_default_verify_paths()
           certificates = ssl.create_default_context().get_ca_certs(binary_form=True)
           tls = {'openssl': ssl.OPENSSL_VERSION, 'default_paths': paths._asdict(),
