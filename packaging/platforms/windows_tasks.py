@@ -5,6 +5,7 @@ import subprocess
 
 _SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 Set-StrictMode -Version Latest
 $pendingMarker = 'codex-router-installer:pending-activation'
 function Test-Python($path) {
@@ -129,7 +130,7 @@ def invoke(run, sid, name, arguments, operation='query', xml=None, *, pending=Tr
     try:
         result = run(['powershell', '-NoLogo', '-NoProfile', '-NonInteractive',
                       '-Command', _SCRIPT], input=json.dumps(request),
-                     capture_output=True, text=True, timeout=20)
+                     capture_output=True, text=True, encoding='utf-8', timeout=20)
         if result.returncode != 0:
             raise ValueError('Task Scheduler query or operation failed')
         doc = json.loads(result.stdout)

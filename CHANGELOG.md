@@ -4,6 +4,7 @@
 
 ## 1.3.14
 
+- Preserve Unicode task paths and saved definitions across Windows PowerShell.
 - Move all three owned Windows tasks to the verified retained runtime after delivery.
   Preserve schedules and disabled states. Restore prior definitions if verification fails.
 - Record tray helper exits and controller failures. Retry an unexpected helper exit once.

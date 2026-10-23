@@ -39,8 +39,8 @@ class AttachmentRecoveryTests(unittest.TestCase):
         install_mod._codex_config.write_receipt(
             self.home, self.config, block, None, mode, 'original settings', variant=variant,
             reviewer={'removed': ['approvals_reviewer = "auto"']})
-        self.config.write_text('# owner comment\r\nmodel = "current-model"\r\n'
-                               'model_reasoning_effort = "high"\r\n[projects.test]\r\ntrusted = true')
+        self.config.write_bytes(b'# owner comment\r\nmodel = "current-model"\r\n'
+                                b'model_reasoning_effort = "high"\r\n[projects.test]\r\ntrusted = true')
         self.before = self.config.read_bytes()
         self.receipt = self.home / 'activation.json'
         self.evidence = json.loads(self.receipt.read_text())['clients']['codex']
