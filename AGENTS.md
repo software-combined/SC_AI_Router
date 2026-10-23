@@ -44,6 +44,21 @@ or catalogue URL literal belongs anywhere else under `ai_router/`.
 
 ## 4. Security
 
+This repository is public. Treat tracked files, pull-request content and
+release artifacts as public disclosure. Sanitise content before adding it.
+
+Never include secrets, credentials, bearer tokens, personal contact details,
+private customer or company information, account or tenant identifiers,
+internal URLs, local user paths or private operational configuration.
+Use synthetic names and values in examples, fixtures and benchmarks.
+Public product names and public source links are acceptable.
+
+Apply this rule to source, instructions, documentation, tests, screenshots,
+generated files and metadata. Keep private configuration and raw evidence
+outside the repository. Check the complete intended diff before each commit,
+push, pull request and release. Run the required secret and public-content
+checks; a passing scan does not replace inspecting content for sensitive data.
+
 Never commit state, activation receipts, catalogues, logs, keys or bearer
 tokens. Never log request or tool content. Bind only to loopback addresses;
 the path token is unique to each installation. Never send subscription headers
