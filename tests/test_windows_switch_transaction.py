@@ -96,6 +96,13 @@ class WindowsSwitchTransactionTests(unittest.TestCase):
         self.assertEqual(restoring, [False])
         self.assertEqual(loaded, ['switched', 'default'])
 
+    def test_failed_proof_restores_original_crlf_bytes(self):
+        self.before = self.before.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+        self.config.write_bytes(self.before)
+        with self.assertRaises(switcher.SwitchError):
+            self.switch(prove=lambda _: False)
+        self.unchanged()
+
     def test_pending_partial_reopen_also_stops_before_restoring(self):
         loaded, restoring = self.partial_reopen(pending=True)
         self.unchanged()

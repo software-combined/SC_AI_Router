@@ -1,5 +1,30 @@
 # Compatibility
 
+## Updated clients for 1.3.17, 23 October 2026 AEDT
+
+Codex desktop `26.1016.62342` (build `21477`), bundled CLI `0.163.0-alpha.11.2`,
+and Claude Code `2.1.309` require fresh verification after their upgrades.
+Four bounded synthetic tool round trips passed at requested Low effort.
+
+| Client and route | Requested model | Counted work | Result |
+| --- | --- | --- | --- |
+| Codex / OpenRouter | `z-ai/glm-5.3-flash` | 2 upstream attempts | Tool result and final marker passed |
+| Codex / ChatGPT subscription | `gpt-5.6-luna` | 1 tool round trip | Tool result and final marker passed |
+| Claude Code / OpenRouter | `z-ai/glm-5.3-flash` | 2 upstream attempts, 2 client turns | File-read marker passed |
+| Claude Code / Claude subscription | `claude-sonnet-5-5` | 1 incomplete invocation; 2-turn confirmation | File-read marker passed |
+
+The external legs used an isolated candidate Router with one shared twelve-attempt
+cap, 512 KiB input and 65,536 output tokens per request. Four upstream attempts ran.
+Both protocols reported the requested model. Codex reported Low effort; Claude did
+not expose served effort. These are provider reports, not independent attestation.
+Both Claude legs retained separate USD 0.10 client budgets and two-turn results.
+The Claude subscription client report named the requested Sonnet model; served
+effort was not reported. Subscription upstream attempt counts were not retained.
+The Codex subscription probe retained its ninety-second deadline and one allowed
+dynamic tool call. Served identity, effort and upstream subscription counts remain
+unverified. The probes did not edit client settings or copy authentication data.
+Windows Store switching and standard-user acceptance remain separate gates.
+
 ## Native Windows switching candidate, 23 October 2026 AEDT
 
 Beta `1.3.16.207` failed an owner-reported test on non-elevated Windows 11.
