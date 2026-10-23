@@ -53,6 +53,16 @@ class Scheduler:
 
 
 class RuntimeRebindTests(unittest.TestCase):
+    def test_unicode_executable_and_snapshot_survive_the_process_transport(self):
+        expected = dict(kind='present', executable='C:\\Élise\\pythonw.exe',
+            state=3, enabled=False, pending=True, instances=[], xml='<Data>é &amp; 漢字</Data>')
+        raw = json.dumps(expected, ensure_ascii=False).encode('utf-8')
+        def pipe(command, **kwargs):
+            return SimpleNamespace(returncode=0,
+                stdout=raw.decode(kwargs.get('encoding') or 'cp1252'), stderr='')
+        actual = backend._tasks.invoke(pipe, USER, 'fixture', 'arguments', 'snapshot')
+        self.assertEqual(actual, expected)
+
     def test_new_runtime_replaces_all_three_paths_preserving_definitions_and_states(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)

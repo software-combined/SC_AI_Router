@@ -49,6 +49,7 @@ pruning. Loaded jobs and a running legacy updater retain their release files.
 `runtime_rebind` uses verified retained resource metadata after `setup-current`
 advances. The Windows task adapter snapshots all three owned definitions,
 changes only the executable and verifies its exact path, enabled and pending states.
+Its JSON subprocess contract uses explicit UTF-8 output and decoding for Unicode paths and saved XML.
 A failed readback restores attempted definitions. Both runtimes remain retained.
 The outer maintenance cadence retries failures under the installation lock.
 `desktop_menu` records helper exit codes and controller exception types.
