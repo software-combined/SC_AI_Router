@@ -100,25 +100,27 @@ def mac_reopen_available(resources):
         return False
 
 
-def run_menu(home, resources, *, autostart=False):
+def run_menu(home, resources, *, autostart=False, after_update=False):
+    quiet = autostart or after_update
     control, model = load('desktop_control'), load('desktop_model')
     removed = Path(home) / load('native_shortcuts').REMOVED
     if removed.exists():
         return 0
     helper = resources / 'control' / ('scg-router-menu.exe' if os.name == 'nt' else 'scg-router-menu')
     if not helper.is_file():
-        if not autostart:
+        if not quiet:
             fallback(home, resources)
         return 1
     mac_reopen = sys.platform == 'darwin' and mac_reopen_available(resources)
-    if sys.platform == 'darwin' and not mac_reopen and not autostart:
+    if sys.platform == 'darwin' and not mac_reopen and not quiet:
         fallback(home, resources)
         return 0
     service = load('service')
     request = home / (session_lock() + '.open')
     with service.install_lock(home, session_lock()) as held:
         if not held:
-            if not autostart:
+            _log(home, 'launch_skipped', reason='existing_controller')
+            if not quiet:
                 if sys.platform == 'darwin':
                     request.touch(mode=0o600)
                     deadline = time.monotonic() + 2
@@ -138,7 +140,7 @@ def run_menu(home, resources, *, autostart=False):
                 request.unlink(missing_ok=True)
         except FileNotFoundError:
             pass
-        open_menu = mac_reopen and not autostart
+        open_menu = mac_reopen and not quiet
         events = queue.Queue(maxsize=32)
         icon = resources / 'router/packaging/assets/router-icon.png'
         try:
@@ -148,7 +150,7 @@ def run_menu(home, resources, *, autostart=False):
                                      **({'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
         except OSError as exc:
             _log(home, 'helper_launch_failed', error=type(exc).__name__)
-            if not autostart:
+            if not quiet:
                 fallback(home, resources)
             return 1
         _log(home, 'helper_launched')
@@ -203,6 +205,7 @@ def run_menu(home, resources, *, autostart=False):
                         if (name and Path(name).name == name and replacement != resources
                                 and job is None and (replacement / 'control' / helper.name).is_file()):
                             load('native_payload').metadata(replacement)
+                            _log(home, 'resource_handoff', reason='resources_advanced')
                             reload_menu = True
                             break
                     except (OSError, ValueError):
@@ -213,7 +216,7 @@ def run_menu(home, resources, *, autostart=False):
                         continue
                     if event.get('closed'):
                         break
-                    if event.get('host') is False and not autostart and not fallback_shown:
+                    if event.get('host') is False and not quiet and not fallback_shown:
                         needs_fallback = True
                     action = event.get('action')
                     if action == 'refresh':
@@ -245,16 +248,23 @@ def run_menu(home, resources, *, autostart=False):
     return 75 if reload_menu else 0 if quit_requested or removed.exists() else 74
 
 
-def start(home, resources, *, autostart=False):
-    if autostart and not load('desktop_startup').enabled(home):
+def start(home, resources, *, autostart=False, after_update=False):
+    if (Path(home) / load('native_shortcuts').REMOVED).exists():
+        _log(home, 'launch_skipped', reason='removed')
+        return
+    if autostart and not after_update and not load('desktop_startup').enabled(home):
         return
     helper = Path(resources) / 'control' / ('scg-router-menu.exe' if os.name == 'nt' else 'scg-router-menu')
     launcher = Path(home) / 'desktop_launch.py'
     if helper.is_file() and launcher.is_file():
-        subprocess.Popen([sys.executable, str(launcher)] + (['--autostart'] if autostart else []),
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         **({'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt'
-                            else {'start_new_session': True}))
+        reason = ['--after-update'] if after_update else ['--autostart'] if autostart else []
+        try:
+            subprocess.Popen([sys.executable, str(launcher)] + reason,
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             **({'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt'
+                                else {'start_new_session': True}))
+        except OSError as exc:
+            _log(home, 'launch_failed', reason='launch_failed', error=type(exc).__name__, errno=exc.errno)
 
 
 def main(argv=None):
@@ -262,17 +272,19 @@ def main(argv=None):
     parser.add_argument('--home', type=Path, required=True)
     parser.add_argument('--resources', type=Path, required=True)
     parser.add_argument('--autostart', action='store_true')
+    parser.add_argument('--after-update', action='store_true')
     args = parser.parse_args(argv)
-    if args.autostart and not load('desktop_startup').enabled(args.home):
+    if args.autostart and not args.after_update and not load('desktop_startup').enabled(args.home):
         return 0
     os.environ.update(load('native_setup').environment(args.resources))
-    try:
-        load('update_warning').offer(args.home)
-    except (Exception, SystemExit):
-        pass
+    if not args.after_update:
+        try:
+            load('update_warning').offer(args.home)
+        except (Exception, SystemExit):
+            pass
     try:
         for attempt in range(2):
-            rc = run_menu(args.home, args.resources, autostart=args.autostart)
+            rc = run_menu(args.home, args.resources, autostart=args.autostart, after_update=args.after_update)
             if rc != 74 or attempt:
                 break
             time.sleep(1)
@@ -291,7 +303,9 @@ def main(argv=None):
         return 1
     if rc == 75:
         command = [sys.executable, str(args.home / 'desktop_launch.py')]
-        if args.autostart:
+        if args.after_update:
+            command.append('--after-update')
+        elif args.autostart:
             command.append('--autostart')
         os.execv(sys.executable, command)
     return rc

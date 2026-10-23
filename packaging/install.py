@@ -401,6 +401,7 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
                   're-run the installer')
             return 1
         _delivery.normalize_pointer(home)
+        if delivery is not None: delivery['installed_version'] = current
         if args.repair:
             return _client_choice.attach_current(args, home, codex=_codex_config,
                 desktop=_desktop_config, claude=attach_claude, write_state=_write_state,
@@ -430,6 +431,7 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
     if not healthy:
         _rollback_failed_install(home, state, backend, latest, previous, catalog_path,
                                  before_catalog)
+    if delivery is not None: delivery['installed_version'] = latest['version']
     # Stage the restart notice once the new version is healthy (fresh
     # installs are a no-op); notice failures never surface.
     _svc.notice.record(home, previous, latest['version'], args.clients)

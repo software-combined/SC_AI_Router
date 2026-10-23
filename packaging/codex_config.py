@@ -452,14 +452,12 @@ def write_client_receipt(home, client, entry):
 
 
 def write_receipt(home, config_path, block, rules_receipt, mode, before='',
-                  client='codex', desktop=None, variant=None, reviewer=None):
+                  client='codex', desktop=None, variant=None, reviewer=None, repair_notice=None):
     """Record one client attachment; existing attachments are preserved."""
     entry = {'config_path': str(config_path), 'inserted_block': block,
              'openai_mode': mode,
              'previous_sha256': hashlib.sha256(before.encode()).hexdigest()}
     if desktop:
-        # Managed Codex desktop preferences: the values written and the
-        # values they replaced, so tools/disable.py can put them back.
         entry['desktop'] = desktop
     if variant:
         entry['variant'] = variant  # the Switch Codex block (codex_switch_config)
@@ -471,6 +469,8 @@ def write_receipt(home, config_path, block, rules_receipt, mode, before='',
         # Legacy installs recorded the managed global-instructions block;
         # install-once starters record nothing, so the key stays absent.
         entry['global_instructions'] = rules_receipt
+    if repair_notice:
+        entry['repair_notice'] = repair_notice
     write_client_receipt(home, client, entry)
 
 

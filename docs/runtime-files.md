@@ -111,6 +111,14 @@ task's output into `logs/`. On a Mac that gets the Switch Codex app,
 `codex_switch_launch.py`; the app runs it under the router's Python, so it
 follows the pointer the same way.
 
+Windows task output also contains JSON launch, completion and failure events.
+Their fields are task kind, UTC timestamp, numeric status and a safe error class.
+Missing target scripts are recorded before execution. Windows failures before Python
+starts require Task Scheduler History and last-result metadata.
+Health-verified installation completion appends `installed <version>; health verified`
+to `logs/update.log`, including direct, regular, Express and beta installation.
+An attachment failure gets a separate event; unchanged checks and rollbacks make no installation claim.
+
 ## Codex usage-limit record
 
 The router writes `codex-usage-limit.json` in its home when ChatGPT refuses a
@@ -174,8 +182,14 @@ The regular and Express tasks record launch, completion or failure.
 Reconciliation records `repaired`, `unchanged`, `inactive`, `deferred`, `unhealthy`,
 `conflict` or `failed` for the Codex attachment. Records contain no settings or keys.
 A repaired attachment retains its original uninstall evidence in `activation.json`.
-Its `repair_notice` event deduplicates the configuration-only restart offer in
+Verified normal attachments and repairs retain a `repair_notice` event to deduplicate the restart offer in
 `update-notice.json`. A missing dialog leaves that offer pending.
+An unsafe active recovery marks the existing assistant component as needing attention.
+
+`desktop-preferences.json` records only an explicit startup choice.
+Windows treats missing, unreadable or malformed preferences as On without rewriting them.
+Verified resource advancement uses a quiet `--after-update` launch, independent of that choice.
+The session lock prevents duplicates. A retained controller reloads the advanced resources.
 
 Each Switch Codex run appends one JSON line to `logs/codex-switch.log`, so a
 switch that refused can be diagnosed afterwards:

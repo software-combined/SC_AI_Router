@@ -13,6 +13,7 @@ keeps loading one module per concern.
 import importlib.util
 import os
 import time
+import uuid
 from pathlib import Path
 
 
@@ -151,9 +152,21 @@ def attach_codex(home, state, mode, codex_config, previous=None,
         pass
     block, before, desktop, reviewer = codex_config.attach_config(
         config_path, block, previous)
+    after = codex_config._owned.read(config_path)
+    codex_config._owned.inspect(after, block)
+    event = previous.get('repair_notice') if after == before else None
+    event = event or uuid.uuid4().hex
     codex_config.write_receipt(home, config_path, block, rules_receipt, mode, before,
                                desktop=desktop, variant=previous.get('variant'),
-                               reviewer=reviewer)
+                               reviewer=reviewer, repair_notice=event)
+    entry = codex_config.codex_attachment(home)
+    codex_config._owned.inspect(codex_config._owned.read(config_path), block)
+    if entry.get('inserted_block') != block or entry.get('repair_notice') != event:
+        raise OSError('attachment readback failed')
+    try:
+        _load('notice').record_attachment(home, _load('service').current_version(home), event)
+    except (Exception, SystemExit):
+        pass
     if python:
         _app.sync(home, python)
     return config_path

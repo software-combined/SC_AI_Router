@@ -2,11 +2,21 @@
 
 ## Unreleased
 
+## 1.3.15
+
 - Switch Windows Store Codex without querying owners of unrelated protected processes.
   Keep tracking app descendants and refuse an unreadable relevant process.
 - Allow thirty seconds for Store identity discovery and record safe failure reasons.
 - Select and verify the bundled Windows executable before switching.
   Discover each updated package afresh; ignore Windows `CODEX_BIN` overrides.
+- Default missing or invalid Windows startup preferences to On. Preserve saved Off choices.
+  Installation maintenance never saves a startup choice.
+- Relaunch the menu quietly after verified resource advancement, independently of sign-in startup.
+  Keep one controller per session and leave unchanged checks and removal quiet.
+- Offer Restart Codex after verified attachment changes, including same-version setup.
+  Preserve pending offers and expose unsafe recovery through the existing repair warning.
+- Record every Windows task launch and completion or safe failure classification.
+  Write installation evidence only after verified health, across direct and scheduled installs.
 
 ## 1.3.14
 

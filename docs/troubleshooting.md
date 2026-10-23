@@ -4,11 +4,21 @@ Scheduled checks can reconnect Codex when its complete Router block is missing.
 This requires an active attachment receipt and a healthy Router.
 Partial blocks, conflicting connection settings and damaged receipts require manual review.
 Use the supported detach or removal action to disable automatic reconnection.
-After repair, choose **Quit and reopen** or **Later** in the restart notice.
+After attachment or repair, **Restart Codex to load SCG Router** offers **Quit and reopen** and **Later**.
 If no dialog is available, the notice stays pending.
 The content-free `logs/maintenance.jsonl` records regular and Express check outcomes.
 It also records tray helper exits, retry decisions and controller exception types.
-An unexpected tray exit gets one retry. Quit and the saved startup choice remain effective.
+An unexpected tray exit gets one retry. Quit keeps the current controller closed.
+New resource updates launch the menu quietly, including when sign-in startup is Off.
+On Windows, missing or invalid preferences default to On. A valid saved Off stays Off.
+Installs and updates reconcile the startup shortcut without saving a preference.
+Use the menu's **Start at sign-in** action to save a choice.
+
+Windows task logs record launch, completion and safe failure facts, including missing launch scripts.
+If no Python launch event exists, check Task Scheduler History and the task's last-result number.
+The launcher cannot record attempts Windows refuses before Python starts.
+`logs/update.log` records `installed <version>; health verified` after each verified installation.
+Attachment failures have separate maintenance events. Unchanged checks and rollbacks do not claim an installation.
 
 Windows updates verify the executable paths of all three owned scheduled tasks.
 Failed verification restores prior definitions and retries on the next maintenance pass.
@@ -27,6 +37,14 @@ If Windows reports that Router could not check its stored key, retry shortly.
 This message does not mean the key is invalid. If it persists, open **SCG Router**
 and run **Check setup**. Permission-query diagnostics contain operation names,
 Windows error numbers and timings, without key contents.
+After three days, summarise `permission_query_failed`, `CREDENTIAL_PERMISSION` and
+`CREDENTIAL_CHECK_UNAVAILABLE` across `router.jsonl` and rotations `.1`, `.2`, `.3`.
+Include time coverage and missing files. Return counts, without raw log records.
+This observation does not delay stable after functional Windows acceptance.
+
+The historical configuration removal during account changes remains unverified.
+Reproduce sign-in, sign-out or account switching only in an isolated standard Windows profile.
+Compare configuration timestamps, size and block presence; do not read authentication files.
 
 If Switch Codex reports a missing bundled tool, update the ChatGPT app (Codex).
 Router discovers the current Store package, then checks the bundled Windows executable

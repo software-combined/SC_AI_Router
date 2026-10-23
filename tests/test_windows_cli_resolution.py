@@ -52,7 +52,12 @@ class WindowsCliTests(unittest.TestCase):
                         OSError(193, 'private path'), subprocess.TimeoutExpired('private command', 5)):
             run = mock.Mock(side_effect=[failure, SimpleNamespace(returncode=0,
                 stdout='codex-cli 0.163.0-alpha.11', stderr='')])
-            self.assertEqual(self.resolve(run=run), str(second))
+            record = {}
+            self.assertEqual(self.resolve(run=run, record=record), str(second))
+            attempt = record['cli_attempts'][0]
+            self.assertEqual(attempt['operation'], 'cli_version')
+            self.assertGreaterEqual(attempt['elapsed_ms'], 0)
+            self.assertNotIn('private', json.dumps(record))
             self.assertEqual(run.call_args_list[0].args[0], [str(first), '--version'])
             self.assertEqual(run.call_args.kwargs['timeout'], 5)
             self.assertEqual(run.call_args.kwargs['creationflags'], 0x08000000)

@@ -58,6 +58,7 @@ def _windows_bin(env, app_root, app_exe, run, record):
     bases = ([Path(app_exe).parent] if app_exe else []) + [root]
     attempts = []
     for path in dict.fromkeys(base / rel for base in bases for rel in WINDOWS_BUNDLED):
+        started = time.monotonic()
         try:
             relative = path.relative_to(root).as_posix()
         except ValueError:
@@ -69,20 +70,24 @@ def _windows_bin(env, app_root, app_exe, run, record):
                 continue
             with path.open('rb') as source:
                 if source.read(2) != b'MZ':
-                    attempts.append(dict(path=relative, reason='not_windows_executable'))
+                    attempts.append(dict(path=relative, reason='not_windows_executable',
+                                         operation='cli_header', elapsed_ms=round((time.monotonic() - started) * 1000, 1)))
                     continue
             result = run([str(path), '--version'], capture_output=True, text=True,
                 timeout=5, creationflags=0x08000000,
                 env={key: value for key, value in env.items()
                      if not key.startswith(('OPENAI_', 'CODEX_'))})
             if result.returncode or not CLI_VERSION.fullmatch(result.stdout.strip()):
-                attempts.append(dict(path=relative, reason='version_rejected', exit_code=result.returncode))
+                attempts.append(dict(path=relative, reason='version_rejected', exit_code=result.returncode,
+                                     operation='cli_version', elapsed_ms=round((time.monotonic() - started) * 1000, 1)))
                 continue
         except (OSError, ValueError, subprocess.SubprocessError) as exc:
-            facts = dict(path=relative, reason='version_timeout' if isinstance(
-                exc, subprocess.TimeoutExpired) else 'candidate_unavailable')
-            if type(getattr(exc, 'winerror', None)) is int:
-                facts['winerror'] = exc.winerror
+            facts = dict(path=relative, operation='cli_version', elapsed_ms=round(
+                (time.monotonic() - started) * 1000, 1), reason='version_timeout' if isinstance(
+                    exc, subprocess.TimeoutExpired) else 'candidate_unavailable')
+            for key in ('winerror', 'errno'):
+                if type(getattr(exc, key, None)) is int:
+                    facts[key] = getattr(exc, key)
             attempts.append(facts)
             continue
         if record is not None:

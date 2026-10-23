@@ -151,6 +151,8 @@ INSTALLER_TESTS = (
     'tests.test_desktop_delivery',
     'tests.test_desktop_controls',
     'tests.test_desktop_recovery',
+    'tests.test_windows_lifecycle',
+    'tests.test_installation_evidence',
     'tests.test_desktop_targets',
     'tests.test_desktop_management',
     'tests.test_desktop_platform_contracts',

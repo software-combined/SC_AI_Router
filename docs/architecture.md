@@ -20,6 +20,8 @@ notices remain pending until a window appears.
 discovery. Attachment conflicts cannot block its controller, stable launchers
 or Linux scheduler repair. Plugin and native controls delivery remain separate
 from routing health, on both full and same-version installs.
+The health-verified completion also owns installation evidence. Attachment failures
+have separate events. `assistant_status` shares attachment classification with outer reconciliation.
 `client_choice` resolves explicit additions, receipt-owned attachments and saved
 choices. It persists Claude choices in `anthropic_mode`; the runtime keeps its
 existing policy reader. Same-version mode changes use the service repair
@@ -55,6 +57,8 @@ The outer maintenance cadence retries failures under the installation lock.
 `desktop_menu` records helper exit codes and controller exception types.
 It retries an unexpected helper exit once after one second within the controller.
 Quit and removal stop it. Resource replacement uses the existing reload path.
+Resource advancement launches with `--after-update`, bypassing only sign-in preferences.
+That path never opens a chooser or warning. A held session lock leaves reload to its owner.
 `feed` downloads public software without credentials. Legacy `download_auth`,
 `download_oauth` and `download_session` helpers are retained for compatibility,
 but the installer and updater no longer require them. `control_models` checks
@@ -81,6 +85,9 @@ healthy Router. `codex_owned` validates absence, connection conflicts and TOML.
 Configuration and receipt writes compare their prior contents and verify readback.
 Original uninstall evidence remains intact. The receipt retains a repair event
 until `notice` can offer its configuration-only restart reason.
+Normal attachment uses the same receipt event after configuration and receipt readback.
+Unsafe active recovery marks assistant attention without replacing configuration or other component results.
+The Windows task launcher records task kind, time, numeric status and safe failure classes.
 
 `winsecurity` reads Windows security descriptors through the operating system.
 `winacl` owns the permitted identities and rejects unsupported rules. Checks
@@ -777,6 +784,7 @@ On Mac, a session-scoped reopen request tells that shell to open its menu.
 Fallback windows run one selected action and then close.
 It serializes actions in a worker, while native menus stay responsive.
 `desktop_startup.py` owns per-user startup entries and the persistent preference.
+Only explicit choices write that preference. Windows defaults missing or invalid choices to On.
 `desktop_launch.py` follows retained setup resources, independently of inference rollback.
 Closing the shell never stops routing. Polling is silent and makes no model calls.
 `native_resources.py` consumes only this target's signed Resources descriptor.
