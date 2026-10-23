@@ -1,74 +1,115 @@
-# Router acceptance example
+# Router CI benchmark
 
-SC AI Router overlapped independent acceptance jobs in
-[PR 488](https://github.com/software-combined/SC_AI_Router/pull/488).
-The full offline suite previously waited for all native checks before starting.
-It now starts alongside them. The required `Test` gate still waits for every
-result before running static checks.
+SC AI Router starts its full offline suite alongside independent native checks.
+The earlier layout waited for those checks before starting the suite.
+The required `Test` gate still waits for every applicable result.
+The graph change shipped in [PR 488](https://github.com/software-combined/SC_AI_Router/pull/488)
+and reached `main` through [PR 494](https://github.com/software-combined/SC_AI_Router/pull/494).
 
-## Equivalent workload
+This controlled comparison measures both layouts against identical source and tests.
+It replaces the earlier comparison between different source revisions.
+Median elapsed time fell **38.3%** across three successful samples per layout.
+Median aggregate job execution changed **+2.4%**. This does not establish compute savings.
 
-The [before run](https://github.com/software-combined/SC_AI_Router/actions/runs/39897410359)
-and [after run](https://github.com/software-combined/SC_AI_Router/actions/runs/39900288385)
-completed on 23 October 2026, on their first attempt.
-Both tested temporary pull-request merge commits targeting `main`.
+## Controlled workload
 
-| Candidate | Event head | Actual checkout |
-| --- | --- | --- |
-| Before | `4ada64b6c27946d0df80f52e35fa577628bd105a` | `68f0e0893c86d86b3d2e43e0e854edc3f9aef9f0` |
-| After | `6d309210e2bc3a041cb0bb5f8b3a7b2f02f19aac` | `cc1eab764c753bfabac573c4834acdac7ac8bce3` |
+Every executed job checked out commit `bc2920a6688cceb9eed3caf40847fef4dc031f39`,
+tree `2b6076c122282b315b3ef724bcf0cc673745589a`.
+The [diagnostic harness](https://github.com/software-combined/SC_AI_Router/blob/a79f21a92a32f6eaed49ed79cc8ea825017fc930/.github/workflows/router-ci-benchmark.yml)
+used one commit for both layouts: `a79f21a92a32f6eaed49ed79cc8ea825017fc930`.
+Its branch name selected serial or parallel scheduling.
+The checked-out application, tests, tools, dependencies and CI definitions stayed identical.
+Keeping the inspected workflow unchanged also kept its regression tests identical.
 
-The actual checkout trees matched their event-head trees:
-`7a5566b15d9daafb03e4386b1c95da8b88ffe5eb` before and
-`4e360d977e9e85f1e7f0f6dae552da97bd7c0427` after.
+Both layouts used CPython 3.14.8, serial unittest execution,
+`SCG_RUN_INSTALLER_TESTS=1` and `python -m unittest discover -s tests -t .`.
+The compatibility job used CPython 3.9.25.
+Installer scope was forced on in both layouts, retaining every native acceptance job.
+Matrices, verification commands, action revisions and permissions matched.
+Native job budgets stayed unchanged. The parallel suite had its own 15-minute budget.
+The diagnostic workflow used a separate check name and could not satisfy release acceptance.
 
-Application code, installer code, tools, dependencies, the unit command and
-installer opt-in stayed unchanged. Only the workflow, workflow tests and
-documentation changed. Two new tests protect overlap and gate coverage.
+## Measurements
 
-Both full suites used CPython 3.14.8 on `ubuntu-latest`, with serial unittest
-execution and `SCG_RUN_INSTALLER_TESTS=1`. Native runner labels stayed unchanged.
-The command remained `python -m unittest discover -s tests -t .`.
+All runs completed on 23 October 2026, on their first attempt.
+The declared order was serial, parallel, parallel, serial, serial, parallel.
+Runs were sequential. No primary run failed or needed replacement.
 
-## Observed results
+| Sample | Workflow elapsed | Aggregate job execution | Offline suite step |
+| --- | ---: | ---: | ---: |
+| [serial-1](https://github.com/software-combined/SC_AI_Router/actions/runs/39931873584) | 14m 17s | 29m 09s | 8m 09s |
+| [parallel-1](https://github.com/software-combined/SC_AI_Router/actions/runs/39933647660) | 8m 10s | 28m 58s | 7m 31s |
+| [parallel-2](https://github.com/software-combined/SC_AI_Router/actions/runs/39934670492) | 8m 50s | 28m 11s | 8m 09s |
+| [serial-2](https://github.com/software-combined/SC_AI_Router/actions/runs/39935769534) | 13m 40s | 28m 09s | 7m 44s |
+| [serial-3](https://github.com/software-combined/SC_AI_Router/actions/runs/39937474035) | 13m 45s | 27m 14s | 8m 05s |
+| [parallel-3](https://github.com/software-combined/SC_AI_Router/actions/runs/39939149481) | 8m 29s | 28m 50s | 7m 41s |
 
-Each column is one successful sample.
+| Measure | Serial median | Parallel median | Serial range | Parallel range |
+| --- | ---: | ---: | ---: | ---: |
+| Workflow elapsed | 13m 45s | 8m 29s | 13m 40s–14m 17s | 8m 10s–8m 50s |
+| Aggregate job execution | 28m 09s | 28m 50s | 27m 14s–29m 09s | 28m 11s–28m 58s |
+| Offline suite step | 8m 05s | 7m 41s | 7m 44s–8m 09s | 7m 31s–8m 09s |
 
-| Measure | Before | After |
+Workflow elapsed runs from workflow creation through the last executed job's completion.
+It includes queues, dependency waiting, setup and cleanup.
+Aggregate job execution sums each executed job's start-to-completion duration.
+It excludes queues and does not weight runner classes or billing rates.
+The extra Ubuntu job adds setup while allowing the suite and native checks to overlap.
+Unit-step durations varied while the unit code and command stayed fixed.
+
+## Verification coverage
+
+Every full suite reported **3492 tests and 21 skips**.
+Post-run discovery found 3492 entries with 3481 unique test identifiers in each run.
+The sorted identifiers, retaining duplicates, had the same SHA-256 digest in all six runs:
+`ff65d6d1d606551ab406d5b774c5e9ee8ba874ba79e5440380348aadce760554`.
+Inventory collection ran after the suite, avoiding pre-test import warming.
+This discovery hash is not an execution trace and does not identify the skipped cases.
+
+Native selections and reported test/skip totals also matched:
+
+| Check | Reported tests | Skips |
 | --- | ---: | ---: |
-| Total workflow elapsed | 14m 18s | 9m 27s |
-| Aggregate job execution | 24m 10s | 25m 06s |
-| Offline suite step | 8m 04s | 8m 35s |
-| Discovered tests | 3562 | 3564 |
-| Existing skips | 21 | 21 |
-| Successful jobs | 14 | 15 |
+| macOS installer, 92 selected modules | 905 | 6 |
+| Windows installer, 74 selected modules | 748 | 174 |
+| Windows packaging contracts | 31 | 2 |
+| Windows ACL contract | 1 | 0 |
+| Linux plugin scheduler | 2 | 0 |
+| Windows plugin scheduler | 2 | 1 |
+| Linux Router recovery | 1 | 0 |
+| Linux hook adapter | 35 | 2 |
+| Windows hook adapter | 35 | 5 |
 
-Elapsed time fell 33.9%, including queues, setup and cleanup.
-Aggregate job execution rose 3.9%; it excludes queues and does not weight
-different runner classes. No cache configuration changed. Caches and host load
-were not controlled, so these samples do not establish typical latency,
-compute savings or improved reliability. The full-suite step was slower in this sample.
+Desktop menu builds retained macOS ARM64 and x86_64, Windows x86_64,
+and Linux ARM64 and x86_64.
 
-## Retained evidence and boundaries
+Python 3.9 imports, shell and PowerShell parsing, compilation, lint, registry,
+catalogue and policy checks also passed in every run.
+Serial runs completed 14 jobs; parallel runs completed 15.
+No configured verification workload was removed. These records establish matching discovery,
+reported test/skip totals, selections and platform checks. They do not establish identical
+skipped-test identities or measure line or branch coverage.
 
-The required `Test` gate still fails on a failed or cancelled prerequisite.
-Native scope, platform matrices, development checks, text-edit safeguards,
-permissions and publication rules stayed intact. Existing timeout values
-stayed unchanged; the extracted suite gained its own 15-minute job budget.
-The extra Ubuntu setup is the deliberate tradeoff for overlap.
-No test selection policy was added.
+## Limits and retained evidence
 
-The after run's tree, `4e360d977e9e85f1e7f0f6dae552da97bd7c0427`, matched the
-reviewed and integrated development tree. Full remote acceptance passed all
-configured jobs. No router tag or release publication was performed.
+[The benchmark record](router-benchmark.json) contains run links, exact revisions,
+test and module digests, platform execution totals, setup costs and observed toolchains.
+All diagnostic instrumentation and setup costs remain included in both layouts.
+No project dependency cache was added. Hosted runtime downloads and tool-cache state varied.
+Hosted images and machine load were not controlled. The record lists all observed image variants.
+Actual Python versions and recorded desktop menu compiler identities matched across the primary cohort.
+This is a descriptive six-run result, not a guarantee of typical latency, billing savings or reliability.
 
-A new documentation page initially failed the bundle's index check.
-After adding its link, affected documentation and bundle checks passed;
-unchanged local results were reused. The final remote full suite passed too.
+Three preliminary runs used floating Python selectors.
+They resolved to different patch versions and were excluded as a separate cohort.
+Their run identifiers, measurements and exclusion reason remain in the benchmark record.
+The primary cohort pinned all runtime setup calls before its first run.
+No sample was rerun to improve its result.
 
-The portable lesson is to measure the critical path before narrowing coverage.
-Independent jobs can overlap while a final required gate preserves their checks.
-Another repository must derive its own dependencies, commands and acceptance rules.
 Failure and event wiring were checked in source and workflow tests.
-Live failure injection was not performed; the benchmark exercised the
-successful main-targeting pull-request path.
+The diagnostic harness also rejected missing, failed, cancelled and unexpected prerequisites in local guard checks.
+Remote failure injection was not performed; these measurements exercised successful full acceptance workloads.
+
+The portable lesson is to measure the dependency graph before narrowing verification.
+Freeze source and test inputs, inspect actual runtimes, retain every attempt and report elapsed time separately from runner use.
+Another repository must derive its own commands, dependencies, platform requirements and release gates.
