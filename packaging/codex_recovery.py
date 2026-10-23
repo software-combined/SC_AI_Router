@@ -19,8 +19,18 @@ def _notice(home, service, entry):
             pass  # The receipt retains the event until a dialog can be offered.
 
 
-def reconcile(home, service):
-    """Caller holds install.lock; return one content-free outcome."""
+def offer(home, service):
+    """Present only after the installation lock has closed."""
+    if any((Path(home) / name).exists() for name in ('.router-removed', 'codex-switch-pending.json')):
+        return
+    try:
+        _notice(home, service, load('codex_config').codex_attachment(home))
+    except (Exception, SystemExit):
+        pass
+
+
+def reconcile(home, service, *, apply=True):
+    """Read-only preflight; applying a repair requires install.lock and repeats all checks."""
     home = Path(home)
     if any((home / name).exists() for name in ('.router-removed', 'codex-switch-pending.json')):
         return 'deferred'
@@ -60,12 +70,13 @@ def reconcile(home, service):
     existed, before = path.exists(), codex._read_text(path)
     if codex.BEGIN in before or codex.END in before:
         owned.inspect(before, saved)
-        _notice(home, service, entry)
         return 'unchanged'
     proof = owned.inspect(before, saved, absent=True)
     health = service.health(state, timeout=1)
     if not health or health.get('status') != 'ok' or health.get('version') != service.current_version(home):
         return 'unhealthy'
+    if not apply:
+        return 'repairable'
     block = ''.join(line for line in saved.splitlines(keepends=True)
                     if codex._key(line) not in proof['picks'])
     after = block + '\n' + before
@@ -90,5 +101,4 @@ def reconcile(home, service):
         else:
             atomic.remove(path, expected=after)
         raise
-    _notice(home, service, updated)
     return 'repaired'

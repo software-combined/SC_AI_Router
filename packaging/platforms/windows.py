@@ -363,6 +363,10 @@ class Backend:
         return _tasks.rebind(self._task_state, home, _pythonw(str(python)),
                              (ROUTER_TASK, UPDATE_TASK, EXPRESS_TASK))
 
+    def runtime_matches(self, python, home):
+        return _tasks.runtime_matches(self._task_state, home, _pythonw(str(python)),
+                                      (ROUTER_TASK, UPDATE_TASK, EXPRESS_TASK))
+
     def ensure_serving(self, home, state, version):
         if not self._running(ROUTER_TASK, home, legacy=self._router(home)[0]):
             return False

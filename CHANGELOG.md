@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 1.3.16
+
+- Allow sixty seconds for Windows process snapshots on busy Codex and Claude desktops.
+  Keep each shutdown probe within the remaining graceful-close deadline.
+- Wait up to sixty seconds for an active update before switching Codex.
+  Show a waiting window with Cancel; cancellation leaves Codex and settings unchanged.
+- Inspect attachments and scheduled runtime paths without the installation lock.
+  Healthy unchanged regular and Express checks leave foreground switching free.
+  Recheck every repair under the lock and present restart notices after releasing it.
+
 ## 1.3.15
 
 - Switch Windows Store Codex without querying owners of unrelated protected processes.

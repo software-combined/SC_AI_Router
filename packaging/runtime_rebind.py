@@ -6,8 +6,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from native_payload import load
 
 
-def reconcile(home):
-    """Caller holds the installation lock; failure keeps every retained runtime."""
+def reconcile(home, *, apply=True):
+    """Read-only checks run unlocked; applying repeats checks under install.lock."""
     if sys.platform != 'win32':
         return 'inactive'
     home, service = Path(home), load('service')
@@ -21,10 +21,14 @@ def reconcile(home):
         platforms = service.load('router_rebind_platforms',
             Path(__file__).parent / 'platforms' / '__init__.py')
         backend = platforms.select('win32', service, service.run)
+        if not apply:
+            return 'ready' if backend.runtime_matches(python, home) else 'repairable'
         backend.rebind_runtime(python, home)
         outcome = 'ready'
     except (Exception, SystemExit):
         pass  # Old definitions and runtimes are retained; the next check retries.
+    if not apply:
+        return outcome
     try:
         state = service._state.read(service._state.path(home))
         if isinstance(state, dict):

@@ -49,7 +49,11 @@ Compare configuration timestamps, size and block presence; do not read authentic
 If Switch Codex reports a missing bundled tool, update the ChatGPT app (Codex).
 Router discovers the current Store package, then checks the bundled Windows executable
 and its version. Do not set `CODEX_BIN` or save a versioned Store path.
-If Codex takes too long to check, retry Switch Codex. Discovery allows thirty seconds.
+Store identity discovery allows thirty seconds. Windows process checks allow sixty seconds
+for a busy Codex session. A slow or failed check still refuses before changing settings.
+If an update owns the installation lock, Switch Codex waits up to sixty seconds.
+Its waiting window offers Cancel. Healthy unchanged update checks do not take that lock.
+An actual install or repair can still delay switching; retry after it finishes.
 The switch log distinguishes identity timeouts, query failures and rejected commands.
 Its command paths are relative to the package. Protected unrelated Windows processes
 do not block switching; an unreadable relevant app process still requires attention.

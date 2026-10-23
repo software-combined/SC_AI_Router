@@ -53,7 +53,8 @@ advances. The Windows task adapter snapshots all three owned definitions,
 changes only the executable and verifies its exact path, enabled and pending states.
 Its JSON subprocess contract uses explicit UTF-8 output and decoding for Unicode paths and saved XML.
 A failed readback restores attempted definitions. Both runtimes remain retained.
-The outer maintenance cadence retries failures under the installation lock.
+The outer maintenance cadence checks owned task paths without the installation lock.
+Only a required repair repeats verification and changes tasks under that lock.
 `desktop_menu` records helper exit codes and controller exception types.
 It retries an unexpected helper exit once after one second within the controller.
 Quit and removal stop it. Resource replacement uses the existing reload path.
@@ -79,7 +80,10 @@ channel and source before displaying them.
 ## Domains and direction
 
 `update_reconcile` runs after applying-update installation locks close, including
-unchanged regular and Express checks. It takes the installation lock without waiting.
+unchanged regular and Express checks. Read-only preflight does not take the installation lock.
+An attachment repair, runtime repair or changed attention result takes the lock without waiting
+and repeats verification. Healthy unchanged checks do not acquire it.
+Restart-notice presentation runs after the lock closes.
 `codex_recovery` repairs only an absent block under a valid, active receipt and
 healthy Router. `codex_owned` validates absence, connection conflicts and TOML.
 Configuration and receipt writes compare their prior contents and verify readback.
@@ -714,6 +718,9 @@ throughout, and a hand-edited block refuses before anything is asked. Each
 run appends one line to `logs/codex-switch.log` (docs/runtime-files.md).
 Windows discovers the current Store package for each operation. The Windows adapter
 allows thirty seconds for identity discovery and records content-free failure facts.
+Windows process snapshots have a separate sixty-second budget. Shutdown probes also respect
+the remaining graceful-close deadline. A busy installation offers a Cancel window while
+Switch Codex waits up to sixty seconds, before discovering the current app and settings.
 Its process snapshot queries owners only for package processes, named writers,
 descendants and previously tracked PIDs. Vanished processes do not invalidate a scan;
 an unreadable relevant process still refuses. Windows CLI selection checks the package

@@ -25,11 +25,13 @@ attachment; this helper never creates or removes one. Each run appends one
 line to `logs/codex-switch.log` (docs/runtime-files.md).
 """
 import argparse
+import contextlib
 import importlib.util
 import json
 import os
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -48,6 +50,7 @@ _proof = _load('codex_config_proof')
 _receipts = _load('codex_config')
 _atomic = _load('atomic_write')
 _service = _load('service')
+_dialog = _load('native_dialog')
 CODEX = _platform.App('com.openai.codex', ())
 MARKER = 'codex-switch-pending.json'
 SWITCHED, SWITCHED_BACK = _blocks.SWITCHED, _blocks.SWITCHED_BACK
@@ -59,6 +62,7 @@ PROMPTS = {
 DESTINATIONS = {SWITCHED: 'OpenRouter models', SWITCHED_BACK: 'your ChatGPT subscription'}
 MAC_ONLY = 'Switch Codex is available on Mac.'
 BUSY = 'SCG Router is updating. Try again in a minute.'
+WAITING = 'Waiting for SCG Router to finish an update. Cancel leaves Codex unchanged.'
 NOTHING_TO_SWITCH = ('The ChatGPT app (Codex) already uses OpenRouter models without a '
                      'ChatGPT subscription, so there is nothing to switch.')
 NOT_READY = ('SCG Router is still checking which OpenRouter models your key can use. '
@@ -83,6 +87,26 @@ class SwitchError(Exception):
     """A message safe to show: no paths, settings, addresses or keys."""
 
 
+@contextlib.contextmanager
+def _switch_lock(home, record):
+    with contextlib.ExitStack() as lock:
+        if lock.enter_context(_service.install_lock(home)):
+            yield True
+            return
+        lock.close()
+        started = time.monotonic()
+        with _dialog.Progress(WAITING) as progress:
+            held = lock.enter_context(_service.install_lock(home, wait=60))
+        record['wait_ms'] = round((time.monotonic() - started) * 1000, 1)
+        if progress.cancelled:
+            yield False
+            return
+        if not held:
+            record.update(operation='install_lock', reason='timeout')
+            raise SwitchError(BUSY)
+        yield True
+
+
 def switch(home, *, run=subprocess.run, platform_ops=None, prove=None, ready=None, target=None):
     """Move Codex to the other variant; returns it, or None when cancelled."""
     if target not in (None, SWITCHED, SWITCHED_BACK):
@@ -92,12 +116,13 @@ def switch(home, *, run=subprocess.run, platform_ops=None, prove=None, ready=Non
         if sys.platform not in ('darwin', 'win32', 'linux'):
             raise SwitchError(MAC_ONLY)
         # The installer's lock: an update rewrites the same config and receipt.
-        with _service.install_lock(home) as held:
-            if not held:
-                raise SwitchError(BUSY)
-            target = _switch(home, run, _platform if platform_ops is None else platform_ops,
-                             _proof.prove if prove is None else prove,
-                             _route_ready if ready is None else ready, record, target)
+        with _switch_lock(home, record) as held:
+            if held:
+                target = _switch(home, run, _platform if platform_ops is None else platform_ops,
+                                 _proof.prove if prove is None else prove,
+                                 _route_ready if ready is None else ready, record, target)
+            else:
+                target = None
     except Exception as exc:
         if 'reason' not in record and (exc.__cause__ is not None or not isinstance(exc, SwitchError)):
             record.update(_platform.error_facts(exc, 'switch'))

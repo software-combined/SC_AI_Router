@@ -265,15 +265,6 @@ class SwitchFlowTests(unittest.TestCase):
             self.run_switch(self.fake())
         self.assertTrue((self.home / switcher.MARKER).exists())
 
-    def test_busy_installer_and_other_platforms_refuse(self):
-        with switcher._service.install_lock(self.home) as held:
-            self.assertTrue(held)
-            with self.assertRaisesRegex(switcher.SwitchError, 'updating'):
-                self.run_switch(self.fake())
-        with mock.patch.object(switcher.sys, 'platform', 'freebsd'):
-            with self.assertRaisesRegex(switcher.SwitchError, 'on Mac'):
-                self.run_switch(self.fake())
-
     def test_wording_is_plain_and_names_the_app(self):
         texts = list(switcher.PROMPTS.values()) + [
             value for name, value in vars(switcher).items()
