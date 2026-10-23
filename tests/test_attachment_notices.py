@@ -8,6 +8,7 @@ from unittest import mock
 
 from tests.test_notice import notice_mod as notice
 from tests import test_client_choice as installs
+from tests.install_fixtures import install_mod_factory
 
 
 class AttachmentNotices(unittest.TestCase):
@@ -52,6 +53,16 @@ class AttachmentNotices(unittest.TestCase):
         notice.record_attachment(self.home, '1.0.0', 'b' * 32)
         with mock.patch.object(notice, 'dialog_command', return_value=['dialog']):
             self.assertFalse(notice.show_pending(self.home, pid_alive=lambda _: True))
+        self.assertNotIn('shown', json.loads(self.path.read_text()))
+
+    def test_installer_fixture_cannot_open_a_real_attachment_notice(self):
+        owner = install_mod_factory()._svc.notice
+        owner.record_attachment(self.home, '1.0.0', 'c' * 32)
+        with mock.patch.object(owner, 'dialog_command', return_value=['synthetic-dialog']), \
+                mock.patch.object(owner.subprocess, 'Popen') as spawn:
+            with self.assertRaisesRegex(AssertionError, 'real dialog reached a test'):
+                owner.show_pending(self.home)
+        spawn.assert_not_called()
         self.assertNotIn('shown', json.loads(self.path.read_text()))
 
     def test_normal_and_same_version_attaches_record_verified_notices(self):
