@@ -566,6 +566,10 @@ It performs no discovery, shutdown or activation on import.
 verified Windows Codex lifecycle policy. It reuses the desktop writer tracker.
 Termination requires explicit consent from its caller and rechecks one open
 handle's creation time, account, session, package and executable before use.
+Query handles remain open through shutdown; a second snapshot checks parent metadata
+before selection, preventing a reused process ID from adopting an unrelated app.
+`windows_dialog.py` verifies the retained compiled helper for switch confirmation
+and progress. The helper owns presentation; Python owns consent and configuration.
 `claude_desktop_switch.py` owns the switch lifecycle. After Claude exits normally,
 it shares the current account's local tasks and changes the mode only when all
 required copies succeed. Open and Switch share one transition lock, held before
@@ -723,6 +727,9 @@ settings as they are.
 moves an attached install to the other variant, holding the installer lock
 throughout, and a hand-edited block refuses before anything is asked. Each
 run appends one line to `logs/codex-switch.log` (docs/runtime-files.md).
+`codex_switch_transaction.py` owns pending markers, proof and restoration of the owned settings.
+Its Windows rollback guard verifies exit again if reopening may have launched the app.
+An unavailable rollback shutdown keeps the pending marker and preserves the current configuration.
 Windows Codex discovers the current Store package through native APIs and checks
 registration before lifecycle actions. Process snapshots use Toolhelp metadata
 and native token reads; they do not start PowerShell. A busy installation offers a Cancel window while
@@ -732,11 +739,15 @@ descendants and previously tracked PIDs. Vanished processes do not invalidate a 
 an unreadable relevant process still refuses. Windows CLI selection checks the package
 boundary, executable header and `codex-cli` version before preflight and proof share it.
 Only package-relative selection diagnostics enter the log; no Codex install path is persisted.
+Windows confirmation names the full close and stopped tasks. Shutdown allows five seconds
+for window closure, then ends verified surviving processes within a fifteen-second deadline.
+Settings remain pending until proof and a visible reopened package window succeed.
+Failure restores the previous owned settings and attempts fresh-package reopening.
 
 `switched` is strict. It needs `codex_route.ready`, a subscription install
 (no-subscription mode already runs without sign-in), exactly one ChatGPT app
-(Codex) with its bundled CLI at the verified platform installation, and a graceful
-quit. It then writes a pending marker, calls `codex_switch_config.switch` and
+(Codex) with its bundled CLI at the verified platform installation, and a verified
+exit. It then writes a pending marker, calls `codex_switch_config.switch` and
 proves the result with `codex_config_proof`: that CLI, started as an app
 server on `~/.codex`, must load the config and report no managed
 `model_provider` and no account. Any doubt refuses before the dialog; a failed
@@ -747,17 +758,14 @@ config.toml held it, the owner's latest model pick included, through
 Switching back is the only way out of `switched`, since detach, uninstall and
 rollback refuse while switched, so it depends on nothing it can lose. It runs
 no proof: it only returns to the install's own block plus the provider entry.
-With exactly one app found it quits the app and reopens it after; if the app
-does not close, it is reopened and the switch still refuses, since the person
-can quit it and retry. With the app missing or not identifiable (two copies,
-a Spotlight failure), the dialog asks the person to quit it first and the
-closing message to open it again.
+Windows requires a current package identity and verified exit in both directions.
+Mac and Linux retain their manual quit and reopen path when the app cannot be identified.
 
 A switch that refused before writing needs no undo, and any refusal after the
 quit reopens the app unchanged. A marker left by a run that stopped halfway is
 kept when its switch was written and needs no proof or proves; anything else
-is rolled back before the next run does anything else, so a way back cut
-short before its writes is simply offered again.
+is rolled back. Windows first obtains consent and verifies exit, then settles the
+pending configuration and verifies reopening. Cancellation leaves the marker pending.
 
 `packaging/codex_switch_offer.py` owns the automatic offers. The updater
 calls it after every pass that holds the update lock, the minute Express job

@@ -72,8 +72,9 @@ class Progress:
 
     Removal passes an OK button instead: closing the window never stops removal.
     """
-    def __init__(self, text=None, button='Cancel'):
+    def __init__(self, text=None, button='Cancel', *, home=None):
         self.process = None
+        self.home = home
         self.cancelled = False
         self.text = text or ('Setting up SCG Router. This can take a few minutes.\n\n'
                              'Cancel closes setup after the current step finishes.')
@@ -81,6 +82,9 @@ class Progress:
 
     def __enter__(self):
         text, labels = self.text, (self.button,)
+        if sys.platform == 'win32' and self.home is not None:
+            self.process = platform._windows_dialogs.progress(self.home, text, self.button)
+            return self
         if sys.platform == 'darwin':
             args = ['/usr/bin/osascript', '-e', platform.dialog_script(text, labels=labels)]
         elif sys.platform == 'win32':

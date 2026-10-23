@@ -1,8 +1,4 @@
-"""Desktop identity, lifecycle, dialogs and owned shortcuts.
-
-Windows Codex uses native package and process APIs. Other app adapters retain
-their existing lifecycle. `app` defaults to Claude.
-"""
+"""Desktop identity, lifecycle, dialogs and owned shortcuts; `app` defaults to Claude."""
 import collections
 import importlib.util
 import json
@@ -29,6 +25,7 @@ _policy = _load('router_claude_desktop_policy', 'claude_desktop_policy.py')
 _linux_identity = _load('router_claude_desktop_linux', 'desktop_linux.py')
 _windows_identity = _load('router_desktop_windows', 'desktop_windows.py')
 _windows_codex = _load('router_windows_codex', 'windows_codex.py')
+_windows_dialogs = _load('router_windows_dialog', 'windows_dialog.py')
 _dialogs = _load('router_client_dialog', 'client_dialog.py')
 TITLE = 'SCG Router'
 ICON = Path(__file__).parent / 'assets' / 'router-icon.png'
@@ -55,30 +52,7 @@ def _ps(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 
-def _windows_dialog(message, confirm, labels=('Continue', 'Cancel')):
-    # Match client_dialog's bitmap icon and layout containers; constrain text width.
-    return (
-        "$ErrorActionPreference='Stop';Add-Type -AssemblyName System.Windows.Forms,System.Drawing;"
-        "$f=New-Object System.Windows.Forms.Form;$f.Text='SCG Router';"
-        "$f.Icon=[System.Drawing.Icon]::FromHandle((New-Object System.Drawing.Bitmap %s).GetHicon());"
-        "$f.AutoSize=$true;$f.AutoSizeMode='GrowAndShrink';"
-        "$p=New-Object System.Windows.Forms.FlowLayoutPanel;"
-        "$p.FlowDirection='TopDown';$p.WrapContents=$false;$p.AutoSize=$true;"
-        "$p.Padding=New-Object System.Windows.Forms.Padding(12);"
-        "$l=New-Object System.Windows.Forms.Label;$l.Text=%s;"
-        "$l.MaximumSize=New-Object System.Drawing.Size(440,0);$l.AutoSize=$true;"
-        "$r=New-Object System.Windows.Forms.FlowLayoutPanel;$r.AutoSize=$true;"
-        "$r.FlowDirection='LeftToRight';$r.WrapContents=$false;"
-        "%s$c=New-Object System.Windows.Forms.Button;$c.Text=%s;"
-        "$c.AutoSize=$true;$c.DialogResult='Cancel';$r.Controls.Add($c);"
-        "$f.CancelButton=$c;$p.Controls.Add($l);$p.Controls.Add($r);$f.Controls.Add($p);"
-        "if($f.ShowDialog() -eq 'OK'){'SCG_ROUTER_DIALOG_RESULT=accept';exit 0}"
-        "else{'SCG_ROUTER_DIALOG_RESULT=cancel';exit 1}"
-        % (_ps(ICON), _ps(message), (
-            "$b=New-Object System.Windows.Forms.Button;$b.Text=%s;"
-            "$b.AutoSize=$true;$b.DialogResult='OK';$r.Controls.Add($b);"
-        ) % _ps(labels[0]) if confirm else '', _ps(labels[-1])))
-
+_windows_dialog = _windows_dialogs.script
 
 def _run(command, run, timeout=5, platform_name=None):
     flags = {'creationflags': 0x08000000} if (platform_name or sys.platform) == 'win32' else {}
@@ -105,11 +79,15 @@ def _dialog(message, platform_name, confirm, run, tool_path=None, detailed=False
                                       or 'button returned:' + labels[0] in answer.stdout)
 
 
-def confirm(message, platform_name, run=subprocess.run):
+def confirm(message, platform_name, run=subprocess.run, *, home=None):
+    if platform_name == 'win32' and home is not None:
+        return _windows_dialogs.show(message, home, True, run)
     return _dialog(message, platform_name, True, run)
 
 
-def show_message(message, platform_name, run=subprocess.run):
+def show_message(message, platform_name, run=subprocess.run, *, home=None):
+    if platform_name == 'win32' and home is not None:
+        return _windows_dialogs.show(message, home, False, run, labels=('OK',))
     return _dialog(message, platform_name, False, run, labels=('OK',))
 
 
@@ -119,6 +97,14 @@ def policy_disabled(platform_name, run=subprocess.run, *, profile=None):
 
 error_facts = _windows_identity.error_facts
 _json_command = _windows_identity.json_command
+
+
+def timed(record, stage, operation):
+    started = time.monotonic()
+    try:
+        return operation()
+    finally:
+        record.setdefault('stages_ms', {})[stage] = round((time.monotonic() - started) * 1000, 1)
 
 
 def app_identity(platform_name, run=subprocess.run, app=CLAUDE):
@@ -296,6 +282,17 @@ def open_app(platform_name, run=subprocess.run, app=CLAUDE, *, identity=None):
     if answer.returncode:
         raise subprocess.CalledProcessError(answer.returncode, 'open Claude')
     return answer
+
+
+def running_names(root, run):
+    """Basenames, never arguments or paths, of surviving POSIX app processes."""
+    try:
+        answer = run(['/bin/ps', '-axo', 'comm='], capture_output=True, text=True, timeout=5)
+        prefix = str(root).rstrip('/') + '/'
+        return sorted(Path(line).name for line in answer.stdout.splitlines()
+                      if line.startswith(prefix))
+    except Exception:
+        return None
 
 
 def _desktop_arg(value):

@@ -50,12 +50,19 @@ If Switch Codex reports a missing bundled tool, update the ChatGPT app (Codex).
 Router discovers the current Store package, then checks the bundled Windows executable
 and its version. Do not set `CODEX_BIN` or save a versioned Store path.
 Store Codex identity and process checks use native Windows APIs.
+Closing Codex's window can leave its tray app and tasks running.
+Switch Codex asks to fully close Codex and stop its tasks before changing settings.
+Finish active work before choosing Continue. Cancel leaves Codex unchanged.
+The switch gives Codex five seconds to close, then ends only verified surviving app processes.
+It verifies that Codex reopens. A failure restores the previous connection and attempts reopening.
+Confirmation and waiting windows use the verified native helper, without PowerShell.
 Claude desktop process checks retain a sixty-second limit for busy sessions.
 A failed check refuses before changing settings.
 If an update owns the installation lock, Switch Codex waits up to sixty seconds.
 Its waiting window offers Cancel. Healthy unchanged update checks do not take that lock.
 An actual install or repair can still delay switching; retry after it finishes.
 The switch log distinguishes identity timeouts, query failures and rejected commands.
+It records identity, quit, proof and reopen durations, plus scan count and maximum scan time.
 Its command paths are relative to the package. Protected unrelated Windows processes
 do not block switching; an unreadable relevant app process still requires attention.
 

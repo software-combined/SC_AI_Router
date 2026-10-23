@@ -24,7 +24,8 @@ def error_facts(error, operation):
                 and set(facts) == {'operation', 'reason', 'winerror'}
                 and facts['operation'] in ('app_identity', 'app_open', 'process_open',
                     'process_owner', 'process_session', 'process_snapshot', 'process_identity',
-                    'process_wait', 'process_end', 'window_query', 'window_close', 'request_stop')
+                    'process_wait', 'process_end', 'window_query', 'window_close', 'request_stop',
+                    'confirmation')
                 and facts['reason'] in ('query_failed', 'invalid_identity', 'invalid_response',
                     'app_unavailable', 'package_changed', 'identity_changed', 'still_running',
                     'activation_failed', 'window_unavailable') and type(facts['winerror']) is int):

@@ -72,9 +72,19 @@ class WindowsDesktopTests(unittest.TestCase):
             entry = switcher._receipts.codex_attachment(home)
             (home / switcher.MARKER).write_text(json.dumps({'to': 'switched', 'entry': entry}))
             prove.reset_mock()
+            ops.request_stop.reset_mock()
+            ops.open_app.reset_mock()
             ops.confirm.return_value = False
             switcher.switch(home, platform_ops=ops, ready=lambda _: True, run=self.version())
+            prove.assert_not_called()
+            ops.request_stop.assert_not_called()
+            ops.open_app.assert_not_called()
+            self.assertTrue((home / switcher.MARKER).exists())
+            ops.confirm.return_value = True
+            switcher.switch(home, platform_ops=ops, ready=lambda _: True, run=self.version())
             prove.assert_called_once_with(str(self.app), app_exe=str(self.exe), command=str(self.cli))
+            self.assertEqual(ops.request_stop.call_args.kwargs['identity'], identity)
+            self.assertEqual(ops.open_app.call_args.kwargs['identity'], identity)
 
     def test_switch_log_preserves_identity_and_stop_failure_reasons(self):
         home, config = self.root / 'router', self.root / 'config.toml'

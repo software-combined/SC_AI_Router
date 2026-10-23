@@ -170,6 +170,7 @@ def act(identity, row, api, *, terminate=False, windows=(), record=None):
 
 def stop(expected, select, *, api=None, allow_terminate=False, record=None):
     api, record = api or bindings(), record if record is not None else {}
+    record['shutdown_started'] = False
     try:
         with contextlib.ExitStack() as retained:
             return _stop(expected, select, api, allow_terminate, record, (retained, {}))
