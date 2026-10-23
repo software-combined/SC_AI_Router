@@ -10,6 +10,7 @@ models and billing. These pages go deeper.
 | [Native installers](native-installers.md) | DMG, EXE and AppImage builds, staff downloads, migration and acceptance |
 | [Desktop menu and tray](desktop-menu.md) | Connection switching, management, sign-in startup and Linux fallback controls |
 | [Agent plugins](agent-plugins.md) | The bundled tools, standalone setup and their release rules |
+| [Verification pipeline](ci-pipeline.md) | Parallel main acceptance, required checks and timing evidence |
 | [Operations](operations.md) | Install, update, rollback, uninstall and the daily commands |
 | [Troubleshooting](troubleshooting.md) | Symptom-first remedies: updates, serving, keys, client quirks |
 | [Adding a model](adding-a-model.md) | Adding, probing and promoting a registry row |
