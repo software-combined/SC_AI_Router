@@ -19,7 +19,6 @@
   "packaging/codex_config.py": 501,
   "packaging/install.py": 700,
   "packaging/notice.py": 500,
-  "packaging/operator_surface.py": 421,
   "packaging/service.py": 507,
   "packaging/updater.py": 587,
   "tests/test_bootstrap.py": 310,

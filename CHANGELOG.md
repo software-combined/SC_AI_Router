@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.3.18
+
+- Retry temporary update-check failures quietly on the existing schedule.
+  Keep rejected updates blocked and show retry status without opening repair dialogs.
+- Clear a recovered feed error after a verified unchanged Express check.
+  Preserve incomplete installations, failed components and parked installer failures.
+- Offer Repair only for installation faults, failed components or parked installers.
+  Missed checks alone do not ask for repair after a computer wakes from sleep.
+
 ## 1.3.17
 
 - Discover Windows Store Codex through native package APIs on every switch.

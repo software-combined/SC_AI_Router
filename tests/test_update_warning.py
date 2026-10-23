@@ -14,19 +14,19 @@ NOW = '2026-10-18T13:05:00Z'
 
 
 class WarningPolicyTests(unittest.TestCase):
-    def test_first_failure_is_visible_and_second_failure_offers_repair(self):
+    def test_network_failures_remain_visible_and_retry_without_offering_repair(self):
         status = module('update_status')
         state = {}
         status.record(state, 'feed_unreachable', now=NOW)
         facts = status.summary(state, now=status.seconds(NOW))
-        self.assertEqual(facts['required_action'], 'repair')
+        self.assertIsNone(facts['required_action'])
         self.assertFalse(facts['offer_repair'])
         status.record(state, 'feed_unreachable', now=NOW)
-        self.assertTrue(status.summary(state, now=status.seconds(NOW))['offer_repair'])
+        self.assertFalse(status.summary(state, now=status.seconds(NOW))['offer_repair'])
 
     def test_blocked_install_and_each_failed_component_offer_immediately(self):
         status = module('update_status')
-        for state in ({'last_error': 'download_signin_required'},
+        for state in ({'last_error': 'installer_failed'},
                 {'update_failures': {'1.3.2.185': 3}},
                 *({'component_repairs': {name: 'failed'}} for name in status.COMPONENTS)):
             self.assertTrue(status.summary(state, '1.2.6.174')['offer_repair'], state)
@@ -38,7 +38,8 @@ class WarningPolicyTests(unittest.TestCase):
         self.assertIsNone(status.summary(state, now=deadline - 1)['required_action'])
         facts = status.summary(state, now=deadline)
         self.assertTrue(facts['missed_scheduled_checks'])
-        self.assertTrue(facts['offer_repair'])
+        self.assertTrue(facts['retry_pending'])
+        self.assertFalse(facts['offer_repair'])
         self.assertIsNone(status.summary({'last_check_at': 'damaged'}, now=deadline)['required_action'])
 
     def test_success_clears_only_verified_components_and_formats_valid_times(self):
