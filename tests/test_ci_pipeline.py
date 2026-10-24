@@ -17,10 +17,11 @@ class AcceptancePipelineTests(unittest.TestCase):
         pipeline = jobs()
         suite = pipeline['unit-suite']
         self.assertNotIn('\n    needs:', '\n' + suite, 'offline tests are independent')
-        self.assertIn('run: python -m unittest discover -s tests -t .', suite)
+        command = ('run: python tools/ci_unittest.py --workers 2 '
+                   '--report "$RUNNER_TEMP/unit-results.json" -- discover -s tests -t .')
+        self.assertIn(command, suite)
         self.assertIn("SCG_RUN_INSTALLER_TESTS: '1'", suite)
-        self.assertEqual(sum('run: python -m unittest discover -s tests -t .' in job
-                             for job in pipeline.values()), 1)
+        self.assertEqual(sum(command in job for job in pipeline.values()), 1)
 
     def test_required_gate_waits_for_every_acceptance_job(self):
         pipeline = jobs()

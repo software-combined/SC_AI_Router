@@ -119,7 +119,7 @@ jobs:
       - name: Unit suite (offline)
         env:
           SCG_RUN_INSTALLER_TESTS: '1'
-        run: python -m unittest discover -s tests -t .
+        run: python tools/ci_unittest.py --workers 2 --report "$RUNNER_TEMP/unit-results.json" -- discover -s tests -t .
 
   test:
     # The rulesets require a check named Test. A skipped job reports success
