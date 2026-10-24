@@ -114,12 +114,14 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup
       - name: Unit suite (offline)
         env:
           SCG_RUN_INSTALLER_TESTS: '1'
-        run: python tools/ci_unittest.py --workers 2 --report "$RUNNER_TEMP/unit-results.json" -- discover -s tests -t .
+          VERIFICATION_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: python tools/plugin_verification.py --base "$VERIFICATION_BASE" --run --workers 2 --report "$RUNNER_TEMP/unit-results.json"
 
   test:
     # The rulesets require a check named Test. A skipped job reports success
@@ -135,7 +137,7 @@ jobs:
     needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter, unit-suite]
     if: ${{ !cancelled() && (github.event.action != 'edited' || github.event.changes.base) }}
     # Development keeps the fast static checks. Main acceptance waits for
-    # the full offline suite and native checks running in parallel.
+    # the selected offline suite and native checks running in parallel.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

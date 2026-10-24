@@ -89,14 +89,31 @@ across the platforms, so a new dialog cannot drift from this style.
 
 ## 5. Verification before commit
 
-Run all four checks:
+Run all four checks. The shared selector runs the full core suite unless every
+change qualifies for the narrow plugin documentation path:
 
 ```sh
-python3.14 -m unittest discover -s tests -t .
+python3.14 tools/plugin_verification.py --base origin/development --run
 python3.14 -m compileall -q ai_router tools tests packaging
 python3.14 tools/check_source_limits.py
 python3.14 tools/check_policy_scans.py
 ```
+
+For a scoped release based on `main`, use `--base origin/main`. Use the actual
+integration base, never `HEAD` to hide committed changes. `--full --run` keeps
+explicit full discovery available.
+
+The narrow path permits Markdown skills and references in registered marketplace
+plugins, `plugins/CHANGELOG.md`, and existing paired manifests whose only changed
+field is `version`. It runs plugin, package, delivery and public-content contracts.
+Strict Claude manifest validation and skill-creator validation under section 9
+remain separate required gates. Keep the secret scan and all four review lanes.
+
+Mixed Router changes, executable plugin changes, unknown paths, policy or workflow
+changes, deletions, renames, symlinks, mode changes and uncertain history retain
+full verification. The selector examines committed, staged, unstaged and untracked
+changes separately; opposing edits cannot cancel out of selection. Missing expected
+plugin suites fail. This verification policy itself always requires full checks.
 
 Then run the installed
 [pre-commit-review skill](plugins/scg-review/skills/pre-commit-review/SKILL.md).
@@ -107,7 +124,8 @@ type `feat`, `fix`, `refactor`, `test`, `chore` or `docs`.
 Test discovery runs the fast core suite. Installer tests are opt-in via
 `SCG_RUN_INSTALLER_TESTS=1` (native CI runners cover them on scope for release
 PRs into `main` and pushes to `main`). Development continuous integration (CI)
-runs fast static checks; full remote regression runs for main acceptance.
+runs fast static checks; main acceptance uses the same selector and retains full
+remote regression outside the narrow plugin documentation path.
 Stable tags publish only an exact
 main commit with a successful `Check` run; beta tags publish a commit that
 `development` or `main` moved to (their first-parent line). Neither repeats those
@@ -208,6 +226,10 @@ simplicity; this file and the review skill retain all verification gates.
   directly related plugin verification tests, marketplace registration in
   `.agents/plugins/marketplace.json`, the README's agent-plugin documentation,
   and directly related plugin-release instructions in this file.
+  Plugin verification-policy updates may also promote only
+  `tools/plugin_verification.py`, `.github/workflows/check.yml`, their regression
+  tests, `CONTRIBUTING.md`, `docs/architecture.md` and `docs/agent-plugins.md`
+  through this scoped procedure. These policy changes require full verification.
   Verify the complete diff against current `main`, run all required checks and
   reviews on that exact candidate,
   and use the normal PR gates. Do not include router code, `packaging/VERSION`,
