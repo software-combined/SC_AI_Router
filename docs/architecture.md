@@ -523,12 +523,13 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    that are invoked by the developer or by CI, not by an installed router;
    `ci_unittest.py` owns bounded CI workers and their result reports, keeping
    unittest discovery and fixtures separate from router runtime behavior.
+   `plugin_verification.py` owns conservative suite selection for local and CI
+   checks; unknown scope retains full discovery.
    `packaging/` holds the modules an installed host executes. A new
    host-run script belongs in `packaging/`, even if nothing in `ai_router/`
-   imports it. `packaging/release.py` globs every `tools/*.py` into the
-   bundle, so a repo-only helper placed there ships to recipients; the one
-   deliberate exception is `tools/disable.py`, the installed-host remover
-   that `packaging/install.py` runs.
+   imports it. `packaging/release.py` includes only its named installed operator
+   helpers from `tools/`; checkout verification tools stay outside the bundle.
+   `tools/disable.py` is the installed-host remover that `packaging/install.py` runs.
 
 `plugins/` and `.agents/plugins/marketplace.json` host the SCG agent-plugin
 marketplace outside the router dependency map: no `ai_router/`, `tools/` or

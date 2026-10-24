@@ -17,7 +17,7 @@ The runtime needs Python 3.14 and nothing else; installer scripts stay
 Python 3.9-compatible. Clone the repository and run the gates:
 
 ```sh
-python3.14 -m unittest discover -s tests -t .
+python3.14 tools/plugin_verification.py --base origin/development --run
 python3.14 -m compileall -q ai_router tools tests packaging
 python3.14 tools/check_source_limits.py
 python3.14 tools/check_policy_scans.py
@@ -26,8 +26,15 @@ python3.14 tools/check_policy_scans.py
 All tests run offline; nothing in `tests/` may reach the network or touch a
 real router home.
 
-Main acceptance runs the full offline suite in two isolated processes within
-one Ubuntu job. `tools/ci_unittest.py` splits the discovered order once, between
+The selector permits only registered plugin Markdown and version-only manifest
+changes to use plugin, package, delivery and public-content tests. It checks each
+Git state separately and retains full discovery for mixed, executable, policy,
+deleted, renamed or uncertain inputs. `--full --run` explicitly runs full discovery.
+Scoped main releases use `--base origin/main`; always use the intended integration
+base. Plugin manifest and skill validation, secret scans and reviews still apply.
+
+Main acceptance uses the same selector in two isolated processes within one
+Ubuntu job. `tools/ci_unittest.py` splits the discovered order once, between
 modules, so class and module fixtures stay together. It retains duplicate test
 executions and records outcomes and skips. Both workers must finish; a failed
 or interrupted worker fails the job. Use `--workers 1` for an instrumented
@@ -42,7 +49,7 @@ regressions explicitly disable UTF-8 mode to cover the default runtime.
 - Fork the repository, branch from `development`, and target `development` for normal
   contributions. Develop pull requests run fast static checks, so run the suite
   locally first. Pull requests opened against `main` are welcome and run the
-  full release acceptance; a maintainer retargets them to `development` before
+  required release acceptance; a maintainer retargets them to `development` before
   merging. `main` receives release merges from `development`.
 - Cyril (`SC-Cyril`) and Brent (`BrentJMaxwell`) are the release maintainers.
   Only they merge pull requests, create tags, and run or rerun releases.
