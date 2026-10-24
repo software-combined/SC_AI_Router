@@ -132,6 +132,26 @@ Test realistic counterexamples: combined scopes, shared callers, hidden authenti
 filesystem inputs, deletes, unknown paths, missing history, absent tests and command failure.
 Each test must catch a named defect.
 
+## If updating plugin content
+
+A small skill or guide update can use complete checks for its plugin
+when repository policy permits. Derive the scope from package ownership and
+runtime consumers; a small diff or a Markdown filename alone is insufficient.
+Validate skill format and each supported client manifest. Keep checks for public
+content, package contents, installation and delivery, plus applicable platform checks.
+
+Use the same conservative selection policy locally and in CI.
+Executable changes, shared dependencies, verification policy changes, mixed
+scope, unknown impact or unreliable comparison history retain full checks.
+Validate a changed selection policy with full verification before relying on it.
+Then confirm a representative authorised plugin update takes the targeted path.
+One confirmed execution establishes routing. Typical speed or reliability claims
+need further evidence.
+
+Do not repeat unrelated application suites solely because a content update is
+committed, promoted or released. Retain required check names, secret scans,
+independent reviews and release gates. A small text diff never waives them.
+
 ## Preserve integration and release evidence
 
 Use the correct comparison base for each event. Verify the final combined candidate.
