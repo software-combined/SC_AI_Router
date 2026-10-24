@@ -104,10 +104,10 @@ is scanner evidence, not a completed review: the gate still requires the
 installed hooks and an approval receipt.
 
 Run from a clone of the repository, or substitute the installed plugin's
-absolute root for `plugins/scg-review`:
+absolute root for `plugins/development/scg-review`:
 
 ```sh
-python3 plugins/scg-review/scripts/setup.py check --repo /absolute/path/to/repo
+python3 plugins/development/scg-review/scripts/setup.py check --repo /absolute/path/to/repo
 ```
 
 For first-time provisioning, have the machine owner supply a reviewed JSON
@@ -144,8 +144,8 @@ Windows to accept the router's runtime; set it to override either default:
 Then explicitly provision that repository:
 
 ```sh
-python3 plugins/scg-review/scripts/setup.py install --repo /absolute/path/to/repo --config /absolute/path/to/approved-config.json
-python3 plugins/scg-review/scripts/setup.py check --repo /absolute/path/to/repo
+python3 plugins/development/scg-review/scripts/setup.py install --repo /absolute/path/to/repo --config /absolute/path/to/approved-config.json
+python3 plugins/development/scg-review/scripts/setup.py check --repo /absolute/path/to/repo
 ```
 
 On native Windows, run the same commands in PowerShell with the router's runtime:

@@ -26,7 +26,7 @@ from ai_router import registry
 from ai_router.claude import claude_alias
 
 ROOT = Path(__file__).resolve().parents[1]
-PLUGIN = ROOT / 'plugins/scg-subagents'
+PLUGIN = ROOT / 'plugins/agents/scg-subagents'
 SKILL = PLUGIN / 'skills/router-workers'
 spec = importlib.util.spec_from_file_location('router_worker', SKILL / 'scripts/router_worker.py')
 worker = importlib.util.module_from_spec(spec)

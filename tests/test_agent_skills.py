@@ -68,9 +68,7 @@ class AgentSkillsTest(unittest.TestCase):
 
     def test_bundle_carries_every_plugin_manifest_and_skill(self):
         bundled = set(release.bundle_files(ROOT))
-        for plugin in sorted(p for p in (ROOT / 'plugins').iterdir() if p.is_dir()):
-            if not (plugin / '.codex-plugin' / 'plugin.json').is_file():
-                continue
+        for plugin in skills.plugin_sources(ROOT / 'plugins').values():
             rel = plugin.relative_to(ROOT).as_posix()
             with self.subTest(plugin=plugin.name):
                 self.assertIn(rel + '/.codex-plugin/plugin.json', bundled)

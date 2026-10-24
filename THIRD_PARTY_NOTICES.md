@@ -45,10 +45,10 @@ SOFTWARE.
 
 ## Ponytail
 
-`plugins/scg-ponytail/skills/ponytail/` adapts Ponytail 4.10.0 by
+`plugins/development/scg-ponytail/skills/ponytail/` adapts Ponytail 4.10.0 by
 [Dietrich Gebert](https://github.com/DietrichGebert/ponytail). It remains under
 MIT, with the original copyright and full permission notice preserved in
-[its licence](plugins/scg-ponytail/skills/ponytail/LICENSE).
+[its licence](plugins/development/scg-ponytail/skills/ponytail/LICENSE).
 
 ## Client wire formats
 

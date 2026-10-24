@@ -43,15 +43,20 @@ def transitions(root, base):
 
 def registered_plugins(root, base):
     registry = json.loads(git(root, 'show', f'{base}:.agents/plugins/marketplace.json'))
+    paths = set()
     names = set()
     for entry in registry['plugins']:
         name = entry['name']
-        if entry['source']['path'] != './plugins/' + name or '/' in name or name in ('.', '..'):
+        path = PurePosixPath(entry['source']['path'])
+        if (path.is_absolute() or '..' in path.parts or len(path.parts) not in (2, 3)
+                or path.parts[0] != 'plugins' or path.name != name
+                or '/' in name or name in ('.', '..') or name in names):
             raise ValueError('unknown marketplace ownership')
         names.add(name)
+        paths.add(path.parts)
     if not names:
         raise ValueError('empty marketplace')
-    return names
+    return paths
 
 
 def documentation(parts):
@@ -96,9 +101,10 @@ def narrow_change(root, change, names):
     if name == 'plugins/CHANGELOG.md':
         return True
     parts = path.parts
-    if len(parts) < 4 or parts[0] != 'plugins' or parts[1] not in names:
+    plugin = next((prefix for prefix in names if parts[:len(prefix)] == prefix), None)
+    if plugin is None:
         return False
-    relative = parts[2:]
+    relative = parts[len(plugin):]
     if relative in (('.codex-plugin', 'plugin.json'), ('.claude-plugin', 'plugin.json')):
         return old_mode != '000000' and version_only(root, change)
     return documentation(relative)

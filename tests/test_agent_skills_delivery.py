@@ -21,7 +21,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNNER = ROOT / 'plugins' / 'scg-review' / 'scripts' / 'updater.py'
+RUNNER = ROOT / 'plugins' / 'development' / 'scg-review' / 'scripts' / 'updater.py'
 
 
 def _load(name, path):

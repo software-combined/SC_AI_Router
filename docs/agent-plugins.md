@@ -1,12 +1,13 @@
 # Agent plugins
 
-This repo also hosts the `scg-agent-plugins` marketplace:
-`scg-review` (pre-commit review), `scg-subagents` (subagent coordination),
-`scg-prototypes` (prototype publishing), `scg-finance` (finance analysis) and
-`scg-documentation` (technical writing), `scg-ponytail` (coding simplicity) and
-`scg-optimise-ci` (measured verification improvements).
-Every plugin works in Codex and Claude
-Code.
+This repo hosts the `scg-agent-plugins` marketplace. Browse
+[plugins and skills by domain](../plugins/README.md) for sales, development,
+finance, operations, customer success, support, documentation and agent tools.
+Every plugin works in Codex and Claude Code.
+
+Plugin source lives under `plugins/<domain>/<plugin-name>/`. Department briefs
+share the agent plugin and are linked from their domain pages. Installed plugin
+names, skill names and client paths stay the same.
 
 The router is the delivery channel. Its release bundle carries the plugin
 trees, and each install or scheduled update that lands a new release
@@ -39,7 +40,7 @@ are delivery copies; the authored skill lives in this repository.
 
 SCG Review is model agnostic. Each user sets preferred reviewer models and
 fallbacks in their local Git hook configuration; see
-[reviewer preferences](../plugins/scg-review/references/setup.md#reviewer-preferences).
+[reviewer preferences](../plugins/development/scg-review/references/setup.md#reviewer-preferences).
 The shared skill keeps the same review and secret-scanning gates.
 
 Installing the router later moves that Codex registration to the router's own

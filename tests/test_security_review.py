@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PLUGIN = ROOT / 'plugins/scg-review'
+PLUGIN = ROOT / 'plugins/development/scg-review'
 spec = importlib.util.spec_from_file_location('security_review_setup', PLUGIN / 'scripts/setup.py')
 setup = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(setup)
@@ -37,7 +37,7 @@ class SecurityReviewTests(unittest.TestCase):
         files = release.plugin_files(ROOT)
         for name in ('agents/review-security.md', 'skills/security-review/SKILL.md',
                      'support/cloudflare-LICENSE.txt'):
-            self.assertIn('plugins/scg-review/' + name, files)
+            self.assertIn('plugins/development/scg-review/' + name, files)
 
 
 if __name__ == '__main__':
