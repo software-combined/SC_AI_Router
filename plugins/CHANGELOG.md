@@ -1,5 +1,18 @@
 # Changelog
 
+## scg-optimise-ci 0.1.4 (2026-10-24)
+
+- Compare isolated test workers within an existing runner. Preserve fixture
+  groups, case order and duplicate executions; account for fixture skips and
+  fail on unexplained missing cases or reports.
+- Check effective runtime inputs changed by setup tools. Separate the changed
+  job's duration from setup and unrelated-job variation when reporting totals.
+- Diagnose test failures before replacing samples. Restart both arms after a
+  source or fixture correction.
+- Add the Router's controlled worker-count benchmark: 9.4% lower median runner
+  time and 29.7% lower median elapsed time, with matching execution records.
+  Retain all attempts, exclusions, native fixture proof and measurement limits.
+
 ## scg-optimise-ci 0.1.3 (2026-10-24)
 
 - Apply the method to existing repository boundaries or full verification.
