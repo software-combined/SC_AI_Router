@@ -1777,5 +1777,233 @@
       "result": "pass"
     }
   ]
+},
+{
+  "kind": "model_routes_v1",
+  "observed_at": "2026-10-23T21:53:27.153354+00:00",
+  "model": "moonshotai/kimi-k3.1-pro",
+  "provider": "openrouter",
+  "capability_fingerprint": "7f001fb3687782532c5f360005f5b53b4d8a5ce7585c72087b28356331bb2dd0",
+  "runtime_fingerprint": "2b8b7038cb4214b4556f477ec3d2af7ccc5f88dda33492fdad6f2393dd813ce4",
+  "router_version": "1.3.19",
+  "router_revision": "4ea27df283a9e7aef58f4dd7baae35abb30bac91",
+  "routes": [
+    {
+      "protocol": "responses",
+      "client": "codex",
+      "client_version": "0.163.0-alpha.11.2",
+      "requested_effort": "low",
+      "served_models": [],
+      "served_efforts": [],
+      "calls": 0,
+      "conformance": "pass",
+      "result": "fail"
+    },
+    {
+      "protocol": "messages",
+      "client": "claude",
+      "client_version": "2.1.309",
+      "requested_effort": "low",
+      "served_models": [],
+      "served_efforts": [],
+      "calls": 0,
+      "conformance": "pass",
+      "result": "fail"
+    }
+  ]
+},
+{
+  "kind": "model_routes_v1",
+  "observed_at": "2026-10-23T22:09:14.166292+00:00",
+  "model": "moonshotai/kimi-k3.1-pro",
+  "provider": "openrouter",
+  "capability_fingerprint": "2aa25b7260f1553f09e1cff8259811113418b493057fe8b73825d5129e129197",
+  "runtime_fingerprint": "2b8b7038cb4214b4556f477ec3d2af7ccc5f88dda33492fdad6f2393dd813ce4",
+  "router_version": "1.3.19",
+  "router_revision": "4ea27df283a9e7aef58f4dd7baae35abb30bac91",
+  "routes": [
+    {
+      "protocol": "responses",
+      "client": "codex",
+      "client_version": "0.163.0-alpha.11.2",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "response.completed.response.model"
+        }
+      ],
+      "served_efforts": [
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        }
+      ],
+      "calls": 1,
+      "conformance": "pass",
+      "result": "fail"
+    },
+    {
+      "protocol": "messages",
+      "client": "claude",
+      "client_version": "2.1.309",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "message_start.message.model"
+        }
+      ],
+      "served_efforts": [],
+      "calls": 3,
+      "conformance": "pass",
+      "result": "pass"
+    }
+  ]
+},
+{
+  "kind": "model_routes_v1",
+  "observed_at": "2026-10-23T22:11:43.066894+00:00",
+  "model": "moonshotai/kimi-k3.1-pro",
+  "provider": "openrouter",
+  "capability_fingerprint": "2aa25b7260f1553f09e1cff8259811113418b493057fe8b73825d5129e129197",
+  "runtime_fingerprint": "2b8b7038cb4214b4556f477ec3d2af7ccc5f88dda33492fdad6f2393dd813ce4",
+  "router_version": "1.3.19",
+  "router_revision": "4ea27df283a9e7aef58f4dd7baae35abb30bac91",
+  "routes": [
+    {
+      "protocol": "responses",
+      "client": "codex",
+      "client_version": "0.163.0-alpha.11.2",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "response.completed.response.model"
+        },
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "response.created.response.model"
+        },
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "response.in_progress.response.model"
+        },
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "response.completed.response.model"
+        }
+      ],
+      "served_efforts": [
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.created.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.in_progress.response.reasoning.effort"
+        },
+        {
+          "value": "low",
+          "source": "response.completed.response.reasoning.effort"
+        }
+      ],
+      "calls": 4,
+      "conformance": "pass",
+      "result": "pass"
+    },
+    {
+      "protocol": "messages",
+      "client": "claude",
+      "client_version": "2.1.309",
+      "requested_effort": "low",
+      "served_models": [
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "message_start.message.model"
+        },
+        {
+          "value": "moonshotai/kimi-k3.1-pro",
+          "source": "message_start.message.model"
+        }
+      ],
+      "served_efforts": [],
+      "calls": 3,
+      "conformance": "pass",
+      "result": "pass"
+    }
+  ]
 }
 ]

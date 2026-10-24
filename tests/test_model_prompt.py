@@ -16,7 +16,7 @@ from ai_router.clients import models_for
 from ai_router.registry import MODELS, by_slug
 from tests._platform import unix_only
 
-ALLOWED = ('z-ai/glm-5.3-flash', 'moonshotai/kimi-k3')
+ALLOWED = ('z-ai/glm-5.3-flash', 'moonshotai/kimi-k3.1-pro')
 EXTRA = 'openrouter/acme-test-model'
 
 
@@ -78,7 +78,7 @@ class VisibleModelsTests(unittest.TestCase):
             self.assertEqual(model_prompt.visible_models(tmp), [])
 
     def test_unlisted_row_is_never_visible(self):
-        target = by_slug('moonshotai/kimi-k3')
+        target = by_slug('moonshotai/kimi-k3.1-pro')
         rows = tuple(replace(m, listed=False) if m.slug == target.slug else m
                      for m in MODELS)
         with mock.patch.object(catalogue, 'MODELS', rows), \

@@ -134,13 +134,13 @@ class AvailabilityUnitTests(unittest.TestCase):
             'models': frozenset({'z-ai/glm-5.3'}), 'fetched_at': 0}
         ids = {row['id'] for row in _claude.models_listing()['data']}
         self.assertIn(_claude.claude_alias('z-ai/glm-5.3'), ids)
-        self.assertNotIn(_claude.claude_alias('moonshotai/kimi-k3'), ids)
+        self.assertNotIn(_claude.claude_alias('moonshotai/kimi-k3.1-pro'), ids)
 
     def test_claude_listing_without_snapshot_lists_all(self):
         from ai_router import claude as _claude
         availability._SNAPSHOTS.clear()
         full = {row['id'] for row in _claude.models_listing()['data']}
-        self.assertIn(_claude.claude_alias('moonshotai/kimi-k3'), full)
+        self.assertIn(_claude.claude_alias('moonshotai/kimi-k3.1-pro'), full)
 
     def test_restore_serves_same_key_and_region_only(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -284,7 +284,7 @@ class VisibilityIntegrationTests(unittest.TestCase):
 
     def test_request_selection_refuses_unavailable_row(self):
         from ai_router.errors import UnknownModel
-        target = 'moonshotai/kimi-k3'
+        target = 'moonshotai/kimi-k3.1-pro'
         availability._SNAPSHOTS['openrouter'] = {
             'provider': 'openrouter', 'key': 'k', 'region': 'global',
             'models': frozenset({'z-ai/glm-5.3'}), 'fetched_at': 0}
@@ -295,12 +295,12 @@ class VisibilityIntegrationTests(unittest.TestCase):
 
     def test_request_selection_passes_before_first_snapshot(self):
         availability._SNAPSHOTS.clear()
-        provider = providers.select('moonshotai/kimi-k3', '/responses')
+        provider = providers.select('moonshotai/kimi-k3.1-pro', '/responses')
         self.assertEqual(provider.name, 'openrouter')
         self.assertEqual(provider.host, 'openrouter.ai')
 
     def test_request_selection_uses_region_host(self):
-        provider = providers.select('moonshotai/kimi-k3', '/responses',
+        provider = providers.select('moonshotai/kimi-k3.1-pro', '/responses',
                                     region='us')
         self.assertEqual(provider.host, 'us.openrouter.ai')
 
