@@ -43,6 +43,31 @@ Consider dependency cleanup, correct caching, duplicate work, worker counts,
 equivalent result reuse or affected checks. Reuse the existing task graph.
 A longer individual job may be off the critical path; speeding it up may not help completion.
 
+## Keep proof effort proportionate
+
+Before implementation or custom benchmarking, estimate absolute savings per run,
+run frequency and how long the improvement is likely to remain useful.
+Include faster feedback and concrete reuse opportunities, alongside investigation,
+implementation, benchmark execution and ongoing maintenance effort.
+A large percentage on an infrequent short job can have little practical value.
+Set a bounded proof budget and a success or stopping criterion before spending more.
+
+Start with existing timing and execution reports and the smallest credible
+comparison of equivalent workloads. Match the claim to the evidence available.
+Add instrumentation or samples only when missing evidence, variability or risk
+could change the decision. Stronger claims need stronger evidence.
+Do not copy a worked example's harness or sample count into every repository.
+
+Reassess when proof costs grow or expected gains shrink.
+If further effort outweighs the likely benefit, stop and report the limit.
+If the improvement remains unproven, retain the proven path and say so.
+Do not keep rerunning to obtain a favourable result.
+
+Proportionality limits optional optimisation and benchmarking effort.
+It never waives required tests, assertions, coverage, checks, independent reviews,
+security controls or release gates. Change the scope or strength of a performance
+claim rather than weakening verification to fit the budget.
+
 ## If changing the job graph
 
 Remove a dependency only after checking artifacts, generated inputs, services,
@@ -181,6 +206,7 @@ Stop when required checks pass and evidence addresses the chosen bottleneck.
 Report the change, before/after measures, preserved gates, limitations and integration state.
 Keep the existing full-verification path; add recurring controls only when justified and authorised.
 
-Read the Router's [job-graph benchmark](references/worked-example.md) and
-[runner-time benchmark](references/runner-time-benchmark.md) for measured results and pitfalls.
+For measured examples and pitfalls, consult the Router's
+[job-graph benchmark](references/worked-example.md) or
+[runner-time benchmark](references/runner-time-benchmark.md) when relevant.
 Their provider, commands and layouts are examples, not requirements for another repository.

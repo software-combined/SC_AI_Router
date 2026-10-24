@@ -1,5 +1,14 @@
 # Changelog
 
+## scg-optimise-ci 0.1.5 (2026-10-24)
+
+- Scale optimisation and benchmark effort to likely absolute savings, run
+  frequency, feedback value, risk and ongoing maintenance across repositories.
+- Start with existing timing and execution reports. Expand proof only to resolve
+  uncertainty that could change the decision; stop when further effort outweighs
+  the likely benefit. Preserve tests, checks, reviews and release gates.
+- Record this tradeoff beside the Router benchmark without changing its results.
+
 ## scg-optimise-ci 0.1.4 (2026-10-24)
 
 - Compare isolated test workers within an existing runner. Preserve fixture
