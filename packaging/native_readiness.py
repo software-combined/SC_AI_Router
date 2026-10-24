@@ -57,7 +57,7 @@ def plugins_available(client, names, run=subprocess.run, which=shutil.which):
 
 def check(home, source, status, progress, run=subprocess.run):
     skills = load('agent_skills')
-    names = skills.plugin_names(Path(source) / 'plugins')
+    names = sorted(skills.plugin_sources(Path(source) / 'plugins'))
     clients = list(status.get('clients', {}))
     checks = {}
     for client in clients:

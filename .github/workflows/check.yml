@@ -290,4 +290,4 @@ jobs:
         # The receipt gate, the interpreter selection and the shims run on
         # both platforms. Tests needing a POSIX scanner stub stay
         # POSIX-only; the portability module covers the scanner here.
-        run: python -m unittest discover -s plugins/scg-review/support/git-hooks/tests -v
+        run: python -m unittest discover -s plugins/development/scg-review/support/git-hooks/tests -v

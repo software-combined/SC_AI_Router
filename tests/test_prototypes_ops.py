@@ -17,7 +17,7 @@ from unittest.mock import patch
 # hook, so the fcntl-dependent script is never touched. A module-level
 # ``raise SkipTest`` would surface as a collection ERROR, not a clean skip.
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "plugins/scg-prototypes/skills/publish-prototype/scripts/prototypes.py"
+SCRIPT = ROOT / "plugins/development/scg-prototypes/skills/publish-prototype/scripts/prototypes.py"
 if os.name == 'nt':
     prototypes = None
 else:

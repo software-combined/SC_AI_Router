@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = (ROOT / 'plugins/scg-subagents/skills/router-workers/scripts/'
+SCRIPT = (ROOT / 'plugins/agents/scg-subagents/skills/router-workers/scripts/'
           'router_worker.py')
 spec = importlib.util.spec_from_file_location('router_worker_no_result', SCRIPT)
 worker = importlib.util.module_from_spec(spec)

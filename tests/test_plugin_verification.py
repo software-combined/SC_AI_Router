@@ -83,6 +83,30 @@ class PluginVerificationTests(unittest.TestCase):
         self.assertEqual(plan['mode'], 'plugins')
         self.assertEqual(set(plan['tests']), {'tests.' + name for name in MODULES})
 
+    def test_domain_skill_edit_selects_contracts_after_layout_is_integrated(self):
+        (self.root / 'plugins/development').mkdir()
+        self.git('mv', 'plugins/scg-example', 'plugins/development/scg-example')
+        self.write('.agents/plugins/marketplace.json', json.dumps({'plugins': [
+            {'name': 'scg-example', 'source': {
+                'path': './plugins/development/scg-example'}}]}))
+        self.base = self.commit()
+        self.write('plugins/development/scg-example/skills/example/SKILL.md',
+                   '# Updated domain skill\n')
+        self.assertEqual(self.run_plan()['mode'], 'plugins')
+
+    def test_domain_layout_move_itself_keeps_full_verification(self):
+        (self.root / 'plugins/development').mkdir()
+        self.git('mv', 'plugins/scg-example', 'plugins/development/scg-example')
+        self.assertEqual(self.run_plan()['mode'], 'full')
+
+    def test_unsafe_marketplace_path_keeps_full_verification(self):
+        self.write('.agents/plugins/marketplace.json', json.dumps({'plugins': [
+            {'name': 'scg-example', 'source': {
+                'path': './plugins/../scg-example'}}]}))
+        self.base = self.commit()
+        self.change_skill()
+        self.assertEqual(self.run_plan()['mode'], 'full')
+
     def test_committed_index_worktree_and_untracked_inputs_are_unioned(self):
         self.change_skill()
         self.commit()

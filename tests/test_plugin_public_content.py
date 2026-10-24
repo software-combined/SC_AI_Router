@@ -1,4 +1,5 @@
 """Public plugin packages and metadata omit private environment details."""
+import json
 import re
 import unittest
 from pathlib import Path
@@ -11,16 +12,9 @@ PLUGIN_SURFACES = {
         ROOT / "skills/manage-router",
     ),
     **{
-        name: (ROOT / "plugins" / name,)
-        for name in (
-            "scg-documentation",
-            "scg-finance",
-            "scg-optimise-ci",
-            "scg-ponytail",
-            "scg-prototypes",
-            "scg-review",
-            "scg-subagents",
-        )
+        entry['name']: (ROOT / entry['source']['path'],)
+        for entry in json.loads(
+            (ROOT / '.agents/plugins/marketplace.json').read_text())['plugins']
     },
 }
 PUBLIC_METADATA = (

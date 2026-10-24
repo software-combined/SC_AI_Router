@@ -1,6 +1,6 @@
 # Model-agnostic pre-commit review routing
 
-Canonical authoring source: `plugins/scg-subagents/skills/optimal-subagents/references/reviews.md`
+Canonical authoring source: `plugins/agents/scg-subagents/skills/optimal-subagents/references/reviews.md`
 in SC_AI_Router. The review plugin bundles an unchanged release copy at
 `references/reviews.md` so review-only installations remain usable.
 Edit the canonical source, synchronize the copy and release both affected plugins.

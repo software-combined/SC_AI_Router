@@ -536,6 +536,13 @@ marketplace outside the router dependency map: no `ai_router/`, `tools/` or
 `packaging/` module imports from `plugins/`, and plugin scripts never import
 router code.
 
+Plugin source is grouped under `plugins/<domain>/<plugin-name>/`; the
+[domain index](../plugins/README.md) also routes to shared department briefs.
+`packaging/release.py` discovers package roots by their Codex manifest, so
+updater exclusions apply to each plugin. `packaging/agent_skills.py` reads both
+domain folders and older flat bundles, then preserves flat installed paths.
+Duplicate plugin folder names fail before marketplace files are written.
+
 ## Client contract
 
 `ai_router/clients/registry.py` is the one owner of who sees what: one row per

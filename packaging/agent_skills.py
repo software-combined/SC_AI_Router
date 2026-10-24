@@ -6,9 +6,6 @@ with each attached client, so a machine needs no git account, no GitHub access
 and no marketplace command typed by a person. A scheduled update spawns this
 installer, so the same path refreshes the skills on every router release.
 
-This module owns that work and nothing else. It never imports install.py:
-callers pass the release's plugin directory in, which keeps the seam one-way.
-
 Failures here must never fail a router install. Every entry point catches,
 records one line, and continues.
 """
@@ -104,13 +101,15 @@ def _entry(name):
             'policy': dict(ENTRY_POLICY), 'category': 'Productivity'}
 
 
-def plugin_names(plugins_dir):
-    """Plugins in a release tree: a directory holding a Codex manifest."""
-    root = Path(plugins_dir)
-    if not root.is_dir():
-        return []
-    return sorted(p.name for p in root.iterdir()
-                  if (p / '.codex-plugin' / 'plugin.json').is_file())
+def plugin_sources(plugins_dir):
+    """Find plugins in flat releases and domain folders; refuse duplicate names."""
+    sources = {}
+    for manifest in sorted(Path(plugins_dir).glob('**/.codex-plugin/plugin.json')):
+        plugin = manifest.parent.parent
+        if plugin.name in sources:
+            raise ValueError('duplicate plugin name: ' + plugin.name)
+        sources[plugin.name] = plugin
+    return sources
 
 
 def write_marketplace(root, plugins_dir):
@@ -120,7 +119,8 @@ def write_marketplace(root, plugins_dir):
     written by something else, so it is left exactly as it is and refused.
     """
     root = Path(root)
-    names = plugin_names(plugins_dir)
+    sources = plugin_sources(plugins_dir)
+    names = sorted(sources)
     if not names:
         return []
     if root.exists() and not (root / MARKER).exists() and any(root.iterdir()):
@@ -142,7 +142,7 @@ def write_marketplace(root, plugins_dir):
         staging = root / 'plugins' / ('.tmp.' + name)
         if staging.exists():
             shutil.rmtree(staging)
-        shutil.copytree(Path(plugins_dir) / name, staging)
+        shutil.copytree(sources[name], staging)
         if target.exists():
             shutil.rmtree(target)
         os.replace(staging, target)

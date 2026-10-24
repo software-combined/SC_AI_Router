@@ -130,8 +130,9 @@ def plugin_files(root):
     plugins = root / 'plugins'
     if not plugins.is_dir():
         return []
-    wanted = []
-    for plugin in sorted(p for p in plugins.iterdir() if p.is_dir()):
+    wanted = {p.relative_to(root).as_posix() for p in plugins.rglob('README.md')}
+    for manifest in sorted(plugins.glob('**/.codex-plugin/plugin.json')):
+        plugin = manifest.parent.parent
         prefix = plugin.relative_to(root).as_posix() + '/'
         for path in sorted(plugin.rglob('*')):
             rel = path.relative_to(root).as_posix()
@@ -142,7 +143,7 @@ def plugin_files(root):
             # git updater is withheld, because the router is the channel now.
             if rel.startswith(prefix + 'scripts/') and path.name not in ('setup.py', 'export_review.py'):
                 continue
-            wanted.append(rel)
+            wanted.add(rel)
     return sorted(wanted)
 
 

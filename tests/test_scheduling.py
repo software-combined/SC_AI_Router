@@ -8,7 +8,7 @@ from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'plugins/scg-review/scripts/updater.py'
+SOURCE = ROOT / 'plugins/development/scg-review/scripts/updater.py'
 HELPER = SOURCE.with_name('scheduling.py')
 spec = importlib.util.spec_from_file_location('scheduling', HELPER)
 scheduling = importlib.util.module_from_spec(spec)
@@ -18,7 +18,7 @@ spec.loader.exec_module(scheduling)
 class SchedulingTest(unittest.TestCase):
     def test_both_plugins_ship_the_same_scheduler(self):
         self.assertEqual(HELPER.read_bytes(),
-                         (ROOT / 'plugins/scg-subagents/scripts/scheduling.py').read_bytes())
+                         (ROOT / 'plugins/agents/scg-subagents/scripts/scheduling.py').read_bytes())
 
     def test_either_plugin_registers_the_same_enabled_active_daily_timer(self):
         with tempfile.TemporaryDirectory(prefix='scg $cash %test ') as tmp, \

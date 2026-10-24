@@ -116,8 +116,8 @@ changes separately; opposing edits cannot cancel out of selection. Missing expec
 plugin suites fail. This verification policy itself always requires full checks.
 
 Then run the installed
-[pre-commit-review skill](plugins/scg-review/skills/pre-commit-review/SKILL.md).
-Its [setup guide](plugins/scg-review/skills/review-setup/SKILL.md) covers the
+[pre-commit-review skill](plugins/development/scg-review/skills/pre-commit-review/SKILL.md).
+Its [setup guide](plugins/development/scg-review/skills/review-setup/SKILL.md) covers the
 required hooks and scanner. Commit subjects use `<type>: <short summary>` with
 type `feat`, `fix`, `refactor`, `test`, `chore` or `docs`.
 
@@ -189,13 +189,14 @@ must produce conforming rows; the registry naming test enforces it.
 
 This repository hosts the `scg-agent-plugins` marketplace. See
 [agent plugins](docs/agent-plugins.md) for installation and available plugins.
-Author under `plugins/<name>`; installed plugin caches are delivery copies. The root
+Author under `plugins/<domain>/<name>` and link skills from their
+[domain page](plugins/README.md); installed plugin caches are delivery copies. The root
 `scg-openrouter` plugin stays outside the marketplace. Keep the marketplace
 name and plugin names stable. Release via `development` to `main`; the router
 delivers the plugins without requiring users to run Git or marketplace commands.
 
 Before coding or reviewing code, read the installed
-[`scg-ponytail:ponytail` skill](plugins/scg-ponytail/skills/ponytail/SKILL.md)
+[`scg-ponytail:ponytail` skill](plugins/development/scg-ponytail/skills/ponytail/SKILL.md)
 in full. Resolve its current absolute path from the active client's
 skill catalogue or plugin inventory; never pin a cache version. SCG Review
 requires that same skill for its simplifier and all four lanes, and blocks
