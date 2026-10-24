@@ -1,5 +1,15 @@
 # Changelog
 
+## scg-optimise-ci 0.1.6 (2026-10-24)
+
+- Apply proportionate verification to small plugin content updates. Derive
+  complete plugin checks from ownership and consumers; retain format, manifests,
+  public content, package, installation, delivery and applicable platform checks.
+- Share conservative selection locally and in CI. Retain full checks for
+  executable, mixed, shared, policy or uncertain changes, and preserve required
+  checks, secret scans, reviews and release gates.
+- Confirm actual selection without treating one run as typical performance proof.
+
 ## scg-optimise-ci 0.1.5 (2026-10-24)
 
 - Scale optimisation and benchmark effort to likely absolute savings, run
