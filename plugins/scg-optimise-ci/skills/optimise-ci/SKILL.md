@@ -51,6 +51,9 @@ Independent jobs can overlap; build and test consumers must retain their produce
 Overlap only work with isolated writable state, keeping shared preparation before its consumers.
 Require every branch to pass before downstream work starts.
 Check runner capacity and contention before adding workers or jobs.
+Where the test framework supports isolated workers, compare worker counts within an existing runner.
+This can reduce job duration without duplicating runner setup.
+Preserve fixture groups, ordering requirements and duplicate test executions.
 Account for extra setup, artifact transfers and work performed before another check fails.
 Splitting jobs changes timeout and retry boundaries; verify that required work can still complete.
 
@@ -138,13 +141,21 @@ Record the harness revision and actual checkout; diagnostic runs must not satisf
 Compare test identifiers, resolved suite selections, skips and platform matrices, not counts alone.
 Distinguish discovery inventories from observed execution results and retain reported skips.
 Compare execution outcomes, duplicate identifiers and individual pass/skip identities when available.
+Distinguish fixture skips from cases that started. Retain their reasons and account for suppressed cases.
+Refuse unexplained missing cases or reports; an absent result is not a skip.
 Neither inventories nor summary counts establish line or branch coverage.
 
 Set a finite sampling and replacement rule before execution. Interleave comparable runs when practical.
 Record every warm-up, failed attempt and rerun.
+Decide sample eligibility from declared input checks before comparing timing totals.
+Diagnose test failures before using an infrastructure replacement allowance.
+Keep assertions when correcting fixtures, apply the correction to both arms and restart the cohort.
 Start a new comparison cohort after correcting measured source or execution inputs.
 Pin relevant runtime versions for the comparison when practical; moving selectors can resolve differently across runner images.
+Resolve relevant implicit runtime inputs, including those changed by setup tools.
+When they affect verification, pin them or compare effective content fingerprints.
 Check actual toolchain and runner-image versions. Matching labels do not establish equal environments.
+Record logical CPU counts and architecture for each runner role.
 Disclose changed conditions or analyse separate cohorts. Keep instrumentation from warming only one candidate.
 Define elapsed time through the last relevant completion; dependency waiting is not pure queue time.
 For affected verification, compare a full control with representative selections on the same candidate and runner profile.
@@ -157,6 +168,8 @@ A simulation proves its model; it does not prove provider execution or deploymen
 Verify the integrated tree matches the passing candidate before claiming integration complete.
 
 Report elapsed time and aggregate execution separately, with every sample, medians, ranges and cache limitations as applicable.
+Separate the changed job's duration from setup and unrelated-job variation.
+Do not attribute the whole aggregate difference to the change when other durations vary.
 Explain tradeoffs: overlap can reduce waiting while adding setup and runner use.
 Report joined elapsed time separately from each concurrent branch's duration.
 Individual branches can take longer while the joined wait shrinks; their wall times do not measure CPU use.
@@ -168,5 +181,6 @@ Stop when required checks pass and evidence addresses the chosen bottleneck.
 Report the change, before/after measures, preserved gates, limitations and integration state.
 Keep the existing full-verification path; add recurring controls only when justified and authorised.
 
-Read [the worked example](references/worked-example.md) for the Router's measured result and pitfalls.
-Its provider, commands and job layout are examples, not requirements for another repository.
+Read the Router's [job-graph benchmark](references/worked-example.md) and
+[runner-time benchmark](references/runner-time-benchmark.md) for measured results and pitfalls.
+Their provider, commands and layouts are examples, not requirements for another repository.

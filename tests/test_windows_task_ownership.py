@@ -1,6 +1,7 @@
 """Owned task contracts and a real, disposable Windows Task Scheduler proof."""
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -86,6 +87,9 @@ class NativeTaskTests(unittest.TestCase):
             arguments = backend._arguments(home, 'router_launch.py', backend.ROUTER_LOG)
             xml = backend.render_router_xml(sys.executable, home, sid).replace(
                 '<Settings>', '<Settings><Hidden>true</Hidden>')
+            # Lifecycle steps start tasks explicitly; automatic recovery would race stopped-state checks.
+            xml, replaced = re.subn(r'<Triggers>.*?</Triggers>', '<Triggers/>', xml, flags=re.S)
+            self.assertEqual(replaced, 1)
             def call(operation='query', **changes):
                 return backend._tasks.invoke(obj._call, changes.get('sid', sid), name,
                     changes.get('arguments', arguments), operation, changes.get('xml', xml),

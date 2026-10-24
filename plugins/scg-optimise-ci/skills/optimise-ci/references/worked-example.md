@@ -11,6 +11,10 @@ It replaces the earlier comparison between different source revisions.
 Median elapsed time fell **38.3%** across three successful samples per layout.
 Median aggregate job execution changed **+2.4%**. This does not establish compute savings.
 
+The [worker-count follow-up](runner-time-benchmark.md) measures lower runner time
+within the parallel graph. It uses a different frozen workload; do not combine
+the two cohorts' percentages.
+
 ## Controlled workload
 
 Every executed job checked out commit `bc2920a6688cceb9eed3caf40847fef4dc031f39`,
