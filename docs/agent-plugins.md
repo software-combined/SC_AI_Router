@@ -48,3 +48,15 @@ copy. A plugin you turned off in Codex or Claude Code stays off.
 Plugin releases ride `plugin.json` versions plus `plugins/CHANGELOG.md`,
 separate from the router tag train (`packaging/VERSION` never moves for a
 plugin-only change). See [repository instructions](../AGENTS.md#9-agent-plugins) for the plugin rules.
+
+Small skill and reference updates use the shared
+[`plugin_verification.py`](../tools/plugin_verification.py) entry point locally
+and in CI. It prints the comparison base, changed paths, selected suites and
+reason. The narrow path keeps plugin contracts, paired manifests, public-content
+checks and packaged delivery tests. Strict manifest and skill validation,
+secret scans and independent reviews remain required.
+
+Executable plugin changes and uncertain or mixed scope retain full Router tests.
+Changes to the selector or its workflow wiring also require full verification;
+the policy cannot exempt its own update. See
+[verification before commit](../AGENTS.md#5-verification-before-commit) for commands.

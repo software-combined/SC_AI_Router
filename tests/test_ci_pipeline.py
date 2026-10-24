@@ -17,9 +17,11 @@ class AcceptancePipelineTests(unittest.TestCase):
         pipeline = jobs()
         suite = pipeline['unit-suite']
         self.assertNotIn('\n    needs:', '\n' + suite, 'offline tests are independent')
-        command = ('run: python tools/ci_unittest.py --workers 2 '
-                   '--report "$RUNNER_TEMP/unit-results.json" -- discover -s tests -t .')
+        command = ('run: python tools/plugin_verification.py --base "$VERIFICATION_BASE" '
+                   '--run --workers 2 --report "$RUNNER_TEMP/unit-results.json"')
         self.assertIn(command, suite)
+        self.assertIn('fetch-depth: 0', suite)
+        self.assertIn('github.event.pull_request.base.sha || github.event.before', suite)
         self.assertIn("SCG_RUN_INSTALLER_TESTS: '1'", suite)
         self.assertEqual(sum(command in job for job in pipeline.values()), 1)
 
