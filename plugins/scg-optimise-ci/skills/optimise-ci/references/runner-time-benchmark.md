@@ -157,3 +157,9 @@ latency or long-term reliability.
 The reusable lesson is to measure worker counts within an existing runner
 when tests support safe isolation. Preserve fixture semantics and observed
 test outcomes before accepting shorter duration.
+
+The faster feedback and lower runner time were useful, but proving the modest
+runner saving took substantial effort. This benchmark's harness and repeated
+cohorts are not a default proof requirement for other repositories.
+Estimate the likely benefit first and expand measurement only when uncertainty
+could change the decision. Required tests, checks and reviews still apply.
