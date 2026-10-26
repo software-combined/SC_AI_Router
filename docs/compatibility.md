@@ -1,5 +1,27 @@
 # Compatibility
 
+## Windows shutdown race, Router 1.3.21 candidate
+
+Owner-reported non-elevated Windows 11 checks on Router `1.3.20.212` failed
+three times during shutdown. Identity discovery took about 10 ms. Process scans
+completed within about 150 ms, but exiting processes refused image or owner
+queries before their handles signalled. Settings remained unchanged; configuration
+proof was not reached. This is device evidence reported by the owner.
+
+The candidate verifies process identity once and retains that handle for exit
+checks and consented termination. Regression fixtures cover access denial during
+exit, denied new writers, root-job teardown, missing enumeration rows, rollback
+and cold reopening. The native job-tree test uses only disposable test children.
+Run it from a standard Windows account; administrator CI alone does not establish
+non-elevated acceptance. Real Store switching, configuration proof and a model
+reply on this candidate remain unverified until affected-PC testing completes.
+
+For a test that refuses an elevated shell, set `SCG_REQUIRE_STANDARD_USER=1`
+and run `python -m unittest tests.test_windows_native_lifecycle` on Windows.
+The result records the elevation flag and elapsed shutdown time.
+Host client versions match the Router 1.3.20 compatibility gate below; unchanged
+model routes reuse its four passing client probes.
+
 ## Router 1.3.20 client checks, 27 October 2026 AEDT
 
 Clients: Codex desktop `26.1021.31345` (build `21828`), bundled CLI
