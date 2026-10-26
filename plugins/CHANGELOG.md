@@ -1,5 +1,11 @@
 # Changelog
 
+## scg-subagents 0.6.4 (2026-10-27)
+
+- Distinguish Codex native tools from the exec-only `ALL_TOOLS` catalogue.
+  Check current definitions and direct-call evidence before reporting missing
+  delegation tools or proposing an app restart or replacement chat.
+
 ## Domain organisation (2026-10-24)
 
 - Group plugin source under development, finance, documentation and agents.
