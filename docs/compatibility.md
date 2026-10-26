@@ -1,5 +1,35 @@
 # Compatibility
 
+## Router 1.3.20 client checks, 27 October 2026 AEDT
+
+Clients: Codex desktop `26.1021.31345` (build `21828`), bundled CLI
+`0.164.0-alpha.11.1`, and Claude Code `2.1.309`.
+The probes used synthetic files and requested Low effort.
+
+| Client and route | Requested model | Counted work | Result |
+| --- | --- | --- | --- |
+| Codex / OpenRouter | `z-ai/glm-5.3-flash` | 2 upstream attempts | Tool result and final marker passed |
+| Codex / ChatGPT subscription | `gpt-6-luna` | 2 invocations, one tool call each | Bounded confirmation passed |
+| Claude Code / OpenRouter | `z-ai/glm-5.3-flash` | 3 upstream attempts, 2 sequential reads | Tool results and final markers passed |
+| Claude Code / Claude subscription | `claude-sonnet-5-5` | 2 invocations, 3 reads total | Single-read confirmation passed |
+
+The first Codex subscription invocation completed its tool call but quoted the
+final marker. It failed the exact-output assertion; one bounded repeat passed.
+The initial Claude subscription invocation reached its USD 0.10 client budget
+after reading both files. It is retained as a failed invocation, not acceptance.
+An authorised single-read confirmation passed with a separate USD 0.10 client
+budget. It verified the read, matching tool result and final marker, and reported
+the requested Sonnet model. Claude did not report served effort.
+
+The isolated external Router enforced twelve total upstream attempts, 512 KiB
+input and 65,536 output tokens per request. Five attempts ran across both clients.
+Both external protocols reported the requested model; Codex also reported Low
+effort. Claude did not report served effort. Subscription probes used existing
+sign-in without copying authentication files. Codex subscription served identity
+and effort, and subscription upstream request counts, remain unverified.
+Provider reports do not attest model weights. Publication and installed delivery
+remain separate gates.
+
 ## Kimi K3.1 Pro replacement, 24 October 2026 AEDT
 
 The candidate replaces `moonshotai/kimi-k3` with `moonshotai/kimi-k3.1-pro`.
