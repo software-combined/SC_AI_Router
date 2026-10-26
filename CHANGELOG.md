@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.3.20
+
 - Remind Codex on subscription and routed models that native tools can be
   absent from `ALL_TOOLS`. Require current definitions or direct-call evidence
   before reporting missing tools, restarting the app or moving to a new chat.
