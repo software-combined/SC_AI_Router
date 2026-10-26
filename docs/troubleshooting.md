@@ -60,8 +60,10 @@ Store Codex identity and process checks use native Windows APIs.
 Closing Codex's window can leave its tray app and tasks running.
 Switch Codex asks to fully close Codex and stop its tasks before changing settings.
 Finish active work before choosing Continue. Cancel leaves Codex unchanged.
-The switch gives Codex five seconds to close, then ends only verified surviving app processes.
-It verifies that Codex reopens. A failure restores the previous connection and attempts reopening.
+The switch gives Codex five seconds to close, then ends its verified root before surviving workers.
+It waits for confirmed exits before changing settings. Exiting processes need no further identity reads.
+Reopening can take up to thirty seconds on a cold start.
+A failure restores the previous connection and attempts reopening.
 Confirmation and waiting windows use the verified native helper, without PowerShell.
 Claude desktop process checks retain a sixty-second limit for busy sessions.
 A failed check refuses before changing settings.

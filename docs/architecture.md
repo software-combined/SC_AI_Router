@@ -579,10 +579,12 @@ pointer types. It owns native handles and returns identity facts to desktop poli
 It performs no discovery, shutdown or activation on import.
 `windows_codex.py` owns fresh Store package discovery, process selection and
 verified Windows Codex lifecycle policy. It reuses the desktop writer tracker.
-Termination requires explicit consent from its caller and rechecks one open
-handle's creation time, account, session, package and executable before use.
-Query handles remain open through shutdown; a second snapshot checks parent metadata
-before selection, preventing a reused process ID from adopting an unrelated app.
+Termination requires explicit consent from its caller. Each process is verified
+once for creation time, account, session, package and executable, then its handle
+stays open through shutdown. Subsequent scans check that handle's signal state;
+they do not read identity from an exiting process. A second snapshot checks
+parent metadata before selection. The verified root exits first, allowing its
+job to close workers before remaining verified survivors are ended.
 `windows_dialog.py` verifies the retained compiled helper for switch confirmation
 and progress. The helper owns presentation; Python owns consent and configuration.
 `claude_desktop_switch.py` owns the switch lifecycle. After Claude exits normally,
@@ -757,6 +759,7 @@ Only package-relative selection diagnostics enter the log; no Codex install path
 Windows confirmation names the full close and stopped tasks. Shutdown allows five seconds
 for window closure, then ends verified surviving processes within a fifteen-second deadline.
 Settings remain pending until proof and a visible reopened package window succeed.
+Cold reopening has a separate thirty-second bound.
 Failure restores the previous owned settings and attempts fresh-package reopening.
 
 `switched` is strict. It needs `codex_route.ready`, a subscription install

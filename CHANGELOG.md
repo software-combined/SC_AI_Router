@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.3.21
+
+- Keep verified Windows Codex process handles through shutdown. Exiting app
+  processes no longer fail switching when Windows stops answering identity queries.
+- End the verified app root before surviving workers, and wait for retained handles
+  to signal before changing settings. Give cold reopening up to thirty seconds.
+
 ## 1.3.20
 
 - Remind Codex on subscription and routed models that native tools can be
