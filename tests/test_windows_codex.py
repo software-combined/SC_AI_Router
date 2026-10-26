@@ -162,7 +162,7 @@ class WindowsCodexTests(unittest.TestCase):
         original = row(10, 1, self.identity['exe'])
         self.api.rows[10] = dict(original, born=99999)
         with self.assertRaises(OSError):
-            self.policy.act(self.identity, original, self.api, terminate=True)
+            self.policy.snapshot(self.identity, {10: original}, (), api=self.api, terminate=True)
         self.assertEqual(self.api.ended, [])
 
     def test_stale_parent_pid_never_adopts_or_terminates_an_older_unrelated_child(self):

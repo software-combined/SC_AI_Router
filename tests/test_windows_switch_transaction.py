@@ -146,6 +146,33 @@ class WindowsSwitchTransactionTests(unittest.TestCase):
         self.assertEqual((self.api.closed, self.api.ended), ([], []))
         self.unchanged()
 
+    def test_exit_race_reaches_config_proof_and_reopens_the_new_connection(self):
+        facts, activate = self.api.facts, self.api.activate
+        quitting = []
+        def closing(window, pid):
+            self.api.closed.append(pid)
+            quitting.append(True)
+        def identity(handle, pid):
+            if quitting:
+                raise self.ops._windows_codex._native.NativeError('process_identity', code=5)
+            return facts(handle, pid)
+        def live(handle):
+            if quitting and self.api.now >= 0.3:
+                self.api.rows.pop(handle, None)
+            return handle in self.api.rows
+        def reopen(app):
+            quitting.clear()
+            activate(app)
+        with mock.patch.object(self.api, 'facts', side_effect=identity), \
+                mock.patch.object(self.api, 'close_window', side_effect=closing), \
+                mock.patch.object(self.api, 'alive', side_effect=live), \
+                mock.patch.object(self.api, 'activate', side_effect=reopen):
+            self.assertEqual(self.switch(), 'switched')
+        self.assertEqual(len(self.proofs), 1)
+        self.assertTrue(self.api.visible)
+        self.assertEqual(self.api.ended, [])
+        self.assertEqual(switcher._blocks.current(self.home), 'switched')
+
     def test_failed_reopen_restores_settings_and_reopens_the_original_connection(self):
         activate, calls = self.api.activate, []
         def first_fails(app):

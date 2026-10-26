@@ -67,16 +67,28 @@ def validate(expected, *, api=None):
         raise _native.NativeError('app_identity', 'package_changed')
 
 
-def snapshot(identity, tracked, names, *, api=None, retention=None):
+def snapshot(identity, tracked, names, *, api=None, retention=None, terminate=False):
     """Query owners only for package trees, named writers and tracked processes."""
     api = api or bindings()
     with contextlib.ExitStack() as local:
         scope, pinned = retention if retention is not None else (local, {})
-        return _snapshot(identity, tracked, names, api, scope, pinned)
+        return _snapshot(identity, tracked, names, api, scope, pinned, terminate)
 
 
-def _snapshot(identity, tracked, names, api, scope, pinned):
+def exited(api, handle):
+    """Observe a failed first query's process exit without retrying identity reads."""
+    deadline = time.monotonic() + 0.5
+    while api.alive(handle):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        time.sleep(min(0.05, remaining))
+    return True
+
+
+def _snapshot(identity, tracked, names, api, scope, pinned, terminate):
     entries, facts, errors = api.entries(), {}, {}
+    known = set(pinned)
     names = {name.casefold() for name in names} | {ntpath.basename(identity['exe']).casefold()}
     wanted = set(tracked)
     root = norm(identity['root']).rstrip('/') + '/'
@@ -85,15 +97,26 @@ def _snapshot(identity, tracked, names, api, scope, pinned):
         if row['name'].casefold() in names:
             wanted.add(pid)
         try:
-            if api.session(pid) != identity['session']:
-                if pid in tracked:
-                    raise _native.NativeError('process_snapshot', 'identity_changed')
-                wanted.discard(pid)
-                continue
             if pid not in pinned:
-                pinned[pid] = scope.enter_context(api.opened(pid))
-            fact = api.facts(pinned[pid], pid)
+                if api.session(pid) != identity['session']:
+                    if pid in tracked:
+                        raise _native.NativeError('process_snapshot', 'identity_changed')
+                    wanted.discard(pid)
+                    continue
+                handle = scope.enter_context(api.opened(pid, terminate=terminate))
+                pinned[pid] = dict(handle=handle)
+                try:
+                    pinned[pid]['facts'] = api.facts(handle, pid)
+                except OSError as error:
+                    pinned[pid]['error'] = error
+            pin = pinned[pid]
+            if not api.alive(pin['handle']):
+                continue
+            if 'error' in pin:
+                raise pin['error']
+            fact = pin['facts']
             if fact['session'] != identity['session']:
+                wanted.discard(pid)
                 continue
             facts[pid] = dict(fact, parent=row['parent'])
             if fact['family'] == identity['family'] or norm(fact['exe']).startswith(root):
@@ -114,58 +137,54 @@ def _snapshot(identity, tracked, names, api, scope, pinned):
     fresh = {row['pid']: row for row in api.entries()}
     original = {row['pid']: row for row in entries}
     rows = {}
-    for pid in wanted.intersection(r['pid'] for r in entries):
+    for pid in wanted:
         try:
-            if pid not in fresh:
+            pin = pinned.get(pid)
+            if pin and not api.alive(pin['handle']):
                 continue
-            if fresh[pid] != original[pid]:
+            if pin and pid not in known and pid in original and fresh.get(pid) != original[pid]:
                 raise _native.NativeError('process_snapshot', 'identity_changed')
             if pid in errors:
+                if not pin and pid not in fresh:
+                    continue
                 raise errors[pid]
-            if pid not in facts:
-                if pid in tracked:
+            if not pin or pin.get('facts', {}).get('session') != identity['session']:
+                if pid in tracked and pid in fresh:
                     raise _native.NativeError('process_snapshot', 'identity_changed')
                 continue  # A different desktop session cannot write this profile.
-            current = api.facts(pinned[pid], pid)
-            user = api.user(pinned[pid])
-            if (current != {k: v for k, v in facts[pid].items() if k != 'parent'}
-                    or pid in tracked and any(
-                        dict(current, user=user)[k] != tracked[pid][k] for k in ('born', 'user'))):
+            if 'user' not in pin:
+                pin['user'] = api.user(pin['handle'])
+            current = dict(pin['facts'], user=pin['user'])
+            if pid in tracked and any(current[k] != tracked[pid][k] for k in ('born', 'user')):
                 raise _native.NativeError('process_snapshot', 'identity_changed')
-            if user == identity['user']:
-                rows[pid] = dict(facts[pid], user=user)
+            if current['user'] == identity['user']:
+                rows[pid] = dict(current, parent=original.get(pid, tracked.get(pid, {})).get('parent', 0))
         except OSError:
-            if pid in {r['pid'] for r in api.entries()}:
-                raise  # Only a confirmed disappearance permits skipping a relevant failure.
+            if pin:
+                if not exited(api, pin['handle']):
+                    raise
+            elif pid in {r['pid'] for r in api.entries()}:
+                raise
     return rows
 
 
-@contextlib.contextmanager
-def checked(identity, row, api, terminate=False):
-    with api.opened(row['pid'], terminate=terminate) as handle:
-        facts = dict(api.facts(handle, row['pid']), user=api.user(handle))
-        if any(facts[k] != row[k] for k in ('born', 'user', 'session', 'family')) or (
-                norm(facts['exe']) != norm(row['exe']) or facts['user'] != identity['user']
-                or facts['session'] != identity['session']):
-            raise _native.NativeError('process_identity', 'identity_changed')
-        yield handle
-
-
-def act(identity, row, api, *, terminate=False, windows=(), record=None):
+def act(pin, row, api, *, terminate=False, windows=(), record=None):
     record = record if record is not None else {}
-    try:
-        with checked(identity, row, api, terminate) as handle:
-            if terminate:
+    handle = pin['handle']
+    if not api.alive(handle):
+        return
+    if terminate:
+        record['shutdown_started'] = True
+        try:
+            api.end(handle)  # Same verified handle; never reopen or terminate by PID.
+        except OSError:
+            if not exited(api, handle):
+                raise
+    else:
+        for window, pid in windows:
+            if pid == row['pid']:
                 record['shutdown_started'] = True
-                api.end(handle)  # Same verified handle; never terminate by PID alone.
-            else:
-                for window, pid in windows:
-                    if pid == row['pid']:
-                        record['shutdown_started'] = True
-                        api.close_window(window, pid)
-    except OSError:
-        if row['pid'] in {r['pid'] for r in api.entries()}:
-            raise
+                api.close_window(window, pid)
 
 
 def stop(expected, select, *, api=None, allow_terminate=False, record=None):
@@ -191,7 +210,7 @@ def _stop(identity, select, api, allow_terminate, record, retention):
     started = time.monotonic()
     def scan():
         before = time.monotonic()
-        rows = snapshot(identity, seen, (), api=api, retention=retention)
+        rows = snapshot(identity, seen, (), api=api, retention=retention, terminate=allow_terminate)
         elapsed = round((time.monotonic() - before) * 1000, 1)
         record['scan_count'] = record.get('scan_count', 0) + 1
         record['scan_max_ms'] = max(record.get('scan_max_ms', 0), elapsed)
@@ -200,17 +219,28 @@ def _stop(identity, select, api, allow_terminate, record, retention):
         return {pid: rows[pid] for pid in seen.keys() & rows.keys()}
     rows = scan()
     windows = api.windows()
+    pinned = retention[1]
     for row in rows.values():
         if norm(row['exe']) == norm(identity['exe']):
-            act(identity, row, api, windows=windows, record=record)
+            act(pinned[row['pid']], row, api, windows=windows, record=record)
     grace, deadline = started + 5, started + 15
+    ended = set()
+    root_wait = grace
     while rows:
         now = time.monotonic()
         if now >= grace:
             if not allow_terminate:
                 return False
-            for row in rows.values():
-                act(identity, row, api, terminate=True, record=record)
+            roots = {pid for pid, row in rows.items() if norm(row['exe']) == norm(identity['exe'])
+                     and row['parent'] not in rows}
+            targets = roots - ended
+            if targets:
+                root_wait = now + 0.5
+            elif now >= root_wait:
+                targets = rows.keys() - ended
+            for pid in targets:
+                act(pinned[pid], rows[pid], api, terminate=True, record=record)
+                ended.add(pid)
         if now >= deadline:
             raise _native.NativeError('request_stop', 'still_running')
         time.sleep(min(0.1, deadline - now))
@@ -224,7 +254,7 @@ def open_app(identity, *, api=None):
     api = api or bindings()
     validate(identity, api=api)
     api.activate(identity['app'])
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 30
     while True:
         visible = {pid for _, pid in api.windows(visible=True)}
         rows = snapshot(identity, {}, (), api=api)

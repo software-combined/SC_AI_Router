@@ -50,7 +50,7 @@ class ProcessGenerationTests(unittest.TestCase):
                 finally:
                     opened.remove(token)
         def end(handle):
-            observations.append({pid for pid, terminate, _ in opened if not terminate})
+            observations.append({pid for pid, terminate, _ in opened if terminate})
             original_end(handle)
         def select(rows, seen):
             fixtures.desktop._writers(rows, self.identity, seen, 'win32', ())
