@@ -22,6 +22,26 @@ the parent uses GPT. If a brief still arrives encrypted, apply the
 transport-failure policy; an encrypted message containing a file path is not a
 readable fallback.
 
+## Codex: find the callable tool
+
+Read the current native tool definitions first. Namespaces such as
+`collaboration` and `collaboration_plaintext` can be callable directly while
+absent from `ALL_TOOLS`. That catalogue covers only tools available inside
+`functions.exec`; an empty search there says nothing about native tools.
+Call offered native tools directly, using their actual schema.
+
+Use deferred discovery only for tools the runtime marks as deferred. If the
+runtime offers a read-only native status tool, such as `list_agents`, use it
+when diagnosing access; it does not prove that spawning will succeed. When
+delegation is already authorized, attempt the intended native operation before
+declaring an offered tool unavailable. Respect denials and normal retry limits.
+
+After a context reset, recheck definitions before adopting a saved claim that
+tools disappeared. Report the missing current definition after supported
+discovery, or the exact direct-call rejection. Distinguish full lanes, model
+access and malformed arguments from a missing tool. Do not ask for an app
+restart or a new chat solely because an `ALL_TOOLS` search is empty.
+
 ## Parent: launch and brief
 
 The API makes `fork_turns`, `model` and `reasoning_effort` optional, but the parent
@@ -143,8 +163,9 @@ Do not claim served model identity from your own name or from the prompt.
 
 ## Failures and other task APIs
 
-If spawning is unavailable, search deferred tools where supported, then continue
-locally. If a call is rejected, distinguish a model-access error from malformed
+If no native spawn tool is offered, use supported deferred discovery before
+reporting it missing, then continue locally where the task permits. If a call is
+rejected, distinguish a model-access error from malformed
 instructions or transport. This task encountered router `invalid_instructions`
 errors before research children started; that is a transport limitation, not a
 benchmark or proof that the selected model lacks tools. Do not bypass exact-model

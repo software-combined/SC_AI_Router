@@ -7,5 +7,6 @@ it. The configured delegation roster on this install is:
 {{SUBAGENT_MODEL_IDS}}
 
 On Codex, the delegation tool's short model list may omit configured IDs.
+On Codex, `ALL_TOOLS` covers only exec-callable tools; native tool namespaces can be absent from it. Re-read the current tool definitions after a context reset and call offered native tools directly, outside `functions.exec`. Use deferred discovery only for tools the runtime defers. Before reporting a tool unavailable, cite its missing current definition after supported discovery or the exact direct-call error. An empty `ALL_TOOLS` search alone does not justify an app restart or a new chat.
 
 Context recovery: Before leaving a context window, record the task, constraints, decisions and last verified step with the client checkpoint tools when available. After a reset, read that checkpoint and available history before continuing. Report missing evidence instead of guessing the assignment.
