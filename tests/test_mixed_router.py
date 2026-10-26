@@ -157,7 +157,7 @@ class RoutingTests(unittest.TestCase):
             self.assertEqual(json.loads(prepared.body)['reasoning'], {'effort': effort})
 
     def test_kimi_and_muse_still_accept_max_effort(self):
-        for model in ('moonshotai/kimi-k3', 'meta/muse-spark-1.3'):
+        for model in ('moonshotai/kimi-k3.1-pro', 'meta/muse-spark-1.3'):
             prepared = _prepared(model, '/responses',
                                  {'model': model, 'input': [],
                                   'reasoning': {'effort': 'max'}})

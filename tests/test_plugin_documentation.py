@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PLUGIN = ROOT / "plugins/scg-documentation"
+PLUGIN = ROOT / "plugins/documentation/scg-documentation"
 SKILL = PLUGIN / "skills/documentation"
 
 
@@ -41,7 +41,7 @@ class DocumentationPluginTest(unittest.TestCase):
                     self.assertTrue(resolved.is_file(), target)
 
     def test_updates_guide_is_the_shared_copy(self):
-        review = ROOT / "plugins/scg-review/references/updates.md"
+        review = ROOT / "plugins/development/scg-review/references/updates.md"
         self.assertEqual((SKILL / "references/updates.md").read_bytes(), review.read_bytes())
 
     def test_skill_leads_with_reader_level_clarity(self):

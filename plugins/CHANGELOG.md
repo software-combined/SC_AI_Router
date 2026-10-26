@@ -1,5 +1,20 @@
 # Changelog
 
+## scg-subagents 0.6.4 (2026-10-27)
+
+- Distinguish Codex native tools from the exec-only `ALL_TOOLS` catalogue.
+  Check current definitions and direct-call evidence before reporting missing
+  delegation tools or proposing an app restart or replacement chat.
+
+## Domain organisation (2026-10-24)
+
+- Group plugin source under development, finance, documentation and agents.
+  Add domain pages for sales, operations, customer success and support, linked
+  to their shared department skills.
+- Preserve plugin names, skill names and installed paths. Read both domain
+  folders and older flat bundles; keep retired updater scripts out of releases.
+- Update source links in scg-review 0.7.1 and scg-subagents 0.6.3.
+
 ## scg-optimise-ci 0.1.6 (2026-10-24)
 
 - Apply proportionate verification to small plugin content updates. Derive

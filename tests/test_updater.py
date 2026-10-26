@@ -13,7 +13,7 @@ from tests._platform import unix_only
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location(
-    "updater", ROOT / "plugins/scg-review/scripts/updater.py")
+    "updater", ROOT / "plugins/development/scg-review/scripts/updater.py")
 updater = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(updater)
 

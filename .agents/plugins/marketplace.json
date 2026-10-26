@@ -8,7 +8,7 @@
       "name": "scg-review",
       "source": {
         "source": "local",
-        "path": "./plugins/scg-review"
+        "path": "./plugins/development/scg-review"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -20,7 +20,7 @@
       "name": "scg-subagents",
       "source": {
         "source": "local",
-        "path": "./plugins/scg-subagents"
+        "path": "./plugins/agents/scg-subagents"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -32,7 +32,7 @@
       "name": "scg-prototypes",
       "source": {
         "source": "local",
-        "path": "./plugins/scg-prototypes"
+        "path": "./plugins/development/scg-prototypes"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -44,7 +44,7 @@
       "name": "scg-finance",
       "source": {
         "source": "local",
-        "path": "./plugins/scg-finance"
+        "path": "./plugins/finance/scg-finance"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -56,7 +56,7 @@
       "name": "scg-documentation",
       "source": {
         "source": "local",
-        "path": "./plugins/scg-documentation"
+        "path": "./plugins/documentation/scg-documentation"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -66,13 +66,13 @@
     },
     {
       "name": "scg-ponytail",
-      "source": {"source": "local", "path": "./plugins/scg-ponytail"},
+      "source": {"source": "local", "path": "./plugins/development/scg-ponytail"},
       "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
       "category": "Productivity"
     },
     {
       "name": "scg-optimise-ci",
-      "source": {"source": "local", "path": "./plugins/scg-optimise-ci"},
+      "source": {"source": "local", "path": "./plugins/development/scg-optimise-ci"},
       "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
       "category": "Productivity"
     }

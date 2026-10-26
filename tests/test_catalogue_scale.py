@@ -93,6 +93,20 @@ class CatalogueScaleTests(unittest.TestCase):
             catalogue._visible_rows('codex', None)[0])
         self.assertNotIn('OpenRouter', routed)
 
+    def test_native_tool_discovery_guidance_reaches_both_codex_routes_only(self):
+        merged = catalogue.merge({'models': []}, roster=('gpt-6-astra',))
+        native = next(row for row in merged['models'] if row['slug'] == 'gpt-6-astra')
+        external = next(row for row in merged['models'] if row['slug'].startswith('bench/'))
+        for row in (native, external):
+            with self.subTest(slug=row['slug']):
+                text = row['model_messages']['instructions_template']
+                self.assertIn('`ALL_TOOLS` covers only exec-callable tools', text)
+                self.assertIn('call offered native tools directly', text)
+                self.assertIn('exact direct-call error', text)
+        claude = catalogue.merge({'models': []}, client='claude', roster=('gpt-6-astra',))
+        for row in claude['models']:
+            self.assertNotIn('`ALL_TOOLS`', row['model_messages']['instructions_template'])
+
     def test_a_stale_routed_subscription_row_is_upgraded_and_refused(self):
         # A catalogue written before this change holds routed wording with the
         # roster line of that moment, and the roster moves. Both gates match

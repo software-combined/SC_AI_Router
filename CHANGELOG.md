@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 1.3.20
+
+- Remind Codex on subscription and routed models that native tools can be
+  absent from `ALL_TOOLS`. Require current definitions or direct-call evidence
+  before reporting missing tools, restarting the app or moving to a new chat.
+
+## 1.3.19
+
+- Replace Kimi K3 with Kimi K3.1 Pro in Codex and Claude Code.
+  Retire K3 from saved pickers and model caches.
+
 ## 1.3.18
 
 - Retry temporary update-check failures quietly on the existing schedule.

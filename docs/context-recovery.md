@@ -24,6 +24,18 @@ checkpoint before leaving a window when client tools permit it. They describe
 recovery as a client capability, without promising that every client supplies
 history access or a usable summary.
 
+## Tools reported missing
+
+Re-read the active tool definitions after a reset. In Codex, `ALL_TOOLS`
+describes tools callable inside `functions.exec`; native tool namespaces can
+remain directly callable without appearing there. An empty catalogue search
+does not prove that a native tool disappeared.
+
+Use the offered native operation and report its actual result. Use supported
+discovery for deferred tools. A full delegation lane, rejected model or invalid
+argument needs its own diagnosis. A saved blocker is historical evidence;
+verify it before asking for a restart or a replacement chat.
+
 ## Updating older installations
 
 An earlier generated template contained a paragraph that incorrectly treated

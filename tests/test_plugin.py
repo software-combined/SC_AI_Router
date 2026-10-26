@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-PLUGIN = ROOT / "plugins/scg-review"
+PLUGIN = ROOT / "plugins/development/scg-review"
 spec = importlib.util.spec_from_file_location("review_setup", PLUGIN / "scripts/setup.py")
 setup = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(setup)
@@ -31,7 +31,7 @@ class PluginTest(unittest.TestCase):
             names = skills.write_marketplace(root, ROOT / 'plugins')
             self.assertIn('scg-ponytail', names)
             self.assertFalse(old.exists())
-            source = ROOT / 'plugins/scg-ponytail/skills/ponytail/SKILL.md'
+            source = ROOT / 'plugins/development/scg-ponytail/skills/ponytail/SKILL.md'
             delivered = root / 'plugins/scg-ponytail/skills/ponytail/SKILL.md'
             self.assertEqual(delivered.read_bytes(), source.read_bytes())
             self.assertEqual(list((root / 'plugins').glob('*/skills/ponytail/SKILL.md')),
@@ -74,7 +74,7 @@ class PluginTest(unittest.TestCase):
     def test_review_routing_has_one_synchronized_source(self):
         skills = PLUGIN / "skills"
         review = (skills / "pre-commit-review/SKILL.md").read_text(encoding="utf-8")
-        policy_root = ROOT / 'plugins/scg-subagents/skills/optimal-subagents/references'
+        policy_root = ROOT / 'plugins/agents/scg-subagents/skills/optimal-subagents/references'
         canonical = (policy_root / 'reviews.md').read_text(encoding="utf-8")
         self.assertEqual((PLUGIN / 'references/reviews.md').read_text(encoding="utf-8"), canonical)
         self.assertIn('../../references/reviews.md', review)
@@ -95,7 +95,7 @@ class PluginTest(unittest.TestCase):
     def test_simplification_wait_guidance_prevents_duplicate_passes(self):
         review = (PLUGIN / "skills/pre-commit-review/SKILL.md").read_text()
         simplifier = (PLUGIN / "skills/code-simplifier/SKILL.md").read_text()
-        tool_guide = (ROOT / "plugins/scg-subagents/skills/optimal-subagents/references/tool-guide.md").read_text()
+        tool_guide = (ROOT / "plugins/agents/scg-subagents/skills/optimal-subagents/references/tool-guide.md").read_text()
         for text in (review, simplifier, tool_guide):
             self.assertIn("quiet", text.lower())
             self.assertIn("duplicate", text)
@@ -138,7 +138,7 @@ class PluginTest(unittest.TestCase):
                                  (PLUGIN / 'scripts' / name).read_bytes())
             for skill in (plugin / 'skills').glob('*/SKILL.md'):
                 self.assertIn('updates.md', skill.read_text(encoding="utf-8"), str(skill))
-        subagents = ROOT / "plugins/scg-subagents"
+        subagents = ROOT / "plugins/agents/scg-subagents"
         self.assertEqual(
             (subagents / "skills/optimal-subagents/references/updates.md").read_bytes(),
             (PLUGIN / "references/updates.md").read_bytes())

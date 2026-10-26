@@ -107,6 +107,9 @@ alone does not authorize a spawn. Claude Code reads the Claude Code section,
 because the Codex collaboration tools and fork options do not exist there.
 Codex reads the Codex sections, which include exact examples for the current
 collaboration tools, fork restrictions, replies, waiting and failure handling.
+Codex's `ALL_TOOLS` lists exec-callable tools, not every native tool. An empty
+search there does not prove that delegation is unavailable. Read the current
+native definitions and the guide's discovery section before reporting a blocker.
 On the mixed-provider Codex route, if `collaboration_plaintext` handoff tools
 are offered, use them for every subagent assignment, message and follow-up,
 whatever the recipient. Otherwise use the `collaboration` tools. Pass model and

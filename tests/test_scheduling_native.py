@@ -12,9 +12,27 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('native_scheduling', ROOT / 'plugins/scg-review/scripts/scheduling.py')
+PLUGIN_ROOTS = {entry['name']: ROOT / entry['source']['path'] for entry in
+                json.loads((ROOT / '.agents/plugins/marketplace.json').read_text())['plugins']}
+spec = importlib.util.spec_from_file_location(
+    'native_scheduling', PLUGIN_ROOTS['scg-review'] / 'scripts/scheduling.py')
 scheduling = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(scheduling)
+
+
+def load_updater(plugin):
+    source = PLUGIN_ROOTS[plugin] / 'scripts/updater.py'
+    spec = importlib.util.spec_from_file_location('native_updater', source)
+    updater = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(updater)
+    return updater
+
+
+class NativeSourceTest(unittest.TestCase):
+    def test_native_migration_updaters_import_without_a_service_manager(self):
+        for plugin in ('scg-review', 'scg-subagents'):
+            with self.subTest(plugin=plugin):
+                self.assertEqual(load_updater(plugin).MARKETPLACE, 'scg-agent-plugins')
 
 
 @unittest.skipUnless(os.environ.get('GITHUB_ACTIONS') == 'true' and
@@ -138,10 +156,7 @@ print(json.dumps(result))
                         else:
                             scheduling.install_linux(str(codex), legacy, plugin, base)
                     for plugin in ('scg-review', 'scg-subagents'):
-                        source = ROOT / 'plugins' / plugin / 'scripts/updater.py'
-                        spec = importlib.util.spec_from_file_location('native_updater', source)
-                        updater = importlib.util.module_from_spec(spec)
-                        spec.loader.exec_module(updater)
+                        updater = load_updater(plugin)
                         recognized = [(label, relative, hashlib.sha256(legacy.read_bytes()).hexdigest(), reused)
                                       for label, relative, _, reused in updater.LEGACY]
                         with patch.object(updater, 'LEGACY', recognized):

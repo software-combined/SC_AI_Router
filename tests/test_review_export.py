@@ -12,7 +12,7 @@ import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPORT = ROOT / "plugins/scg-review/scripts/export_review.py"
+EXPORT = ROOT / "plugins/development/scg-review/scripts/export_review.py"
 
 
 class ReviewExportTest(unittest.TestCase):
@@ -73,7 +73,7 @@ class ReviewExportTest(unittest.TestCase):
         spec.loader.exec_module(release)
         bundle = Path(self.temp.name) / "bundle"
         for name in release.plugin_files(ROOT):
-            if not name.startswith("plugins/scg-review/"):
+            if not name.startswith("plugins/development/scg-review/"):
                 continue
             target = bundle / name
             target.parent.mkdir(parents=True, exist_ok=True)

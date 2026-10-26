@@ -19,7 +19,7 @@ from pathlib import Path
 # touched. A module-level ``raise SkipTest`` would surface as a collection
 # ERROR under ``python -m unittest <name>``, not a clean skip.
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "plugins/scg-prototypes/skills/publish-prototype/scripts/prototypes.py"
+SCRIPT = ROOT / "plugins/development/scg-prototypes/skills/publish-prototype/scripts/prototypes.py"
 if os.name == 'nt':
     prototypes = None
 else:
@@ -76,7 +76,7 @@ def arguments(**overrides):
 
 class PrototypeManifestTest(unittest.TestCase):
     def test_marketplace_entry_and_skill_links_resolve_inside_the_plugin(self):
-        plugin = ROOT / "plugins/scg-prototypes"
+        plugin = ROOT / "plugins/development/scg-prototypes"
         marketplace = json.loads((ROOT / ".agents/plugins/marketplace.json").read_text())
         entries = {entry["name"]: entry for entry in marketplace["plugins"]}
         self.assertIn("scg-prototypes", entries)
@@ -95,7 +95,7 @@ class PrototypeManifestTest(unittest.TestCase):
                     self.assertTrue(resolved.is_file(), target)
 
     def test_bundled_channel_config_is_a_blank_non_operational_template(self):
-        config = json.loads((ROOT / "plugins/scg-prototypes/skills/publish-prototype/references/channel.json").read_text())
+        config = json.loads((ROOT / "plugins/development/scg-prototypes/skills/publish-prototype/references/channel.json").read_text())
         self.assertEqual(config["account"], "")
         self.assertEqual(config["bucket"], "")
         self.assertEqual(config["domain"], "")

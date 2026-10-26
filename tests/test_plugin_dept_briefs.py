@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILLS = ROOT / "plugins/scg-subagents/skills"
+SKILLS = ROOT / "plugins/agents/scg-subagents/skills"
 BRIEFS = ("sales-subagent", "csm-subagent", "support-subagent",
           "finance-subagent", "operations-subagent")
 
@@ -29,7 +29,7 @@ class DeptBriefsTest(unittest.TestCase):
                 self.assertIn("updates.md", skill)
 
     def test_brief_links_resolve_inside_the_plugin(self):
-        plugin = ROOT / "plugins/scg-subagents"
+        plugin = ROOT / "plugins/agents/scg-subagents"
         for name in BRIEFS:
             markdown = SKILLS / name / "SKILL.md"
             for target in re.findall(r"\]\(([^)]+)\)", markdown.read_text()):

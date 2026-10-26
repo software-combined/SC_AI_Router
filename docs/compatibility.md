@@ -1,5 +1,65 @@
 # Compatibility
 
+## Router 1.3.20 client checks, 27 October 2026 AEDT
+
+Clients: Codex desktop `26.1021.31345` (build `21828`), bundled CLI
+`0.164.0-alpha.11.1`, and Claude Code `2.1.309`.
+The probes used synthetic files and requested Low effort.
+
+| Client and route | Requested model | Counted work | Result |
+| --- | --- | --- | --- |
+| Codex / OpenRouter | `z-ai/glm-5.3-flash` | 2 upstream attempts | Tool result and final marker passed |
+| Codex / ChatGPT subscription | `gpt-6-luna` | 2 invocations, one tool call each | Bounded confirmation passed |
+| Claude Code / OpenRouter | `z-ai/glm-5.3-flash` | 3 upstream attempts, 2 sequential reads | Tool results and final markers passed |
+| Claude Code / Claude subscription | `claude-sonnet-5-5` | 2 invocations, 3 reads total | Single-read confirmation passed |
+
+The first Codex subscription invocation completed its tool call but quoted the
+final marker. It failed the exact-output assertion; one bounded repeat passed.
+The initial Claude subscription invocation reached its USD 0.10 client budget
+after reading both files. It is retained as a failed invocation, not acceptance.
+An authorised single-read confirmation passed with a separate USD 0.10 client
+budget. It verified the read, matching tool result and final marker, and reported
+the requested Sonnet model. Claude did not report served effort.
+
+The isolated external Router enforced twelve total upstream attempts, 512 KiB
+input and 65,536 output tokens per request. Five attempts ran across both clients.
+Both external protocols reported the requested model; Codex also reported Low
+effort. Claude did not report served effort. Subscription probes used existing
+sign-in without copying authentication files. Codex subscription served identity
+and effort, and subscription upstream request counts, remain unverified.
+Provider reports do not attest model weights. Publication and installed delivery
+remain separate gates.
+
+## Kimi K3.1 Pro replacement, 24 October 2026 AEDT
+
+The candidate replaces `moonshotai/kimi-k3` with `moonshotai/kimi-k3.1-pro`.
+Codex desktop `26.1016.62342`, bundled CLI `0.163.0-alpha.11.2`, and
+Claude Code `2.1.309` match the preceding client compatibility gate.
+The unchanged subscription routes reuse that gate's evidence.
+
+The final isolated candidate run passed both routes at requested Low effort:
+Codex completed a streamed tool round trip, image recognition and compaction
+in four upstream attempts; Claude Code completed two sequential file reads
+and their matching tool results in three attempts. Both routes reported the
+exact requested model. Codex reported Low effort; Claude did not expose effort.
+The structured record is in `acceptance-ledger.json` and binds the capability
+row, Python runtime and both client versions. These are provider reports,
+not independent model attestation.
+
+A separate six-attempt Codex diagnostic also verified freeform `apply_patch`:
+one file-change item changed synthetic `note.txt` from `alpha` to `beta`.
+It also passed the tool, image and compaction checks. The earlier candidate
+run reached the right model but failed the Codex tool round trip; its failed
+record remains in the ledger. The focused diagnostic and final candidate
+confirmation passed without a runtime change.
+
+Each isolated run allowed at most twelve upstream attempts, 512 KiB input
+and 65,536 output tokens per request. Claude retained a USD 0.25 client cap.
+Only synthetic task data was used. The initial access-blocked run made no
+inference requests. Model access became available after the owner approved
+Moonshot AI in the global and workspace provider allowlists; retention
+settings were unchanged. Source acceptance does not prove release delivery.
+
 ## Updated clients for 1.3.17, 23 October 2026 AEDT
 
 Codex desktop `26.1016.62342` (build `21477`), bundled CLI `0.163.0-alpha.11.2`,

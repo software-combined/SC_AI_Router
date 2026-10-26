@@ -14,9 +14,9 @@ from tests.test_lite_handoffs import lite
 from tests.test_plugin_router_workers import worker
 
 ROOT = Path(__file__).resolve().parents[1]
-SUBAGENTS = ROOT / 'plugins/scg-subagents/skills/optimal-subagents'
-CODEX_GUIDANCE = (ROOT / 'plugins/scg-review/skills/pre-commit-review/SKILL.md',
-                  ROOT / 'plugins/scg-review/references/reviews.md',
+SUBAGENTS = ROOT / 'plugins/agents/scg-subagents/skills/optimal-subagents'
+CODEX_GUIDANCE = (ROOT / 'plugins/development/scg-review/skills/pre-commit-review/SKILL.md',
+                  ROOT / 'plugins/development/scg-review/references/reviews.md',
                   SUBAGENTS / 'SKILL.md', SUBAGENTS / 'references/tool-guide.md')
 OFFERED_TOOLS_RULE = (
     '`collaboration_plaintext` handoff tools are offered, use them for every subagent '
