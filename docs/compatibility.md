@@ -1,5 +1,33 @@
 # Compatibility
 
+## Picker rows for 1.3.26, 27 October 2026 AEDT
+
+Clients: Codex desktop bundled CLI `0.164.0-alpha.11.1` and Claude Code
+`2.1.309`, the same pair recorded for Router `1.3.20` below. This entry covers
+the two rows release `1.3.26` publishes.
+
+`openai/gpt-6.1-terra` was probed again on the `1.3.26` candidate, because the
+retirement edit changed `ai_router/catalogue.py` and invalidated its earlier
+record. The first run passed both routes: Codex made 4 calls across the tool
+round trip, the image colour check and compaction, and Claude Code made 3
+calls over two sequential Reads. The earlier `1.3.23` record needed five runs;
+the ledger keeps every one.
+
+`minimax/minimax-m3.1-flash` was probed on `1.3.25`, which shares the `1.3.26`
+router runtime. Codex failed its first run and passed the second; Claude Code
+passed both.
+
+A separate real Claude Code turn used the installed `1.3.21.214` router and the
+subscription model `claude-opus-5-5`. On `/v1/messages` it answered `OK` with a
+USD 0.50 client cap; a first attempt stopped at a USD 0.05 cap before an
+answer. That turn is client-session evidence, not a ledger record.
+
+Requests kept the 512 KiB input and 65,536-output-token probe limits, the
+750-second deadline, the twelve-attempt cap and Claude's client budget.
+Served identity matched the requested row on every routed leg. These are
+provider reports, not independent model or reasoning-compute attestation.
+Windows-specific behaviour was not exercised in this check.
+
 ## Codex encrypted output include, 27 October 2026
 
 Linux Codex CLI `0.164.0-alpha.11.1`, through the running desktop app, sent
