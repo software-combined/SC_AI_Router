@@ -46,16 +46,16 @@ billed to OpenRouter. Those models cost money and have no local spend cap.
 An AWS Bedrock API key is optional and only enables the Bedrock models;
 see [setup options](docs/setup.md).
 
-1. Open [SCG Router setup and repair](https://hub.softwarecombined.com/router)
+1. Open [Install SCG Router](https://hub.softwarecombined.com/router)
    and choose your computer. You do not need a download sign-in or GitHub account.
-2. Run setup and choose the assistant you use. Enter your key only in the
-   setup window when prompted, or choose **Sign in with Microsoft** for an
-   approved work account. Work sign-in selects your company and connects your
-   personal OpenRouter key with a US$50 monthly limit. Other computers reuse
-   that allowance. Never paste a key into a chat or support ticket.
-   On Microsoft Windows 11 x64, use the supplied `bootstrap.ps1` in PowerShell.
-   It asks you to accept short terms for Microsoft's runtime files first.
-   You do not need to install Python. If Windows blocks the script, contact IT.
+2. Open the installer and choose the assistant you use. Choose **Sign in with
+   Microsoft** for an approved work account. Work sign-in selects your company
+   and connects your personal OpenRouter key with a US$50 monthly limit.
+   Other computers reuse
+   that allowance. You can also choose **Use my own key** in the setup window.
+   Never paste a key into a chat or support ticket.
+   Use the Windows installer on Microsoft Windows 11 x64. You do not need
+   to install Python. Contact IT if your device blocks the installer.
 3. Quit and reopen your assistant, select a model labelled `· OpenRouter`,
    and send a short greeting. For Claude desktop, setup offers to switch Claude
    to OpenRouter instead. Claude restarts on OpenRouter. The first switch sets

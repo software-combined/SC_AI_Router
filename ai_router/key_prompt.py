@@ -57,7 +57,11 @@ def _mode_line(mode, provider_id=None):
             else '%s models only' % label)
 
 
-def _confirm_text(payload, which='codex'):
+def _confirm_text(payload, which='codex', *, managed=False):
+    if managed:
+        action = ('Continue installation' if which == 'none'
+                  else setup_page.RESTART[key_dialog.clients(which)] + ', then start a new chat')
+        return 'Your work key is ready.\n\n' + action + '.'
     lines = []
     if which in ('codex', 'both'):
         lines.append('Codex: ' + _mode_line(payload.get('mode')))
@@ -133,7 +137,7 @@ def run_window(url, tool_path=None, platform_name=None, which=None, run=None,
                                platform_name=platform_name, run=run)
             return 1
         if payload.get('ok'):
-            key_dialog.message(tool_path, _confirm_text(payload, clients),
+            key_dialog.message(tool_path, _confirm_text(payload, clients, managed=managed),
                                platform_name=platform_name, run=run)
             return 0
         error = payload.get('error') or 'setup failed (%s)' % status

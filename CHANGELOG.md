@@ -9,6 +9,9 @@
 - Show a centred confirmation with the SCG logo after Microsoft sign-in.
   Tell people they can close the tab.
 
+- Give the download page the Hub style and lead with installation and work sign-in.
+  Confirm the key is ready after saving, then name the assistants to restart.
+
 ## 1.3.27
 
 - Keep Windows installation recovery records byte-exact across line endings.
