@@ -141,6 +141,18 @@ For a diagnostic check, run:
 If you open a new PowerShell window or the router updates, paste the path block again.
 For a source installation, use its Python 3.14 interpreter and matching installer instead.
 
+## OpenRouter rejects every new Codex chat
+
+Codex can request `output.encrypted_content` in the Responses API `include` list.
+OpenRouter rejects that option before selecting a model provider. The router can
+then show `PROVIDER_REJECTED` and suggest a new chat, which has the same problem.
+Service health and a working key do not detect this request compatibility error.
+
+The compatibility fix removes only `output.encrypted_content` on the OpenRouter
+route. It preserves other include options and the ChatGPT subscription request.
+Verify with a fresh Codex reply and a tool round trip through the affected model.
+A minimal HTTP request can pass because it does not request encrypted output.
+
 ## Codex Send button is greyed out or ChatGPT subscription access is unavailable
 
 From 1.3, open **SCG Router → Codex → OpenRouter only** and confirm the restart.

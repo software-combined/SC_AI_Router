@@ -9,7 +9,7 @@ import json
 import unittest
 
 from ai_router import external_history, outbound, provider_defs, tool_adapter, tool_history
-from ai_router.providers import ExternalResponsesProvider
+from ai_router.providers import ExternalResponsesProvider, SubscriptionProvider
 from tests.harness import stub_credentials
 
 
@@ -85,6 +85,34 @@ class RetryReasoningTests(unittest.TestCase):
         self.assertEqual(projected['input'], native)
         stripped = external_history.strip_reasoning_blobs(items)
         self.assertEqual(stripped[-1], dict(self.history()[1], id='rs_tail'))
+
+
+class IncludeCompatibilityTests(unittest.TestCase):
+    def test_openrouter_omits_native_output_encryption_without_mutating_input(self):
+        payload = {'model': 'deepseek/deepseek-v4.1-flash-1017',
+                   'input': [{'role': 'user', 'content': 'Reply OK.'}],
+                   'include': ['reasoning.encrypted_content', 'output.encrypted_content',
+                               'message.input_image.image_url']}
+        original = copy.deepcopy(payload)
+        prepared = ExternalResponsesProvider(provider_defs.OPENROUTER).prepare(
+            payload['model'], '/responses', payload, b'', {}, stub_credentials())
+        self.assertEqual(json.loads(prepared.body)['include'],
+                         ['reasoning.encrypted_content', 'message.input_image.image_url'])
+        self.assertEqual(payload, original)
+
+    def test_subscription_preserves_output_encryption_and_original_bytes(self):
+        payload = {'model': 'gpt-6-luna', 'input': [{'role': 'user', 'content': 'Reply OK.'}],
+                   'include': ['reasoning.encrypted_content', 'output.encrypted_content']}
+        raw = json.dumps(payload, indent=2).encode()
+        prepared = SubscriptionProvider().prepare(
+            payload['model'], '/responses', payload, raw, {}, stub_credentials())
+        self.assertEqual(prepared.body, raw)
+
+    def test_other_external_provider_preserves_its_include_contract(self):
+        from types import SimpleNamespace
+        payload = {'include': ['output.encrypted_content']}
+        projection = outbound.Projection('/responses', row=SimpleNamespace(provider=provider_defs.BEDROCK.id))
+        self.assertEqual(outbound.drop_native_fields(payload, projection), payload)
 
 
 if __name__ == '__main__':

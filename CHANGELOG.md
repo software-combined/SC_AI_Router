@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep new Codex chats working on OpenRouter when Codex requests encrypted
+  output metadata. Omit its unsupported include option on that route.
 - Give OpenRouter Codex mode hidden Luna helper aliases and route chat titles
   and metadata to Luna. Preserve the chosen chat model and model access policy.
 - Run Windows update checks at sign-in and catch missed scheduled checks.
