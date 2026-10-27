@@ -14,6 +14,7 @@ _mod = _ilu.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 
 replace_text = _mod.replace_text
+replace_bytes = _mod.replace_bytes
 replace_json = _mod.replace_json
 StaleTmp = _mod.StaleTmp
 ConcurrentChange = _mod.ConcurrentChange

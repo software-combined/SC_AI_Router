@@ -173,6 +173,8 @@ def main():
             command = [sys.executable, str(ROOT / 'tools/ci_unittest.py'), '--workers',
                        str(args.workers), '--report', str(args.report), '--', *selected['tests']]
         os.chdir(ROOT)
+        if os.name == 'nt':
+            return subprocess.call(command)
         os.execv(sys.executable, command)
     return 0
 

@@ -218,7 +218,7 @@ class InstallerCiGateTests(unittest.TestCase):
             # fails, and a non-number count must also stop the job.
             gh.write_text('#!/bin/sh\ntouch gh-called\n'
                           '[ "$ACCEPTANCE_COUNT" = error ] && { echo 1; exit 1; }\n'
-                          'printf "%s\\n" "$ACCEPTANCE_COUNT"\n'); gh.chmod(0o700)
+                          'printf "%s\\n" "$ACCEPTANCE_COUNT"\n', newline='\n'); gh.chmod(0o700)
             env = {**os.environ, 'PATH': f'{bin_dir}{os.pathsep}{os.environ["PATH"]}',
                    'GITHUB_REPOSITORY': 'example/router', 'GIT_AUTHOR_NAME': 'Probe',
                    'GIT_COMMITTER_NAME': 'Probe',

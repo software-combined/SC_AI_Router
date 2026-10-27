@@ -31,9 +31,7 @@ _tasks_spec.loader.exec_module(_tasks)
 
 _XML_ENTITIES = {'"': '&quot;', "'": '&apos;'}
 
-ROUTER_TASK = 'CodexMixedModelRouter'
-UPDATE_TASK = ROUTER_TASK + 'Update'
-EXPRESS_TASK = UPDATE_TASK + 'Express'
+ROUTER_TASK, UPDATE_TASK, EXPRESS_TASK = _tasks.NAMES
 TASK_LAUNCHER = 'task_launch.py'  # written beside router_launch.py on install
 ROUTER_LOG = 'launchd.log'   # same supervisor log names as the other platforms
 UPDATE_LOG = 'update.log'
@@ -113,11 +111,7 @@ def _quote(arg):
     return arg
 
 
-def _pythonw(python):
-    lower = python.lower()
-    if lower.endswith('python.exe'):
-        return python[:-10] + 'pythonw.exe'
-    return python
+_pythonw = _tasks.pythonw
 
 
 def _render(template, python, home, script, log, user=''):
@@ -201,6 +195,9 @@ def _post_shutdown(state):
 
 class Backend:
     name = 'windows'
+    snapshot_cohort = _tasks.snapshot_cohort
+    restore_cohort = _tasks.restore_cohort
+    preserve_cohort = _tasks.preserve_cohort
 
     def __init__(self, svc, run, query=None):
         self._svc = svc

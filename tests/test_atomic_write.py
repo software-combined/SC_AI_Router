@@ -25,6 +25,35 @@ def _mod():
 
 
 class AtomicWriteTests(unittest.TestCase):
+    def test_binary_restore_and_removal_preserve_exact_bytes(self):
+        mod, target = _mod(), self._dir() / 'shortcut.lnk'
+        before, after = b'\xff\xfe\x00old\r\n', b'\x00\xff\xfereplaced\n'
+        target.write_bytes(before)
+        mod.replace_bytes(target, after, expected=before)
+        self.assertEqual(target.read_bytes(), after)
+        mod.remove(target, expected=after)
+        self.assertFalse(target.exists())
+
+    def test_binary_restore_refuses_a_concurrent_edit_and_cleans_its_temp(self):
+        mod, target = _mod(), self._dir() / 'shortcut.lnk'
+        target.write_bytes(b'\xffbefore')
+        chmod = mod._mod.os.chmod
+        def changed(path, mode):
+            target.write_bytes(b'\xfeconcurrent')
+            chmod(path, mode)
+        with mock.patch.object(mod._mod.os, 'chmod', side_effect=changed), \
+                self.assertRaises(mod.ConcurrentChange):
+            mod.replace_bytes(target, b'restored', expected=b'\xffbefore')
+        self.assertEqual(target.read_bytes(), b'\xfeconcurrent')
+        self.assertEqual(list(target.parent.iterdir()), [target])
+
+    def test_binary_restore_refuses_an_unexpected_existing_file(self):
+        mod, target = _mod(), self._dir() / 'shortcut.lnk'
+        target.write_bytes(b'\xffbinary')
+        with self.assertRaises(mod.ConcurrentChange):
+            mod.replace_bytes(target, b'restored', expected=None)
+        self.assertEqual(target.read_bytes(), b'\xffbinary')
+
     def test_concurrent_edit_during_temp_write_is_not_overwritten(self):
         mod = _mod()
         target = self._dir() / 'settings.json'

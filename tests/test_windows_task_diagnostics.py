@@ -42,6 +42,23 @@ $serviceFixture | Add-Member ScriptMethod GetRunningTasks {
 
 
 class TaskDiagnosticsTests(unittest.TestCase):
+    @unittest.skipUnless(SHELL, 'requires executable PowerShell fixture')
+    def test_active_owned_task_uses_cross_context_view_only_when_scoped_view_is_empty(self):
+        script = FIXTURE.replace("'SID'", "'" + USER + "'").replace('END_CODE', '0')
+        script = script.replace('return @($script:live,$script:ending)', 'return @()')
+        script = script.replace('Definition=$definition;State=3;', 'Definition=$definition;State=4;')
+        script = script.replace("throw [Runtime.InteropServices.COMException]::new('PRIVATE UNRELATED TASK',-2147024891)",
+                                'return @($script:ending,$script:live)')
+        script += ("\n$ending | Add-Member NoteProperty Path '\\OtherTask';"
+                   "$ending.ErrorCode=-2147024891;"
+                   "$live | Add-Member NoteProperty Path '\\router';\n")
+        command = backend._tasks._SCRIPT.replace('New-Object -ComObject Schedule.Service', '$script:serviceFixture')
+        command = command.replace('$owned = Test-Python ($d.Actions.Item(1).Path)', '$owned = $true')
+        def run(_command, **kwargs):
+            return subprocess.run([SHELL, '-NoProfile', '-Command', script + command], **kwargs)
+        result = backend._tasks.invoke(run, USER, 'Router', 'args')
+        self.assertEqual(result['instances'], ['live-instance'])
+
     def _refusal(self, stdout):
         run = lambda *_args, **_kwargs: SimpleNamespace(returncode=1, stdout=stdout)
         with self.assertRaises(SystemExit) as refused:
