@@ -17,6 +17,25 @@ class DownloadPageTests(unittest.TestCase):
 
 
 class DownloadPagePublicationTests(unittest.TestCase):
+    def test_hub_can_read_only_the_public_release_metadata_without_credentials(self):
+        text = (ROOT / 'infra/feed.yaml').read_text()
+        self.assertTrue('  RouterMetadataHeaders:' in text, 'Hub metadata CORS policy is missing')
+        policy = text.split('  RouterMetadataHeaders:', 1)[1].split('\n  FeedDns:', 1)[0]
+        self.assertIn('AccessControlAllowCredentials: false', policy)
+        self.assertIn('AccessControlAllowMethods: {Items: [GET, HEAD]}', policy)
+        origins = policy.split('AccessControlAllowOrigins:', 1)[1].split('AccessControlMaxAgeSec:', 1)[0]
+        self.assertEqual([line.strip()[2:] for line in origins.splitlines()
+                          if line.strip().startswith('- ')],
+                         ['https://hub.softwarecombined.com',
+                          'https://staging.hub.softwarecombined.com'])
+        for path, cache in (('/install/*.json', '4135ea2d-6df8-44a3-9df3-4b5a84be39ad'),
+                            ('/stable/latest.json', '658327ea-f89d-4fab-a63d-7e88639e58f6')):
+            behavior = text.split('PathPattern: ' + path, 1)[1].split('PathPattern:', 1)[0]
+            self.assertIn('ResponseHeadersPolicyId: !Ref RouterMetadataHeaders', behavior)
+            self.assertIn('CachePolicyId: ' + cache, behavior)
+        default = text.split('DefaultCacheBehavior:', 1)[1].split('CacheBehaviors:', 1)[0]
+        self.assertNotIn('RouterMetadataHeaders', default)
+
     def test_install_page_publishes_shared_fonts_and_their_licences(self):
         with mock.patch.object(publish, '_aws') as aws:
             publish.publish_setup_page('feed-bucket')

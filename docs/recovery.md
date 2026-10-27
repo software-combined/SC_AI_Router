@@ -1,6 +1,6 @@
 # Repair an existing Router installation
 
-Run [SCG Router setup and repair](https://hub.softwarecombined.com/router)
+Run [SCG Router setup and repair](https://hub.softwarecombined.com/install)
 once, using the link for your computer. An existing installation selects
 **Update or repair**. Finish active work and follow the assistant-close prompt.
 Keep the setup window open until it reports the result.
@@ -40,7 +40,7 @@ Never send raw assistant configuration, keys or subscription credentials.
 ## Maintainer notice
 
 > If your Router is stuck on an older version or asks you to sign in for
-> downloads, run [SCG Router setup and repair](https://hub.softwarecombined.com/router)
+> downloads, run [SCG Router setup and repair](https://hub.softwarecombined.com/install)
 > once. Choose your computer and follow the update or repair steps. You do
 > not need to uninstall or enter your working key again. Finish active work
 > before continuing. Send a short reply afterwards and check the version.

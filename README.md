@@ -46,7 +46,7 @@ billed to OpenRouter. Those models cost money and have no local spend cap.
 An AWS Bedrock API key is optional and only enables the Bedrock models;
 see [setup options](docs/setup.md).
 
-1. Open [Install SCG Router](https://hub.softwarecombined.com/router)
+1. Open [Install SCG Router](https://hub.softwarecombined.com/install)
    and choose your computer. You do not need a download sign-in or GitHub account.
 2. Open the installer and choose the assistant you use. Choose **Sign in with
    Microsoft** for an approved work account. Work sign-in selects your company
