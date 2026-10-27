@@ -1,0 +1,6 @@
+{
+  "tenant_id": "organizations",
+  "client_id": "f4d1865e-b327-418c-be6c-605bf27edb72",
+  "scope": "api://7fa5b8e7-326f-4043-9e3f-796a53074915/Router.Provision",
+  "provision_url": "https://hub.softwarecombined.com/api/v1/router/provision"
+}
