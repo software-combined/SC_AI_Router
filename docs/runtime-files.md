@@ -175,6 +175,14 @@ appears and is owner-only (0600). A home that cannot be written therefore
 shows no dialog rather than the same one every minute, and a dialog that
 cannot be drawn is taken back off the list so a later pass offers it again.
 
+`installation-pending.json` retains the fixed Windows recovery inputs while an
+installation changes required components. It contains owned launchers, pointers,
+task definitions and Windows entry points. Independently refreshed catalogues stay outside rollback. It contains no
+credentials, client configuration or full Router state. A failed restoration keeps
+this record and both runtimes for the next maintenance attempt.
+`installed-cohort.json` records verified component versions and hashes after
+completion. Startup preferences remain independently controlled by the user.
+
 ## Switch Codex run log
 
 Applying update checks append content-free records to `logs/maintenance.jsonl`.

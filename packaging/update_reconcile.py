@@ -23,6 +23,7 @@ def log(home, task, event, **facts):
 def run(home, service):
     outcomes = {'attachment': 'deferred'}
     try:
+        outcomes['installation'] = load('windows_installation').reconcile(home, service)
         recovery, runtime = load('codex_recovery'), load('runtime_rebind')
         outcomes['attachment'] = _attachment(recovery, home, service, apply=False)
         outcomes['runtime'] = runtime.reconcile(home, apply=False)

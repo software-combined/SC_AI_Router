@@ -458,7 +458,8 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
             # pass, show the notice, and still report the failure; a pointer
             # without a serving router is a release to retry and park.
             landed = (_svc.current_version(home) == latest['version']
-                      and _svc.wait_version(state, latest['version']))
+                      and _svc.wait_version(state, latest['version'])
+                      and (sys.platform != 'win32' or _resources.ready(home)))
             if not landed:
                 _park(home, etag, etag_path, latest['version'])
                 _record_pass(home, error='installer_failed')
@@ -467,7 +468,8 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
             failure = result.returncode
         else:
             failure = 0
-    if _svc.current_version(home) != latest['version']:
+    if (_svc.current_version(home) != latest['version'] or
+            sys.platform == 'win32' and not _resources.ready(home)):
         print('deferred: installer did not activate the requested version')
         _record_pass(home)
         return failure

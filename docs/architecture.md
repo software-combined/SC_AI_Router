@@ -90,6 +90,15 @@ unchanged regular and Express checks. Read-only preflight does not take the inst
 An attachment repair, runtime repair or changed attention result takes the lock without waiting
 and repeats verification. Healthy unchanged checks do not acquire it.
 Restart-notice presentation runs after the lock closes.
+`windows_installation` owns required Windows completion and interrupted recovery under
+that existing lock. It stages matching core, controller and native resources before
+activation. Its private journal captures only fixed owned files, task definitions
+and entry points. It never captures client configuration, credentials or full state.
+Completion verifies health and component bindings before writing the cohort receipt.
+After a runtime rollback, this transaction may select a verified matching older controller.
+Newer controller files stay retained; independent callers keep their non-downgrade rule.
+Verified restoration defers the update quietly. Incomplete restoration keeps both
+runtimes and exposes repair attention. Attachment and plugin outcomes remain separate.
 `codex_recovery` repairs only an absent block under a valid, active receipt and
 healthy Router. `codex_owned` validates absence, connection conflicts and TOML.
 Configuration and receipt writes compare their prior contents and verify readback.
@@ -854,8 +863,8 @@ These owner APIs support installation recovery; they never capture client settin
 Closing the shell never stops routing. Polling is silent and makes no model calls.
 `native_resources.py` consumes only this target's signed Resources descriptor.
 It verifies archive size, checksum and matching core identity before retention.
-Installation owns its lock; failed menu delivery preserves the previous setup pointer.
-Same-version installs and cached update checks retry missing controls independently of service health.
+Installation owns its lock. Windows repairs missing controls through required cohort
+completion, including unchanged checks. Mac and Linux retain independent controls delivery.
 `native_resources_publish.py` validates all five archives before `publish_feed.py`
 uploads immutable resources and signs the channel document containing their map.
 

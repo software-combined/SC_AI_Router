@@ -36,8 +36,10 @@ def resources(root, version='1.2.0', channel='stable'):
     for folder in ('runtime/python/bin', 'router/packaging', 'payload'):
         (root / folder).mkdir(parents=True)
     (root / 'runtime/python/bin/python3.14').write_text('bundled Python')
+    (root / 'runtime/python/bin/pythonw.exe').write_text('bundled windowless Python')
     for name in ('install.py', 'native_setup.py'):
         (root / 'router/packaging' / name).write_text('# packaged entrypoint\n')
+    (root / 'router/packaging/VERSION').write_text(version)
     blob = b'packaged-router'
     sha = hashlib.sha256(blob).hexdigest()
     (root / 'payload/bundle.tar.gz').write_bytes(blob)

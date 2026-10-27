@@ -302,7 +302,8 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
             print(f'No Python 3.14 found: {remedy}')
             raise SystemExit(2)
     _codex_config._owned.PYTHON = python
-    if delivery is not None: delivery.update(python=python, backend=platform_backend())
+    if delivery is not None: delivery.update(python=python, backend=platform_backend(), platform=PLATFORM)
+    _delivery.recover(home, delivery or {})
     feed = args.feed or _svc.channel_feed(home)
     latest = _updater._verified_feed(feed, _svc.feed_read(_fetch, feed), _fetch)
     serial = check_serial(home, latest, pinned=bool(args.feed))
@@ -310,9 +311,8 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
     current = current_version(home)
     # Current-runtime repair keeps its code; verified maintenance can advance independently.
     repair = bool(args.setup or args.repair) and not newer(latest['version'], current)
+    if delivery is not None: delivery['repair_version'] = current if repair else None
     if not newer(latest['version'], current) and not repair:
-        if PLATFORM == 'win32' and not args.dry_run:
-            platform_backend().recover_pending(python, home, current_release_dir(home), current)
         print(f'up to date {current}')
         if (args.clients is None and args.client is None and not args.choose_clients
                 and not args.desktop and args.claude_mode is None
@@ -338,8 +338,7 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
         except KeyError:
             raise SystemExit('bundle has no MANIFEST.json')
     home.mkdir(mode=0o700, parents=True, exist_ok=True)
-    # Plan 116 Stage 2: harden the home before any token or key is minted
-    # inside it (never widen-then-narrow); POSIX no-op, mode 0700 owns it.
+    # Protect the home before minting any token or key; POSIX mode 0700 owns it.
     backend.protect_secret(home)
     (home / 'logs').mkdir(exist_ok=True)
     # --feed is one-shot: it selects this run's source only. Never pin it,
@@ -355,12 +354,13 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
             (home / 'mixed-router-state.json').unlink(missing_ok=True)
         raise
     if delivery is not None:
-        delivery['controller_source'] = _delivery.prepare(home, tarball, latest, manifest_doc, state, python, backend)
-        delivery['maintenance_done'] = True
+        delivery['controller_source'] = _delivery.prepare(home, tarball, latest, manifest_doc, state, python, backend, delivery)
+        delivery['maintenance_done'] = not bool(delivery.get('cohort'))
     if args.repair and not _delivery.close_assistants(home):
         args.repair_cancelled = True
         raise SystemExit('Repair cancelled; run setup again when your assistants are ready.')
     client, clients, _, mode = _resolve_clients_and_modes(args, home, state, repair=repair)
+    python = _codex_config._owned.PYTHON = _delivery.activate(home, delivery, python)
     # First-run window: the router boots keyless on a single-use link and
     # the operator pastes one key there instead of into the terminal. TTL
     # mirrors ai_router.setup.SETUP_TTL_S; kept literal so the 3.9-compatible
@@ -413,7 +413,7 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
             lambda: _operator.listing(state))
         if setup_url is not None and os.environ.get('ROUTER_NO_KEY_WINDOW') != '1':
             _open_key_window(python, home, setup_url, clients)
-        print(f'installed {current}; health ok; key window ready')
+        print(f'router {current}; health ok; key window ready')
         return 0
     catalog_path = home / 'mixed-models.json'
     before_catalog = catalog_path.read_bytes() if catalog_path.exists() else None
@@ -429,6 +429,7 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
         print(f'service start failed: {exc}')
         healthy = False
     if not healthy:
+        _delivery.refuse_failed_cohort(delivery)
         _rollback_failed_install(home, state, backend, latest, previous, catalog_path,
                                  before_catalog)
     if delivery is not None: delivery['installed_version'] = latest['version']
@@ -455,7 +456,7 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
         if not args.feed:
             (home / 'feed-serial').write_text(str(serial) + '\n')
         backend.start_updates(home)
-        print(f"installed {latest['version']}; health ok; {_client_choice.none_outcome(args, bool(saved))}")
+        print(f"router {latest['version']}; health ok; {_client_choice.none_outcome(args, bool(saved))}")
         return 0
     if clients in ('claude', 'both'): attach_claude(home, state, python=python)
     if args.desktop or saved: _desktop_config.attach(home, state, _codex_config, saved, python=python)
@@ -465,7 +466,7 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
         if not args.feed:
             (home / 'feed-serial').write_text(str(serial) + '\n')
         backend.start_updates(home)
-        print(f"installed {latest['version']}; health ok; Claude Code attached")
+        print(f"router {latest['version']}; health ok; Claude Code attached")
         return 0
     _client_choice.attach_codex(home, state, mode, _codex_config, previous_receipt, static_catalogue=args.static_catalogue, python=python)
     # launchd keeps the updater command until the job is reloaded and a
@@ -477,7 +478,7 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
         # serial, so recording it makes the real feed look stale for good.
         (home / 'feed-serial').write_text(str(serial) + '\n')
     backend.start_updates(home)
-    print(f"installed {latest['version']}; health ok; restart Codex to load the router")
+    print(f"router {latest['version']}; health ok; restart Codex to load the router")
     return 0
 
 

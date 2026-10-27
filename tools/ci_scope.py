@@ -233,6 +233,7 @@ INSTALLER_TESTS = (
     'tests.test_windows_task_ownership',
     'tests.test_windows_task_diagnostics',
     'tests.test_windows_task_cohort',
+    'tests.test_windows_installation',
     'tests.test_windows_shortcut_recovery',
     'tests.test_windows_task_state',
     'tests.test_windows_task_migration',
