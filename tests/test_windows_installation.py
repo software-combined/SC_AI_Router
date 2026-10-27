@@ -86,6 +86,7 @@ class InstallationRecoveryTests(unittest.TestCase):
         return owner, home, backend, table, shortcuts, old, new
 
     def activate(self, owner, home, new):
+        (home / owner.JOURNAL).write_bytes((home / owner.JOURNAL).read_bytes().replace(b'\r\n', b'\n').replace(b'\n', b'\r\n'))
         for name in ('current', 'control-version'):
             (home / name).write_text(new)
         for name in owner.LAUNCHERS:
@@ -93,7 +94,7 @@ class InstallationRecoveryTests(unittest.TestCase):
             (home / name).write_bytes((home / 'control' / new / 'packaging' / origin).read_bytes())
         return dict(resources=home / 'setup' / new)
 
-    def test_completion_is_last_and_mixed_versions_refuse_readiness(self):
+    def test_crlf_journal_completion_is_last_and_mixed_versions_refuse_readiness(self):
         with tempfile.TemporaryDirectory() as temporary:
             owner, home, backend, table, _, old, new = self.fixture(Path(temporary))
             owner.begin(home, new, backend)

@@ -313,6 +313,7 @@ def _do_install(args, _fetch=fetch, _run=None, delivery=None):
     repair = bool(args.setup or args.repair) and not newer(latest['version'], current)
     if delivery is not None: delivery['repair_version'] = current if repair else None
     if not newer(latest['version'], current) and not repair:
+        _delivery.recover_current(home, delivery, python, current)
         print(f'up to date {current}')
         if (args.clients is None and args.client is None and not args.choose_clients
                 and not args.desktop and args.claude_mode is None

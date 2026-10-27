@@ -15,6 +15,7 @@ from tests.test_native_setup import module
 class DesktopDeliveryTests(unittest.TestCase):
     def fixture(self, root):
         resources, home, latest, data = resource_fixtures.NativeResourcesTests().fixture(root)
+        self.resources = resources  # This fixture exercises independently delivered controls.
         latest.update(url='file:///core.tar.gz', min_python='3.14', serial=1)
         state = {'clients': 'none'}
         module('update_status').verified(state, latest, 'file:///latest.json', 'stable', 'cached')
@@ -32,6 +33,7 @@ class DesktopDeliveryTests(unittest.TestCase):
                                  owners.get(name) or original(name))
 
     def update(self, owner, home, latest, data, reader):
+        owner._resources = self.resources
         args = SimpleNamespace(home=str(home), feed='file:///latest.json', express_only=False)
         fetch = mock.Mock(return_value=data)
         with mock.patch.object(owner._models, 'refresh'), self.shortcuts(owner._resources), \
@@ -92,10 +94,11 @@ class DesktopDeliveryTests(unittest.TestCase):
             fetch = mock.Mock(side_effect=lambda url: json.dumps(latest).encode()
                               if url.endswith('latest.json') else data)
             real = installer._delivery._load
-            owner = module('native_resources')
+            owner = self.resources
             with self.shortcuts(owner), mock.patch.object(installer._delivery, '_load',
                     side_effect=lambda name: owner if name == 'native_resources' else real(name)), \
                     mock.patch.object(installer, 'platform_backend', return_value=mock.Mock()), \
+                    mock.patch.object(installer._delivery, 'sys', SimpleNamespace(platform='linux')), \
                     contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(installer.do_install(args, _fetch=fetch), 0)
             self.assertTrue(owner.ready(home))

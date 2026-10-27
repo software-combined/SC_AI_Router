@@ -119,6 +119,13 @@ by the client transition and profile locks. Repeated destination selections
 do nothing. Existing shortcuts retain their toggle behaviour. Platform identity
 and lifecycle helpers serve both clients; the configuration proof uses the
 CLI bundled with the verified desktop app.
+Windows switching checks the required-component receipt under the installation lock
+before identity discovery or pending-switch recovery. Forward preflight and proof
+also check the serving version; reverse recovery can proceed offline without a CLI.
+Legacy tray resources use the existing quiet Windows dialog rather than unsupported helper modes.
+The updater marks an automatic installer child once. Installation consumes that marker
+and respects removal under its lock. Explicit setup can reinstall. Runtime-only legacy
+installs retain their pending-task protocol; native installations never use that bypass.
 
 ```
 provider_defs (one definition per upstream, imports nothing) + errors,
