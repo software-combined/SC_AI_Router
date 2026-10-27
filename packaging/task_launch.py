@@ -44,7 +44,8 @@ except OSError:
     raise SystemExit(1)
 os.dup2(fd, 1)
 os.dup2(fd, 2)
-os.close(fd)
+if fd not in (1, 2):
+    os.close(fd)
 sys.stdout = open(1, 'w', 1, 'utf-8', 'replace')
 sys.stderr = open(2, 'w', 1, 'utf-8', 'replace')
 sys.argv = [os.path.join(home, script), '--home=' + home]

@@ -8,6 +8,25 @@ import sys
 import time
 
 
+def task_diagnostics(run, name, heartbeat, log):
+    script = ("$ErrorActionPreference='Stop';$s=New-Object -ComObject Schedule.Service;"
+              "$s.Connect();$n=[Console]::In.ReadToEnd();$t=$s.GetFolder('\\').GetTask($n);"
+              "@{result=[long]$t.LastTaskResult;state=[int]$t.State;scoped=[int]$t.GetInstances(0).Count;"
+              "all_instances=@($s.GetRunningTasks(1)|Where-Object Path -EQ ('\\'+$n)).Count}"
+              "|ConvertTo-Json -Compress")
+    try:
+        result = run(['powershell', '-NoProfile', '-Command', script], input=name,
+                     capture_output=True, text=True, timeout=15, check=True)
+        facts = json.loads(result.stdout)
+        facts = {key: value for key, value in facts.items()
+                 if key in ('result', 'state', 'scoped', 'all_instances') and type(value) is int}
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        facts = {'error': type(error).__name__}
+    facts['heartbeat'] = heartbeat.exists()
+    facts['log_bytes'] = log.stat().st_size if log.exists() else 0
+    return facts
+
+
 def write_launcher(home, script, lifetime):
     stem = script.removesuffix('.py')
     gate, heartbeat = home / (stem + '.gate'), home / (stem + '.alive')

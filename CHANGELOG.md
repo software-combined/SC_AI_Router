@@ -16,6 +16,7 @@
   fingerprints when the optional repository revision is unavailable.
 - Require Windows core and native process, dialog and key-permission checks
   from a standard user account during main release acceptance.
+- Keep task logging open when a Windows launch has no standard output or error.
 
 ## 1.3.21
 
