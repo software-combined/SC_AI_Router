@@ -504,6 +504,39 @@
     "priority": 115
   },
   {
+    "slug": "minimax/minimax-m3.1-flash",
+    "provider": "openrouter",
+    "upstream_id": "",
+    "display_name": "MiniMax: M3.1 Flash · OpenRouter",
+    "vendor": "MiniMax",
+    "reasoning": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default_reasoning": "low",
+    "modalities": [
+      "text",
+      "image"
+    ],
+    "excluded_efforts": [],
+    "schema_mode": "native",
+    "history_mode": "native",
+    "max_tools": null,
+    "drop_images": false,
+    "context_window": 1048576,
+    "max_output_tokens": 524288,
+    "reasoning_summary": "none",
+    "apply_patch": "none",
+    "experimental_tools": [],
+    "web_search": false,
+    "tier": "verified",
+    "listed": true,
+    "priority": 116
+  },
+  {
     "slug": "moonshotai/kimi-k3.1-pro",
     "provider": "openrouter",
     "upstream_id": "",
