@@ -50,7 +50,7 @@ Linux reloads and reads back the effective stable updater command before
 pruning. Loaded jobs and a running legacy updater retain their release files.
 `runtime_rebind` uses verified retained resource metadata after `setup-current`
 advances. The Windows task adapter snapshots all three owned definitions,
-updates executable bindings and update catch-up/sign-in policy, then verifies
+updates executable bindings and shared catch-up/sign-in policy, then verifies
 the expected path and policy while preserving enabled and pending states.
 Its JSON subprocess contract uses explicit UTF-8 output and decoding for Unicode paths and saved XML.
 A failed readback restores attempted definitions. Both runtimes remain retained.
@@ -829,6 +829,9 @@ deferred zero exits consistently; child exit is separate from verified installat
 `desktop_service.py` uses the platform service lifecycle for bounded restart.
 `desktop_model.py` gives native shells and the fallback window identical actions.
 `desktop_menu.py` runs one shell per installation and graphical session.
+Windows uses the native session ID rather than launcher environment variables.
+Only the lock-owning controller offers a startup warning, through its worker
+after the helper starts and the first menu document is sent.
 On Mac, a session-scoped reopen request tells that shell to open its menu.
 Fallback windows run one selected action and then close.
 It serializes actions in a worker, while native menus stay responsive.
@@ -859,9 +862,12 @@ The platform backends own a separate minute Express job alongside the regular
 four-hour job. Both use `update_launch.py` (also installed as
 `express_launch.py`) and `updater.py`; an update-parent lock serializes
 them while the child installer retains its own installation lock.
-Windows update tasks also run for their installing user's sign-in and catch
+All three Windows tasks run for their installing user's sign-in and catch
 missed timed runs. Runtime reconciliation migrates these settings transactionally
 with task actions, while preserving enabled state, pending state and other settings.
+Registered-task inspection uses its own running instances, refreshed before ID reads.
+Only the documented not-running result is omitted; unknown errors still refuse.
+The adapter returns numeric HRESULT and identifier-only exception type without messages.
 
 ## Transitional owners (do not entrench)
 

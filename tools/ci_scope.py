@@ -229,6 +229,7 @@ INSTALLER_TESTS = (
     'tests.test_windows_runtime_rebind',
     'tests.test_windows_native_fixture',
     'tests.test_windows_task_ownership',
+    'tests.test_windows_task_diagnostics',
     'tests.test_windows_task_state',
     'tests.test_windows_task_migration',
     'tests.test_windows_portability',

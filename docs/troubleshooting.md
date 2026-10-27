@@ -13,21 +13,27 @@ New resource updates launch the menu quietly, including when sign-in startup is 
 On Windows, missing or invalid preferences default to On. A valid saved Off stays Off.
 Installs and updates reconcile the startup shortcut without saving a preference.
 Use the menu's **Start at sign-in** action to save a choice.
+Windows menu locks use the native session ID, so scheduled updates share the existing menu.
+The menu starts before a startup repair warning; duplicate launches do not show another warning.
 
 Windows task logs record launch, completion and safe failure facts, including missing launch scripts.
 If no Python launch event exists, check Task Scheduler History and the task's last-result number.
 The launcher cannot record attempts Windows refuses before Python starts.
+Task-operation refusals include a numeric Windows error and a safe exception class when available.
+They exclude the error message, task paths and raw command output.
 `logs/update.log` records `installed <version>; health verified` after each verified installation.
 Menu and graphical setup also record when an install starts, exits or fails.
 These events contain safe status fields; they do not copy installer output or settings.
 Attachment failures have separate maintenance events. Unchanged checks and rollbacks do not claim an installation.
 
 Windows updates verify the executable paths of all three owned scheduled tasks.
-Both Windows update tasks run at the installing user's sign-in and catch missed timed checks.
+All three Windows tasks catch missed timed checks and use the installing user's sign-in.
 Disabled schedules stay disabled. Windows normally delays catch-up runs by ten minutes;
 see [Microsoft's scheduling behavior](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-startwhenavailable).
 Failed verification restores prior definitions and retries on the next maintenance pass.
 Both runtime folders remain available. Do not remove old setup folders during recovery.
+See the [27 October Windows acceptance evidence](compatibility/windows-2026-10-27.md)
+for verified source changes and the remaining device checks.
 
 Temporary network, update-signature and download failures retry on the existing schedule.
 The current Router keeps running. Rejected updates cannot install.
