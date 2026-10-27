@@ -69,9 +69,12 @@ def runtime_fingerprint(root=ROOT):
 
 def binding(row, root=ROOT):
     row = model(row)
-    done = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=root,
-                          capture_output=True, text=True, timeout=10)
-    revision = done.stdout.strip()
+    try:
+        done = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=root,
+                              capture_output=True, text=True, timeout=10)
+        revision = done.stdout.strip()
+    except FileNotFoundError:
+        revision = ''
     return {'kind': KIND, 'observed_at': datetime.now(timezone.utc).isoformat(),
             'model': row.slug, 'provider': row.provider,
             'capability_fingerprint': capability_fingerprint(row),

@@ -31,6 +31,7 @@ UUID_PROBE = b'-'.join((b'4' * 8, b'4' * 4, b'4' * 4, b'4' * 4, b'4' * 12))
 class ProviderKeyIgnoreTests(unittest.TestCase):
     """A provider's key file must be ignored before anyone writes one."""
 
+    @unittest.skipUnless(shutil.which('git'), 'requires Git ignore rules')
     def test_every_external_key_file_is_ignored(self):
         from ai_router import provider_defs
         names = sorted(defn.key.file for defn in provider_defs.external_defs())

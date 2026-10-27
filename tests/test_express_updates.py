@@ -32,6 +32,9 @@ class ExpressUpdates(unittest.TestCase):
                            sha256=hashlib.sha256(self.blob).hexdigest())
         self.children, self.fetches, self.feeds, self.sleeps = [], [], [], []
         _patch_attrs(self, run=self.child)
+        # These cadence fixtures have no native resources; their scheduler
+        # reconciliation belongs to the native/runtime integration suites.
+        self.enterContext(mock.patch.object(install_mod._updater._reconcile, 'run'))
 
     def child(self, cmd, **kwargs):
         self.children.append(cmd)

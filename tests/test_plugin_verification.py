@@ -1,6 +1,7 @@
 """Real Git transitions and runner handoff cannot hide required verification."""
 import json
 import os
+import shutil
 from pathlib import Path
 import signal
 import subprocess
@@ -18,6 +19,7 @@ MODULES = ('test_plugin', 'test_agent_skills', 'test_prototypes_manifest',
            'test_plugin_verification')
 
 
+@unittest.skipUnless(shutil.which('git'), 'requires real Git integration')
 class PluginVerificationTests(unittest.TestCase):
     def setUp(self):
         temporary = self.enterContext(tempfile.TemporaryDirectory())

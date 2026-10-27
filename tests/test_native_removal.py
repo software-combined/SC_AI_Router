@@ -159,7 +159,7 @@ class RemovalFlowTests(unittest.TestCase):
                 message = dialog.message.call_args.args[0]
                 self.assertIn(expected, message)
                 if rc == 0:
-                    self.assertIn('Your model key and settings stay in /home', message)
+                    self.assertIn('Your model key and settings stay in ' + str(Path('/home')), message)
                 dialog.Progress.assert_called_once()
                 self.assertEqual(dialog.Progress.call_args.kwargs, {'button': 'OK'})
                 self.assertIn('--uninstall', run.call_args.args[0])
