@@ -1,6 +1,7 @@
 """One post-install delivery step, including same-version and desktop attaches."""
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -194,10 +195,23 @@ def activate(home, delivery, python):
 
 
 def recover(home, delivery):
+    """Caller holds install.lock; an earlier automatic child cannot undo removal."""
+    if delivery.get('automatic') and (Path(home) / '.router-removed').exists():
+        print('deferred: SCG Router was removed; open setup to install it again')
+        raise SystemExit(0)
     if delivery.get('platform') == 'win32' and not delivery.get('dry_run'):
         owner = _load('windows_installation')
         if owner.pending(home) and owner.restore(home, delivery['backend']) == 'failed':
             raise SystemExit('Installation recovery needs repair. Open SCG Router to retry.')
+
+
+def recover_current(home, delivery, python, version):
+    """Retain the pending-task protocol for legacy runtime-only installations."""
+    if (delivery and delivery.get('platform') == 'win32' and not delivery.get('dry_run')
+            and not delivery['latest'].get('native_resources') and not os.environ.get('SCG_NATIVE_RESOURCES')
+            and not any((Path(home) / name).exists() for name in ('setup-current', 'control-version'))):
+        delivery['backend'].recover_pending(python, home,
+            _load('service').current_release_dir(home), version)
 
 
 def refuse_failed_cohort(delivery):
@@ -253,7 +267,8 @@ def finish(home, run=subprocess.run, native=None, fetch=None, *,
 
 def run_install(args, install, *, run, fetch):
     """A refused attachment cannot suppress independent maintenance delivery."""
-    delivery, rc = dict(fetch=fetch, dry_run=args.dry_run), None
+    delivery, rc = dict(fetch=fetch, dry_run=args.dry_run,
+                        automatic=os.environ.pop('ROUTER_AUTOMATIC_UPDATE', None) == '1'), None
     try:
         rc = install(delivery)
         return rc

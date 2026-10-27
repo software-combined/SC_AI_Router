@@ -58,11 +58,14 @@ function Test-Owned($d, $r) {
     return $owned
 }
 try {
+    [Console]::Error.WriteLine('SCG_TASK_STAGE=request')
     $r = [Console]::In.ReadToEnd() | ConvertFrom-Json
+    [Console]::Error.WriteLine('SCG_TASK_STAGE=connect')
     $service = New-Object -ComObject Schedule.Service
     $service.Connect()
     $folder = $service.GetFolder('\')
     $task = $null
+    [Console]::Error.WriteLine('SCG_TASK_STAGE=lookup')
     try { $task = $folder.GetTask($r.name) } catch {
         $code = $_.Exception.GetBaseException().HResult
         if ($code -eq -2147024891 -and $r.operation -eq 'query') {
@@ -72,6 +75,7 @@ try {
         if ($code -ne -2147024894) { throw }
     }
     if ($null -eq $task) {
+        [Console]::Error.WriteLine('SCG_TASK_STAGE=instances')
         foreach ($instance in $service.GetRunningTasks(1)) {
             if ($instance.Path -ieq ('\' + $r.name)) { throw 'unowned running instance' }
         }
@@ -83,6 +87,7 @@ try {
         }
     }
     $created = $null -eq $task
+    [Console]::Error.WriteLine('SCG_TASK_STAGE=definition')
     if ($r.operation -eq 'restore') {
         $definition = $service.NewTask(0)
         $definition.XmlText = $r.xml
@@ -91,6 +96,7 @@ try {
             exit 0
         }
         $flags = if ($created) { 2 } else { 4 }
+        [Console]::Error.WriteLine('SCG_TASK_STAGE=register')
         $task = $folder.RegisterTaskDefinition($r.name, $definition, $flags, $r.sid, $null, 3, $null)
     } elseif ($r.operation -eq 'register') {
         $definition = $service.NewTask(0)
@@ -102,12 +108,14 @@ try {
         } else { '' }
         $definition.Settings.Enabled = -not $created -and $task.Enabled
         $flags = if ($null -eq $task) { 2 } else { 4 }
+        [Console]::Error.WriteLine('SCG_TASK_STAGE=register')
         $task = $folder.RegisterTaskDefinition($r.name, $definition, $flags, $r.sid, $null, 3, $null)
     } elseif ($null -ne $task) {
         if ($r.operation -eq 'rebind') {
             if (-not (Test-Python $r.executable)) { throw 'invalid runtime' }
             $definition = $task.Definition
             $definition.Actions.Item(1).Path = $r.executable
+            [Console]::Error.WriteLine('SCG_TASK_STAGE=register')
             $task = $folder.RegisterTaskDefinition($r.name, $definition, 4, $r.sid, $null, 3, $null)
         } elseif ($r.operation -in @('handover', 'complete', 'disable') -or
             ($r.operation -eq 'enable' -and $task.Definition.Data -eq $pendingMarker)) {
@@ -117,6 +125,7 @@ try {
                 $false
             } elseif ($r.operation -eq 'enable') { $true } else { $task.Enabled }
             $definition.Data = if ($r.operation -eq 'handover') { $pendingMarker } else { '' }
+            [Console]::Error.WriteLine('SCG_TASK_STAGE=register')
             $task = $folder.RegisterTaskDefinition($r.name, $definition, 4, $r.sid, $null, 3, $null)
         }
         switch ($r.operation) {
@@ -137,6 +146,7 @@ try {
         }
         if ($r.operation -in @('run', 'enable') -and -not $task.Enabled) { throw 'disabled' }
     }
+    [Console]::Error.WriteLine('SCG_TASK_STAGE=readback')
     if ($null -eq $task) {
         @{kind = 'missing'} | ConvertTo-Json -Compress
     } else {
@@ -216,8 +226,18 @@ def invoke(run, sid, name, arguments, operation='query', xml=None, *, pending=Tr
         if operation == 'snapshot' and (not isinstance(doc.get('xml'), str) or not doc['xml']):
             raise ValueError('missing task definition')
         return doc
+    except subprocess.TimeoutExpired as error:
+        raise SystemExit('cannot verify Windows task %s during %s (timeout stage=%s)' %
+                         (name, operation, _stage(error.stderr))) from None
     except (OSError, subprocess.SubprocessError, ValueError, TypeError, KeyError):
         raise SystemExit('cannot verify Windows task %s during %s%s' % (name, operation, detail))
+
+
+def _stage(stderr):
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode('utf-8', errors='replace')
+    values = re.findall(r'^SCG_TASK_STAGE=(request|connect|lookup|instances|definition|register|readback)\r?$', stderr or '', re.M)
+    return values[-1] if values else 'startup'
 
 
 def _failure(stdout):

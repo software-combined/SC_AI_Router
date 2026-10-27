@@ -22,6 +22,9 @@ def command(home, mode, text, labels):
     icon = resources / 'router/packaging/assets/router-icon.png'
     if not metadata.get('menu_sha256') or not icon.is_file():
         raise OSError('The switch window is unavailable')
+    if tuple(map(int, metadata['version'].split('.')[:3])) < (1, 3, 17):
+        return ['powershell', '-NoProfile', '-NonInteractive', '-Command',
+                script(text, len(labels) > 1, labels)], ''
     request = json.dumps(dict(text=text, labels=list(labels)), ensure_ascii=False) + '\n'
     return [str(helper), mode, str(icon)], request
 

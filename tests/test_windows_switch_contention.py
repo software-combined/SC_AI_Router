@@ -49,6 +49,10 @@ class WindowsSwitchContentionTests(unittest.TestCase):
                 self.cancelled = owner.cancel_wait
         self.enterContext(mock.patch.object(switcher, '_dialog', SimpleNamespace(Progress=Progress), create=True))
         self.enterContext(mock.patch.object(switcher.sys, 'platform', 'win32'))
+        self.enterContext(mock.patch.object(switcher, '_installation',
+            SimpleNamespace(ready=lambda _: True), create=True))
+        self.enterContext(mock.patch.object(switcher._service, 'health', return_value={'version': '1.3.26'}))
+        self.enterContext(mock.patch.object(switcher._service, 'current_version', return_value='1.3.26'))
         self.ops = switcher._platform
         self.enterContext(mock.patch.object(self.ops, 'app_identity', return_value=self.identity))
         self.confirm = self.enterContext(mock.patch.object(self.ops, 'confirm', return_value=True))
@@ -78,6 +82,21 @@ class WindowsSwitchContentionTests(unittest.TestCase):
         self.assertTrue(all(12.3 < budget <= 60 for budget in self.budgets))
         self.reopen.assert_called_once()
         self.assertEqual(self.waits, [])
+
+    def test_serving_version_change_after_quit_restores_settings_and_reopens(self):
+        before = self.config.read_bytes(), (self.home / 'activation.json').read_bytes()
+        self.snapshots = iter([self.rows, [], []])
+        proof = mock.Mock(return_value=True)
+        with mock.patch.object(switcher._service, 'health', side_effect=[
+                {'version': '1.3.26'}, {'version': '1.3.21'}]) as health:
+            with self.assertRaisesRegex(switcher.SwitchError, 'could not use the new settings'):
+                switcher.switch(self.home, run=self.run_command, prove=proof, ready=lambda _: True)
+        self.assertEqual(health.call_count, 2)
+        proof.assert_not_called()
+        self.assertEqual(len(self.budgets), 3)  # Initial quit, exit, and verified rollback quit.
+        self.assertEqual((self.config.read_bytes(), (self.home / 'activation.json').read_bytes()), before)
+        self.reopen.assert_called_once()
+        self.assertFalse((self.home / switcher.MARKER).exists())
 
     def test_waits_for_express_holder_then_checks_fresh_settings_and_large_tree(self):
         acquired, release, finished = threading.Event(), threading.Event(), threading.Event()

@@ -42,6 +42,18 @@ $serviceFixture | Add-Member ScriptMethod GetRunningTasks {
 
 
 class TaskDiagnosticsTests(unittest.TestCase):
+    def test_timeout_keeps_the_bound_and_exposes_only_a_closed_stage(self):
+        for stderr, stage in ((None, 'startup'),
+                (b'SCG_TASK_STAGE=lookup\nPRIVATE\nSCG_TASK_STAGE=register\r\nSCG_TASK_STAGE=/private\n', 'register')):
+            def run(command, **kwargs):
+                self.assertEqual(kwargs['timeout'], 20)
+                raise subprocess.TimeoutExpired('PRIVATE COMMAND', 20, stderr=stderr)
+            with self.subTest(stage=stage), self.assertRaises(SystemExit) as refused:
+                backend._tasks.invoke(run, USER, 'Router', 'args', 'register')
+            self.assertEqual(str(refused.exception),
+                             'cannot verify Windows task Router during register (timeout stage=%s)' % stage)
+            self.assertTrue(refused.exception.__suppress_context__)
+
     @unittest.skipUnless(SHELL, 'requires executable PowerShell fixture')
     def test_active_owned_task_uses_cross_context_view_only_when_scoped_view_is_empty(self):
         script = FIXTURE.replace("'SID'", "'" + USER + "'").replace('END_CODE', '0')
@@ -55,7 +67,9 @@ class TaskDiagnosticsTests(unittest.TestCase):
         command = backend._tasks._SCRIPT.replace('New-Object -ComObject Schedule.Service', '$script:serviceFixture')
         command = command.replace('$owned = Test-Python ($d.Actions.Item(1).Path)', '$owned = $true')
         def run(_command, **kwargs):
-            return subprocess.run([SHELL, '-NoProfile', '-Command', script + command], **kwargs)
+            result = subprocess.run([SHELL, '-NoProfile', '-Command', script + command], **kwargs)
+            self.assertIn('SCG_TASK_STAGE=readback', result.stderr)
+            return result
         result = backend._tasks.invoke(run, USER, 'Router', 'args')
         self.assertEqual(result['instances'], ['live-instance'])
 

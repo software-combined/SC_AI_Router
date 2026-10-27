@@ -34,6 +34,10 @@ class WindowsSwitchTransactionTests(unittest.TestCase):
                          11: row(11, 10, '/runtime/node.exe')}
         self.ops = switcher._platform
         self.enterContext(mock.patch.object(switcher.sys, 'platform', 'win32'))
+        self.cohort = SimpleNamespace(ready=mock.Mock(return_value=True))
+        self.enterContext(mock.patch.object(switcher, '_installation', self.cohort, create=True))
+        self.health = self.enterContext(mock.patch.object(switcher._service, 'health', return_value={'version': '1.3.26'}))
+        self.enterContext(mock.patch.object(switcher._service, 'current_version', return_value='1.3.26'))
         self.enterContext(mock.patch.object(self.ops._windows_codex, 'bindings', return_value=self.api))
         self.enterContext(mock.patch.object(switcher.time, 'monotonic', side_effect=lambda: self.api.now))
         self.enterContext(mock.patch.object(switcher.time, 'sleep', side_effect=self.api.sleep))
@@ -145,6 +149,40 @@ class WindowsSwitchTransactionTests(unittest.TestCase):
         self.assertIsNone(self.switch())
         self.assertEqual((self.api.closed, self.api.ended), ([], []))
         self.unchanged()
+
+    def test_mixed_components_refuse_before_app_lookup_or_pending_recovery(self):
+        self.pending()
+        before = self.config.read_bytes(), (self.home / switcher.MARKER).read_bytes()
+        self.cohort.ready.return_value = False
+        with mock.patch.object(self.ops, 'app_identity', wraps=self.ops.app_identity) as identity:
+            with self.assertRaisesRegex(switcher.SwitchError, 'update or repair'):
+                self.switch()
+        identity.assert_not_called()
+        self.confirm.assert_not_called()
+        self.assertEqual((self.config.read_bytes(), (self.home / switcher.MARKER).read_bytes()), before)
+        self.assertEqual(self.api.ended, [])
+
+    def test_forward_switch_refuses_a_different_serving_version_before_closing(self):
+        self.health.return_value = {'version': '1.3.21'}
+        with self.assertRaisesRegex(switcher.SwitchError, 'not ready'):
+            self.switch()
+        self.confirm.assert_not_called()
+        self.assertEqual(self.api.closed, [])
+        self.unchanged()
+
+    def test_coherent_reverse_switch_needs_neither_running_router_nor_cli(self):
+        switcher._blocks.switch(self.home, 'switched')
+        self.cli.unlink()
+        self.health.return_value = None
+        self.assertEqual(self.switch(target='switched_back'), 'switched_back')
+        self.health.assert_not_called()
+
+    def test_pending_forward_can_recover_back_without_router_or_cli(self):
+        self.pending()
+        self.cli.unlink()
+        self.health.return_value = None
+        self.assertEqual(self.switch(target='switched_back'), 'switched_back')
+        self.assertEqual(((self.home / switcher.MARKER).exists(), self.api.visible), (False, True))
 
     def test_exit_race_reaches_config_proof_and_reopens_the_new_connection(self):
         facts, activate = self.api.facts, self.api.activate
