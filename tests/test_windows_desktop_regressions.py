@@ -28,6 +28,9 @@ class WindowsDesktopTests(unittest.TestCase):
         self.cli.parent.mkdir(parents=True)
         self.cli.write_bytes(b'MZ fixture')
         self.exe.touch()
+        self.enterContext(mock.patch.object(switcher._installation, 'ready', return_value=True))
+        self.enterContext(mock.patch.object(switcher._service, 'current_version', return_value='1.3.27'))
+        self.enterContext(mock.patch.object(switcher._service, 'health', return_value={'version': '1.3.27'}))
 
     def version(self):
         return mock.Mock(return_value=SimpleNamespace(returncode=0,
@@ -155,7 +158,7 @@ class WindowsDesktopTests(unittest.TestCase):
         ops = switcher._platform
         with mock.patch.object(switcher.sys, 'platform', 'win32'), \
                 mock.patch.dict(os.environ, {}, clear=True), \
-                mock.patch.object(ops, 'app_identity', side_effect=[identity, changed]), \
+                mock.patch.object(ops, 'app_identity', side_effect=[identity, changed]) as identities, \
                 mock.patch.object(ops, 'confirm', return_value=True), \
                 mock.patch.object(ops, '_snapshot', return_value={}), \
                 mock.patch.object(ops, 'open_app') as reopen, \
@@ -164,6 +167,7 @@ class WindowsDesktopTests(unittest.TestCase):
             with self.assertRaises(switcher.SwitchError):
                 switcher.switch(home, platform_ops=ops, ready=lambda _: True, run=self.version())
             self.assertEqual((config.read_bytes(), (home / 'activation.json').read_bytes()), before)
+            self.assertEqual(identities.call_count, 2)
             reopen.assert_not_called()
 
 
