@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The OpenRouter picker now offers MiniMax M3.1 Flash on its paid endpoint,
+  after the free entry was withdrawn. They are separate ids: the paid row
+  passed both client route checks and keeps thread history on a switch.
+
 - The OpenRouter picker no longer offers MiniMax M3.1 Flash (free). OpenRouter
   withdrew the free endpoint, so the router drops the row instead of keeping a
   model that can no longer answer.
