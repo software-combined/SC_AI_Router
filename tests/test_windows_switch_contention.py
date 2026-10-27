@@ -28,7 +28,7 @@ class WindowsSwitchContentionTests(unittest.TestCase):
         (self.home / 'mixed-router-state.json').write_text(json.dumps(state))
         block = switcher._blocks.build(self.home, state, 'subscription', False, 'default')
         switcher._blocks._codex.write_receipt(self.home, self.config, block, None, 'subscription', '')
-        self.config.write_text(block)
+        self.config.write_bytes(block.encode())
         self.identity = dict(root=str(self.app), exe=str(exe), user='fixture', app='Codex!App')
         labels = ['ChatGPT.exe'] * 14 + ['conhost.exe'] * 13 + ['node.exe'] * 7
         labels += ['node_repl.exe'] * 6 + ['cmd.exe'] * 4 + ['codex.exe', 'computer-use.exe']

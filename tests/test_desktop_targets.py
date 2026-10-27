@@ -59,7 +59,10 @@ class DesktopTargetTests(unittest.TestCase):
     def test_codex_windows_and_linux_use_the_selected_platform_lifecycle(self):
         case = self.fixture(codex_tests.SwitchFlowTests)
         for name in ('win32', 'linux'):
-            with mock.patch.object(codex.sys, 'platform', name):
+            with mock.patch.object(codex.sys, 'platform', name), \
+                    mock.patch.object(codex._installation, 'ready', return_value=True), \
+                    mock.patch.object(codex._service, 'current_version', return_value='1.3.27'), \
+                    mock.patch.object(codex._service, 'health', return_value={'version': '1.3.27'}):
                 cli = case.app / 'resources/codex.exe'
                 cli.parent.mkdir(exist_ok=True)
                 cli.write_bytes(b'MZ fixture')

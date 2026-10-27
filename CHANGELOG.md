@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.3.27
+
 - Keep Windows installation recovery records byte-exact across line endings.
 
 - Refuse Windows Codex switching before closing the app when required Router
