@@ -360,9 +360,11 @@ While Codex is switched:
 - Codex still asks you before it runs a command that needs approval;
 - conversations you start while switched still open after you switch back.
 
-Two things do not work while Codex is switched. Archiving a conversation fails
-with "Failed to archive conversation", a ChatGPT app (Codex) issue, so switch
-back to archive it. Conversation titles are not generated.
+Conversation titles and other chat metadata use Luna through the OpenRouter
+key while switched. Your chosen chat model stays unchanged. If Luna is absent
+from the key's model list or company policy excludes it, these helpers cannot run.
+Archiving a conversation still fails with "Failed to archive conversation",
+a ChatGPT app (Codex) issue, so switch back to archive it.
 
 ## Express updates
 

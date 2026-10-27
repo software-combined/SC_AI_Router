@@ -420,12 +420,18 @@ anything is prepared or sent. Native service paths get the no-subscription
 answers; every other request gets one final `invalid_prompt` refusal, which
 `ingress.error` sends as a `response.failed` frame when the turn streams. The
 refusal names the twin row only when the portco allowlist, the key's
-availability snapshot and the Codex picker all admit it. Helper turns are
-refused too: the helper fallback moves a turn to its twin only after the
-subscription refuses it, and this route sends nothing to refuse.
+availability snapshot and the Codex picker all admit it. `codex_helpers.py`
+owns the bounded helper-source parser and bare Luna aliases. Before Responses
+adapter selection, known metadata helpers on the switched route or an install
+without a subscription resolve to the external Luna row. Normal model policy,
+availability and credential checks still apply; a denied Luna never falls back
+to Fable or the subscription. The normal subscription helper fallback stays opt-in.
 `routed_models.py` owns `routed-models.json`, the picker Switch Codex points
 Codex at: the rows no-subscription mode shows, under the mixed list's key and
-portco filters. `availability.sync_catalogue` rewrites it after the mixed list,
+portco filters, plus hidden bare Luna aliases only when Luna is admitted.
+Those aliases prevent the client from selecting its first chat model when its
+requested helper ID is missing. Readiness checks bind them to the real Luna row.
+`availability.sync_catalogue` rewrites it after the mixed list,
 never empty and never without a live snapshot, since Codex rejects an empty
 list and a stale one offers models the key cannot use. `codex_route.ready`
 answers whether Switch Codex may use it, reading "current" through

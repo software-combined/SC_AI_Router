@@ -20,35 +20,17 @@ no twin of its own, and relays that response. Ordinary turns keep today's
 refusal. The fallback requires `openai_helper_fallback: true`: it bills that
 provider's key and sends the helper prompt to it only after explicit opt-in.
 """
-import json
-
-from . import (attempt_policy, codex_route, errors, provider_defs, request_context,
+from . import (attempt_policy, codex_helpers, codex_route, errors, provider_defs, request_context,
                subscription_roster, usage_episodes, wire_shape)
 from .image_items import has_images
 from .providers import ExternalResponsesProvider
 from .events import log_event
 
-HELPER_SOURCES = frozenset({'thread_title', 'thread_description',
-                            'thread_summary', 'thread_title_reconsideration'})
-METADATA_HEADER = 'x-codex-turn-metadata'
-MAX_METADATA_BYTES = 8192
+HELPER_SOURCES = codex_helpers.HELPER_SOURCES
+MAX_METADATA_BYTES = codex_helpers.MAX_METADATA_BYTES
 TWIN_PREFIX = subscription_roster.TWIN_PREFIX
-LUNA_TWIN = 'openai/gpt-6-luna'
-
-
-def helper_turn(headers):
-    """True when the turn metadata names a thread metadata (helper) turn."""
-    raw = next((v for k, v in headers.items() if k.lower() == METADATA_HEADER), None)
-    if not isinstance(raw, str) or len(raw) > MAX_METADATA_BYTES:
-        return False
-    try:
-        meta = json.loads(raw)
-    except ValueError:
-        return False
-    if not isinstance(meta, dict):
-        return False
-    source = meta.get('thread_source')
-    return isinstance(source, str) and source in HELPER_SOURCES
+LUNA_TWIN = codex_helpers.LUNA_TWIN
+helper_turn = codex_helpers.helper_turn
 
 
 def _twin_entry(rows, slug):

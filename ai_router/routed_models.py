@@ -3,16 +3,18 @@
 Switch Codex points Codex's picker at this file while Codex runs without
 ChatGPT sign-in, so it must never offer a model that route cannot serve. It
 holds the rows no-subscription mode shows (routed rows and their OpenAI twins,
-no ChatGPT subscription rows) under the same key availability and portco
+no visible ChatGPT subscription rows) under the same key availability and portco
 allowlist as `mixed-models.json`, and every availability sync rewrites it
 beside that file. With no current snapshot, or no row left to show, the
 previous file stays: Codex refuses an empty model list, and a list built for
 no key would offer models this key cannot use.
+Hidden bare Luna IDs let Codex select its metadata helper without falling
+back to the first chat model. Only recognised helpers use the external alias.
 """
 import json
 from pathlib import Path
 
-from . import catalogue
+from . import catalogue, codex_helpers
 from .atomic_write import replace_json
 
 NAME = 'routed-models.json'
@@ -26,6 +28,7 @@ def sync(home, available, allowed):
                              available=available)
     if not merged['models']:
         return False
+    merged['models'].extend(codex_helpers.aliases(merged['models']))
     replace_json(Path(home) / NAME, merged)
     return True
 

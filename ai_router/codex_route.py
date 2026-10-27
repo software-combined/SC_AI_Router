@@ -16,19 +16,19 @@ to a streaming turn as one `response.failed` frame, whose message Codex
 0.153.1 and 0.158 show as sent, and to anything else as a 400; neither
 version retries either form, and 0.153.1 shows the 400's whole body.
 
-Helper turns get the same refusal. The helper fallback moves a turn to its
-twin only after the subscription refuses it, and this route sends nothing.
+Metadata helpers resolve to the external Luna row before adapter selection.
+Ordinary subscription turns keep the refusal below.
 
 `ready` is what Switch Codex asks before it points Codex's picker at the
 routed-only list (`routed_models`). The check lives here rather than beside
 the list's writer because the availability sync imports that writer, and the
 check reads availability back: side by side they would import each other.
 """
-from . import (availability, errors, local_services, provider_defs, routed_models,
+from . import (availability, codex_helpers, errors, local_services, provider_defs, routed_models,
                subscription_roster)
 from .clients import visible_for
 
-HEADER = 'x-scg-codex-route'  # lowercase, as the Switch Codex provider entry sends it
+HEADER = codex_helpers.ROUTE_HEADER
 
 
 class Refusal(errors.LocalAnswer):
@@ -41,7 +41,7 @@ class Refusal(errors.LocalAnswer):
 
 def switched(headers):
     """True when the request carries `HEADER`, whatever its case."""
-    return any(key.lower() == HEADER for key in headers)
+    return codex_helpers.switched(headers)
 
 
 def message(twin=None):
@@ -88,5 +88,8 @@ def ready(home):
     allowed = availability.effective_ids(
         home, availability.current_key(home), availability.current_region(home))
     listed = routed_models.rows(home)
+    slugs = {row.get('slug') for row in listed}
     return bool(listed) and allowed is not None and all(
-        row.get('slug') in allowed for row in listed)
+        codex_helpers.served_slug(row) in allowed
+        and (row.get('slug') not in codex_helpers.ALIASES
+             or codex_helpers.LUNA_TWIN in slugs) for row in listed)
