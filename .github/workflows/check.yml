@@ -82,6 +82,9 @@ jobs:
       - name: Native packaging contracts (PowerShell)
         shell: pwsh
         run: python -m unittest tests.test_native_stage tests.test_native_packages tests.test_native_setup tests.test_native_readiness tests.test_native_menu_build
+      - name: Failed standard-user launch cleans up its account
+        shell: pwsh
+        run: python -m unittest tests.test_windows_standard_ci.StandardUserLaunchFailureTests
       - name: Native ACL contract (PowerShell)
         shell: pwsh
         run: python -m unittest tests.test_windows_acl_native
@@ -103,6 +106,21 @@ jobs:
           python-version: "3.9"
       - name: Installer surface imports on 3.9
         run: python tools/check_installer_python39.py
+
+  windows-standard:
+    name: Windows standard user
+    needs: changes
+    if: needs.changes.result == 'success'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Core and native contracts without administrator rights
+        shell: pwsh
+        run: ./tools/run_windows_standard.ps1 -Python (Get-Command python).Source
 
   unit-suite:
     name: Offline unit suite
@@ -134,7 +152,7 @@ jobs:
     # Installer jobs may be skipped when scope finds no installer paths;
     # release-only prerequisites are skipped on development runs.
     # !cancelled() lets the failure guard run after a failed prerequisite.
-    needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter, unit-suite]
+    needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter, unit-suite, windows-standard]
     if: ${{ !cancelled() && (github.event.action != 'edited' || github.event.changes.base) }}
     # Development keeps the fast static checks. Main acceptance waits for
     # the selected offline suite and native checks running in parallel.
@@ -165,7 +183,7 @@ jobs:
         # Real parser validation, not a lint pass: a .ps1 syntax error is
         # otherwise only discovered on a Windows host.
         run: |
-          foreach ($f in Get-ChildItem packaging/*.ps1) {
+          foreach ($f in Get-Item packaging/*.ps1, tools/run_windows_standard.ps1) {
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile(
               $f.FullName, [ref]$null, [ref]$errors) | Out-Null

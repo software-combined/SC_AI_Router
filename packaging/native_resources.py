@@ -1,4 +1,4 @@
-"""Deliver only this target's signed native Resources; keep inference health separate."""
+"""Verify target Resources; Windows joins required installation completion."""
 import hashlib
 import importlib.util
 import json
@@ -25,6 +25,23 @@ def current(home):
     return home / 'setup' / name
 
 
+def for_version(home, version):
+    """Find verified retained Resources when rollback kept a newer setup pointer."""
+    version = load('update_status').version(version)
+    base = Path(home) / 'setup'
+    if not version or base.is_symlink():
+        raise ValueError('Invalid retained resource version')
+    for candidate in [base / version, *sorted(base.glob(version + '-*'))]:
+        if candidate.is_symlink():
+            continue
+        try:
+            if metadata(candidate)['version'] == version:
+                return candidate
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+    raise ValueError('Matching verified resources are unavailable')
+
+
 def ready(home):
     try:
         doc = metadata(current(home))
@@ -33,7 +50,8 @@ def ready(home):
         delivery = json.loads(record.read_text()) if record.exists() else {}
         failed = not isinstance(delivery, dict) or delivery.get('status') == 'failed'
         newer_core = load('bundle').newer(service.current_version(Path(home)), doc['version'])
-        return bool(doc.get('menu_sha256')) and not failed and not newer_core
+        coherent = sys.platform != 'win32' or load('windows_installation').ready(home)
+        return bool(doc.get('menu_sha256')) and not failed and not newer_core and coherent
     except (OSError, ValueError, KeyError, TypeError):
         return False
 
@@ -117,6 +135,26 @@ def unpack(archive, destination):
     return root
 
 
+def stage(home, latest, feed_url, fetch=None, *, resources=None):
+    """Verify and retain required Resources without changing live entry points."""
+    row = descriptor(latest)
+    if resources is not None:
+        doc = metadata(resources)
+        if doc['sha256'] != latest['sha256'] or doc['version'] != latest['version'] or not doc.get('menu_sha256'):
+            raise ValueError('Native resources have the wrong core identity')
+        return retained(resources, home, repair=True)
+    if row is None:
+        raise ValueError('Required Windows resources are unavailable')
+    with tempfile.TemporaryDirectory(prefix='scg-resources-') as temporary:
+        archive = Path(temporary) / 'resources.tar.gz'
+        download(load('feed').sibling_bundle(feed_url, row['url']), archive, row, fetch)
+        resources = unpack(archive, temporary)
+        doc = metadata(resources)
+        if doc['sha256'] != row['bundle_sha256'] or doc['version'] != row['version'] or not doc.get('menu_sha256'):
+            raise ValueError('Native resources have the wrong core identity')
+        return retained(resources, home, repair=True)
+
+
 def reconcile(home, latest, feed_url, fetch=None):
     """Caller holds the installation lock and has verified the channel document."""
     home = Path(home)
@@ -125,6 +163,8 @@ def reconcile(home, latest, feed_url, fetch=None):
     row = descriptor(latest)
     if row is None or load('service').current_version(home) != latest['version']:
         return False
+    if sys.platform == 'win32':
+        return load('windows_installation').controls(home, latest, feed_url, fetch)
     previous = None
     try:
         previous = current(home)
@@ -141,26 +181,19 @@ def reconcile(home, latest, feed_url, fetch=None):
         pass
     pointer = home / 'setup-current'
     before = pointer.read_bytes() if pointer.exists() else None
-    with tempfile.TemporaryDirectory(prefix='scg-resources-') as temporary:
-        archive = Path(temporary) / 'resources.tar.gz'
-        url = load('feed').sibling_bundle(feed_url, row['url'])
-        download(url, archive, row, fetch)
-        resources = unpack(archive, temporary)
-        doc = metadata(resources)
-        if doc['sha256'] != row['bundle_sha256'] or doc['version'] != row['version'] or not doc.get('menu_sha256'):
-            raise ValueError('Native resources have the wrong core identity')
-        permanent = retained(resources, home, repair=True)
-        try:
-            load('native_shortcuts').install(home, permanent, permanent / 'runtime' / doc['runtime_exec'])
-            load('runtime_rebind').reconcile(home)
-            if previous != permanent:
-                load('desktop_menu').start(home, permanent, after_update=True)
-        except (Exception, SystemExit):
-            if before is None:
-                pointer.unlink(missing_ok=True)
-            else:
-                load('atomic_write').replace_text(pointer, before.decode(), newline='')
-            raise
+    permanent = stage(home, latest, feed_url, fetch)
+    doc = metadata(permanent)
+    try:
+        load('native_shortcuts').install(home, permanent, permanent / 'runtime' / doc['runtime_exec'])
+        load('runtime_rebind').reconcile(home)
+        if previous != permanent:
+            load('desktop_menu').start(home, permanent, after_update=True)
+    except (Exception, SystemExit):
+        if before is None:
+            pointer.unlink(missing_ok=True)
+        else:
+            load('atomic_write').replace_bytes(pointer, before)
+        raise
     load('atomic_write').replace_json(home / 'desktop-delivery.json',
         dict(status='ready', version=row['version'], sha256=row['sha256']))
     print('SCG Router menu delivered')
@@ -168,13 +201,15 @@ def reconcile(home, latest, feed_url, fetch=None):
 
 
 def deliver(home, latest, feed_url, fetch=None):
-    """A menu delivery failure never rolls back a healthy inference service."""
+    """Use the platform's completion boundary and retain safe failure status."""
     try:
         delivered = reconcile(home, latest, feed_url, fetch)
         if delivered:
             _record(home, 'ready')
         return delivered
-    except (Exception, SystemExit):
+    except (Exception, SystemExit) as error:
+        if sys.platform == 'win32' and isinstance(error, SystemExit) and error.code == 0:
+            return False  # The unchanged or restored cohort remains usable; retry quietly.
         load('atomic_write').replace_json(Path(home) / 'desktop-delivery.json',
                                          dict(status='failed'))
         _record(home, 'failed')

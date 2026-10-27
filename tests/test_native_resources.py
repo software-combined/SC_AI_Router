@@ -11,11 +11,13 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.test_native_setup import module, resources
+from tests.test_maintenance_recovery import payload
 
 
 class NativeResourcesTests(unittest.TestCase):
     def fixture(self, root):
         owner = module('native_resources')
+        owner.sys = SimpleNamespace(platform='linux')  # Independent controls path; Windows has cohort workflow tests.
         original = owner.load
         owner.load = lambda name: (SimpleNamespace(reconcile=lambda _: 'inactive')
             if name == 'runtime_rebind' else original(name))
@@ -103,7 +105,7 @@ class NativeResourcesTests(unittest.TestCase):
             original = owner.load
             fdopen = os.fdopen
             def windows_text(fd, mode, **kwargs):
-                if kwargs.get('newline') is None:
+                if 'b' not in mode and kwargs.get('newline') is None:
                     kwargs['newline'] = '\r\n'
                 return fdopen(fd, mode, **kwargs)
             def install(home, permanent, python):
@@ -157,6 +159,7 @@ class NativeResourcesTests(unittest.TestCase):
             (source / 'installer.json').write_text(json.dumps(doc))
             feed = source / 'payload/latest.json'
             feed.write_text(json.dumps(dict(json.loads(feed.read_text()), version='2.0.0')))
+            (source / 'router/packaging/VERSION').write_text('2.0.0')
             previous = owner.retained(source, home)
             (home / 'setup-current').write_text(previous.name)
             (home / 'desktop-delivery.json').write_text('{"status":"failed"}')
@@ -230,3 +233,55 @@ class NativeResourcesTests(unittest.TestCase):
             self.assertFalse(owner.ready(home))
             self.assertEqual(state.read_bytes(), before)
             self.assertFalse((home / 'desktop-delivery.json').exists())
+
+
+class WindowsPreparationTests(unittest.TestCase):
+    def test_controller_retention_does_not_advance_its_pointer_until_activation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, home = root / 'source', root / 'home'
+            home.mkdir()
+            (home / 'control-version').write_bytes(b'1.3.21\r\n')
+            blob, _, _ = payload('1.3.23')
+            module('service').safe_extract(blob, source)
+            controller = module('native_controller')
+            installer = controller.install(home, source, activate=False)
+            self.assertTrue(installer.is_file())
+            self.assertEqual((home / 'control-version').read_bytes(), b'1.3.21\r\n')
+            self.assertFalse((home / 'update_launch.py').exists())
+            controller.install(home, installer.parent.parent)
+            self.assertEqual((home / 'control-version').read_text().strip(), '1.3.23')
+
+    def test_verified_native_staging_keeps_live_pointers_and_preferences_unchanged(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            owner, home, latest, data = NativeResourcesTests().fixture(root)
+            for name, value in (('setup-current', b'old\r\n'), ('desktop-preferences.json', b'{"autostart":false}')):
+                (home / name).write_bytes(value)
+            before = {p.name: p.read_bytes() for p in home.iterdir() if p.is_file()}
+            permanent = owner.stage(home, latest, 'file:///latest.json', lambda _: data)
+            self.assertTrue((permanent / 'installer.json').is_file())
+            self.assertEqual({p.name: p.read_bytes() for p in home.iterdir() if p.is_file()}, before)
+            with self.assertRaises(ValueError):
+                owner.stage(home, latest, 'file:///latest.json', lambda _: data + b'broken')
+            self.assertEqual({p.name: p.read_bytes() for p in home.iterdir() if p.is_file()}, before)
+
+
+    def test_embedded_native_code_version_must_match_its_resource_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _, _, _, _ = NativeResourcesTests().fixture(root)
+            (root / 'Resources/router/packaging/VERSION').write_text('0.0.1')
+            with self.assertRaises(ValueError):
+                module('native_payload').metadata(root / 'Resources')
+
+
+    def test_windows_resources_need_windowless_python_before_activation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = resources(Path(temporary) / 'Resources')
+            doc = json.loads((source / 'installer.json').read_text())
+            doc['target'] = 'windows/x86_64'
+            (source / 'installer.json').write_text(json.dumps(doc))
+            (source / 'runtime/python/bin/pythonw.exe').unlink()
+            with self.assertRaisesRegex(ValueError, 'Python'):
+                module('native_payload').metadata(source, 'windows/x86_64')

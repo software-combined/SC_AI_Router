@@ -36,6 +36,7 @@ PACKAGING_FILES = (
     # git account and no marketplace command to receive them.
     'packaging/agent_skills.py',
     'packaging/install_delivery.py', 'packaging/repair_ui.py', 'packaging/native_payload.py',
+    'packaging/windows_installation.py',
     'packaging/native_controller.py', 'packaging/native_setup.py',
     'packaging/native_launch.py', 'packaging/native_dialog.py',
     'packaging/native_shortcuts.py', 'packaging/native_readiness.py',

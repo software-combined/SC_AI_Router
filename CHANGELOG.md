@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+- The OpenRouter picker now offers MiniMax M3.1 Flash on its paid endpoint,
+  after the free entry was withdrawn. They are separate ids: the paid row
+  passed both client route checks and keeps thread history on a switch.
+
+- The OpenRouter picker no longer offers MiniMax M3.1 Flash (free). OpenRouter
+  withdrew the free endpoint, so the router drops the row instead of keeping a
+  model that can no longer answer.
+
+- The OpenRouter picker now offers GPT-6.1 Terra. It passed the isolated Codex
+  and Claude Code route checks, so both clients can switch to it and keep
+  their thread history.
+
+- Keep new Codex chats working on OpenRouter when Codex requests encrypted
+  output metadata. Omit its unsupported include option on that route.
+- Give OpenRouter Codex mode hidden Luna helper aliases and route chat titles
+  and metadata to Luna. Preserve the chosen chat model and model access policy.
+- Run Windows update checks at sign-in and catch missed scheduled checks.
+  Migrate all three owned tasks while preserving disabled schedules and pending state.
+- Keep one Windows tray menu per native session, even when Task Scheduler supplies
+  a different environment. Start the menu before offering a repair warning.
+- Report safe Windows task error codes and inspect only the owned task's instances.
+  Ignore confirmed completed instances; refuse unknown or unreadable task state.
+  Include active owned instances that Windows omits from the caller's scoped view.
+- Record menu and setup installation launches, child exits and failures in the
+  update log. A deferred menu install reports busy instead of reporting completion.
+- Keep model verification usable without Git. Preserve source and capability
+  fingerprints when the optional repository revision is unavailable.
+- Require Windows core and native process, dialog and key-permission checks
+  from a standard user account during main release acceptance.
+- Keep task logging open when a Windows launch has no standard output or error.
+- Stage required Windows components before activation. Verify completion before
+  recording installation success, and restore prior bindings after a required failure.
+  Retry quietly after verified restoration; retain recovery evidence when restoration fails.
+- Verify and restore owned Windows shortcuts and the Apps entry during installation recovery.
+  Preserve explicit sign-in choices and launch the sign-in menu without a console.
+
 ## 1.3.21
 
 - Keep verified Windows Codex process handles through shutdown. Exiting app

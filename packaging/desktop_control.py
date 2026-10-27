@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from native_payload import load
+from native_payload import load, succeeded
 
 DESTINATIONS = {
     'codex': [('subscription', 'ChatGPT + OpenRouter'), ('openrouter', 'OpenRouter only')],
@@ -91,9 +91,13 @@ def snapshot(home):
 def _installer(home, flags, run):
     controller = load('native_controller').installer(home)
     command = controller or Path(__file__).with_name('install.py')
-    return run([sys.executable, str(command), '--home', str(home)] + list(flags),
-               capture_output=True, text=True, timeout=900,
-               **({'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
+    def launch():
+        return run([sys.executable, str(command), '--home', str(home)] + list(flags),
+                   capture_output=True, text=True, timeout=900,
+                   **({'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
+    if '--update' in flags:
+        return load('install_delivery').run_logged(home, 'menu', 'update', launch)
+    return launch()
 
 
 def execute(home, resources, action, run=subprocess.run):
@@ -149,6 +153,8 @@ def execute(home, resources, action, run=subprocess.run):
     flags = {'router.restart': ['--restart'], 'updates.install': ['--update'],
              'updates.check': ['--check-update', '--json'], 'help.support': ['--support']}[action]
     result = _installer(home, flags, run)
+    if result.returncode == 0 and not succeeded(result):
+        raise Notice(BUSY)
     if result.returncode:
         if action == 'updates.check':
             raise Notice('SCG Router could not check for updates. '

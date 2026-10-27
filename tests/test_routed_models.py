@@ -12,7 +12,7 @@ import unittest
 import urllib.error
 from unittest import mock
 
-from ai_router import availability, catalogue, codex_route, routed_models, snapshot_store
+from ai_router import availability, catalogue, codex_helpers, codex_route, routed_models, snapshot_store
 from ai_router.registry import external_slugs
 from ai_router.state import STATE_NAME
 from ai_router.subscription_roster import SUBSCRIPTION_SLUGS
@@ -65,11 +65,26 @@ class RoutedModelsTests(unittest.TestCase):
         routed = self._slugs(home / routed_models.NAME)
         self.assertTrue({FLASH, TWIN} <= routed)  # routed rows and the OpenAI twins
         self.assertNotIn(QWEN, routed)  # the key cannot use it
-        self.assertFalse(routed & set(SUBSCRIPTION_SLUGS))
+        visible = routed - codex_helpers.ALIASES
+        self.assertFalse(visible & set(SUBSCRIPTION_SLUGS))
         self.assertIn('gpt-6-astra', self._slugs(home / 'mixed-models.json'))
         none_mode = catalogue.merge_file(home / 'none-mode.json', openai_mode='none',
                                          available=ids)
-        self.assertEqual(routed, {row['slug'] for row in none_mode['models']})
+        self.assertEqual(visible, {row['slug'] for row in none_mode['models']})
+
+    def test_ready_requires_hidden_helpers_and_their_real_luna_row(self):
+        home = self._home()
+        self._refresh(home, *external_slugs())
+        path = home / routed_models.NAME
+        rows = json.loads(path.read_text())['models']
+        self.assertTrue(self._ready(home))
+        missing_target = [row for row in rows if row['slug'] != codex_helpers.LUNA_TWIN]
+        visible_alias = [dict(row, visibility='list') if row['slug'] == 'gpt-6-luna'
+                         else row for row in rows]
+        for broken in (missing_target, visible_alias):
+            with self.subTest(broken=broken is missing_target):
+                path.write_text(json.dumps({'models': broken}))
+                self.assertFalse(self._ready(home))
 
     def test_the_portco_allowlist_applies_as_it_does_to_the_mixed_list(self):
         home = self._home(policy=[FLASH, TWIN])

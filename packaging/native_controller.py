@@ -1,7 +1,7 @@
 """Keep installer and download access available across runtime rollbacks.
 
-Only manifest-verified release files enter the controller. A rollback changes
-the serving release, never the updater's independent version pointer.
+Only manifest-verified release files enter the controller. Windows completion
+can select a matching retained version; other callers preserve a newer controller.
 """
 import hashlib
 import importlib.util
@@ -42,8 +42,8 @@ def launcher_source(home, source):
     return Path(source)
 
 
-def install(home, source):
-    """Install a verified, non-downgrading controller; never import its code."""
+def install(home, source, *, activate=True, allow_rollback=False):
+    """Verify before activation; Windows matching completion may select an older version."""
     home, source = Path(home), Path(source).resolve()
     manifest = json.loads((source / 'MANIFEST.json').read_text())
     version = (source / 'packaging' / 'VERSION').read_text().strip()
@@ -51,11 +51,9 @@ def install(home, source):
     if manifest.get('version') != version:
         raise ValueError('controller identity mismatch')
     previous = installer(home)
-    if previous and _version(previous.parent.parent.name) > candidate:
+    if previous and _version(previous.parent.parent.name) > candidate and not allow_rollback:
         return previous
     destination = home / 'control' / version
-    if source == destination.resolve():
-        return destination / 'packaging' / 'install.py'
     destination.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
     if destination.is_symlink():
         raise ValueError('unsafe controller folder')
@@ -82,9 +80,14 @@ def install(home, source):
                     raise ValueError('installed controller files changed')
         else:
             stage.rename(destination)
+    if activate:
+        _point(home, version)
+    return destination / 'packaging' / 'install.py'
+
+
+def _point(home, version):
     spec = importlib.util.spec_from_file_location(
         'router_controller_atomic', Path(__file__).with_name('atomic_write.py'))
     atomic = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(atomic)
     atomic.replace_text(home / 'control-version', version + '\n')
-    return destination / 'packaging' / 'install.py'

@@ -102,19 +102,23 @@ class InstallerCiGateTests(unittest.TestCase):
 
     def test_required_gate_waits_for_all_scoped_jobs(self):
         self.assertIn(
-            'needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter, unit-suite]',
+            'needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter, unit-suite, windows-standard]',
             self.CHECK)
         self.assertIn('if: ${{ !cancelled() && ' + NOT_A_TEXT_EDIT + ' }}', self.CHECK)
         self.assertIn(
             "contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')",
             self.CHECK)
 
+    def test_standard_user_job_runs_the_account_launcher_during_main_acceptance(self):
+        job = self.CHECK.split('\n  windows-standard:', 1)[1].split('\n  unit-suite:', 1)[0]
+        self.assertIn('needs: changes', job)
+        self.assertIn("if: needs.changes.result == 'success'", job)
+        self.assertIn('runs-on: windows-latest', job)
+        self.assertIn('persist-credentials: false', job)
+        self.assertIn('./tools/run_windows_standard.ps1 -Python (Get-Command python).Source', job)
+
     def test_the_hook_adapter_tests_run_on_windows_and_posix(self):
-        # Plan 156's lesson: a green required check that never executes the
-        # tests is worse than no check. Pin the wiring, not just the file.
-        # Scope the assertions to this job: plugin-schedulers carries the same
-        # matrix string, so an unscoped assertIn would stay green even if this
-        # job's matrix were narrowed to one runner.
+        # Scope the wiring check here; another job uses the same matrix.
         self.assertIn('hook-adapter:', self.CHECK)
         job = self.CHECK.split('hook-adapter:', 1)[1]
         self.assertIn('os: [ubuntu-latest, windows-latest]', job)
@@ -124,9 +128,7 @@ class InstallerCiGateTests(unittest.TestCase):
                          'runs the workflow step through a POSIX shell with a '
                          'shell-script git stub; the gate itself runs on Ubuntu')
     def test_the_scope_step_fails_closed_and_writes_the_output(self):
-        # The exact workflow step: a failed diff must fail it (pipefail), not
-        # read as "no installer files changed" and silently skip the native
-        # checks while the required gate stays green.
+        # A failed diff must not silently skip the native checks.
         block = (run_block('Installer scope', self.CHECK)
                  .replace('${{ github.base_ref }}', 'development')
                  .replace('${{ github.event.before }}', 'before')
@@ -216,7 +218,7 @@ class InstallerCiGateTests(unittest.TestCase):
             # fails, and a non-number count must also stop the job.
             gh.write_text('#!/bin/sh\ntouch gh-called\n'
                           '[ "$ACCEPTANCE_COUNT" = error ] && { echo 1; exit 1; }\n'
-                          'printf "%s\\n" "$ACCEPTANCE_COUNT"\n'); gh.chmod(0o700)
+                          'printf "%s\\n" "$ACCEPTANCE_COUNT"\n', newline='\n'); gh.chmod(0o700)
             env = {**os.environ, 'PATH': f'{bin_dir}{os.pathsep}{os.environ["PATH"]}',
                    'GITHUB_REPOSITORY': 'example/router', 'GIT_AUTHOR_NAME': 'Probe',
                    'GIT_COMMITTER_NAME': 'Probe',
@@ -253,8 +255,8 @@ class InstallerCiGateTests(unittest.TestCase):
                         ['bash', '-e', '-c', run_block('Require an accepted commit')],
                         cwd=tmp, env={**env, 'GITHUB_REF_NAME': tag, 'GITHUB_SHA': sha,
                                      'ACCEPTANCE_COUNT': str(count)}, capture_output=True)
-                    self.assertEqual(result.returncode == 0, allowed)
-                    self.assertEqual(Path(tmp, 'gh-called').exists(), asks_gh)
+                    self.assertEqual(result.returncode == 0, allowed, result.stderr.decode(errors='replace'))
+                    self.assertEqual(Path(tmp, 'gh-called').exists(), asks_gh, result.stderr.decode(errors='replace'))
 
     @unittest.skipUnless(shutil.which('jq'), 'requires jq to evaluate the gh filter')
     def test_acceptance_query_only_counts_successful_main_runs(self):

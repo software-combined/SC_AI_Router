@@ -9,7 +9,7 @@ import webbrowser
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from native_payload import install_arguments, load, metadata, retained
+from native_payload import install_arguments, load, metadata, retained, succeeded as _succeeded
 
 ACTIONS = (('resume', 'Update or repair'), ('status', 'Check setup'),
            ('add', 'Connect another assistant'), ('key', 'Replace model key'),
@@ -37,13 +37,6 @@ def environment(resources):
     return env
 
 
-def _succeeded(result):
-    output = getattr(result, 'stdout', '') or ''
-    if isinstance(output, bytes):
-        output = output.decode(errors='replace')
-    return result.returncode == 0 and not any(line.startswith('deferred:') for line in output.splitlines())
-
-
 def run_installer(resources, home, flags=(), run=subprocess.run):
     state = read_json(Path(home) / 'mixed-router-state.json')
     key, repair = '--setup' in flags, '--repair' in flags
@@ -63,7 +56,10 @@ def run_installer(resources, home, flags=(), run=subprocess.run):
             args.append('--desktop')
     env = environment(resources)
     env.update(ROUTER_NO_KEY_WINDOW='1', ROUTER_NO_CLIENT_CHOOSER='1')
-    return run(args, capture_output=True, text=True, timeout=900, env=env)
+    env['SCG_NATIVE_RESOURCES'] = str(resources)
+    return load('install_delivery').run_logged(home, 'setup',
+        'key' if key else 'repair' if repair else 'install',
+        lambda: run(args, capture_output=True, text=True, timeout=900, env=env))
 
 
 def status(resources, home, run=subprocess.run):
@@ -287,7 +283,8 @@ def onboard(resources, home, action=None):
     with dialog.Progress() as progress:
         permanent = retained(resources, home)
         python = permanent / 'runtime' / doc['runtime_exec']
-        load('native_shortcuts').install(home, permanent, python)
+        if sys.platform != 'win32':
+            load('native_shortcuts').install(home, permanent, python)
         if not (home / 'channel').exists():
             load('atomic_write').replace_text(
                 home / 'channel', ('stable' if existing else doc['channel']) + '\n')
@@ -302,10 +299,12 @@ def onboard(resources, home, action=None):
     except (OSError, ValueError, KeyError):
         pass
     source = permanent / 'router'
-    load('native_controller').install(home, source)
+    if sys.platform != 'win32':
+        load('native_controller').install(home, source)
     python = permanent / 'runtime' / doc['runtime_exec']
-    load('native_shortcuts').install(home, permanent, python)
-    load('native_resources').confirm_controls(home, permanent)
+    if sys.platform != 'win32':
+        load('native_shortcuts').install(home, permanent, python)
+        load('native_resources').confirm_controls(home, permanent)
     load('desktop_menu').start(home, permanent)
     atomic = load('atomic_write')
     atomic.replace_json(home / 'setup-progress.json',

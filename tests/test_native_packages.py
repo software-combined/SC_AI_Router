@@ -109,7 +109,7 @@ class NativePackageTests(unittest.TestCase):
         result = subprocess.run([shell, '-NoProfile', '-File', str(ROOT / 'packaging/bootstrap.ps1')],
                                 input='no\n', capture_output=True, text=True, timeout=120, env=env)
         self.assertEqual(result.returncode, 1)
-        self.assertIn('terms were not accepted', result.stdout + result.stderr)
+        self.assertIn('terms were not accepted', ' '.join((result.stdout + result.stderr).split()))
         self.assertNotIn('/runtimes/x.tar.gz', requested)
 
     def test_uruntime_architecture_and_automatic_fallback(self):

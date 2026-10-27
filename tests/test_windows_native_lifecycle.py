@@ -115,12 +115,29 @@ class WindowsNativeLifecycleTests(unittest.TestCase):
             (resources / 'installer.json').write_text('{}')
             helper = build.build(resources, 'windows/x86_64')
             icon = Path(__file__).resolve().parents[1] / 'packaging/assets/router-icon.png'
-            result = subprocess.run([str(helper), '--progress', str(icon)],
-                input=json.dumps(dict(text='Waiting for a test operation.', labels=['Cancel'])) + '\n',
-                capture_output=True, text=True, encoding='utf-8', timeout=15,
-                creationflags=0x08000000)
-        self.assertEqual(result.returncode, 1)
-        self.assertEqual(result.stdout.strip(), 'SCG_ROUTER_DIALOG_RESULT=cancel')
+            child = subprocess.Popen([str(helper), '--progress', str(icon)],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, encoding='utf-8', creationflags=0x08000000)
+            try:
+                child.stdin.write(json.dumps(dict(text='Waiting for a test operation.', labels=['Cancel'])) + '\n')
+                child.stdin.flush()
+                api = module('windows_native').Native()
+                deadline, visible = time.monotonic() + 10, False
+                while child.poll() is None and time.monotonic() < deadline:
+                    visible = any(pid == child.pid for _, pid in api.windows(visible=True))
+                    if visible:
+                        break
+                    time.sleep(0.05)
+                self.assertTrue(visible, 'Native progress window was not visible to the standard desktop')
+                child.stdin.close()
+                child.stdin = None
+                stdout, _ = child.communicate(timeout=5)
+                self.assertEqual(child.returncode, 1)
+                self.assertEqual(stdout.strip(), 'SCG_ROUTER_DIALOG_RESULT=cancel')
+            finally:
+                if child.poll() is None:
+                    child.terminate()  # Retained handle for this fixture only.
+                child.communicate(timeout=5)
 
 
 if __name__ == '__main__':

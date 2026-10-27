@@ -61,6 +61,7 @@
   "tests/test_tool_adapter.py": 469,
   "tests/test_tool_alias_repair.py": 354,
   "tests/test_update_channel.py": 421,
+  "tests/test_update_warning.py": 301,
   "tests/test_updater.py": 301,
   "tests/test_upstream_failures.py": 481,
   "tests/test_windows_backend.py": 449,

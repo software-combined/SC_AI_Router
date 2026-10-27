@@ -340,6 +340,7 @@ class RegistryTests(unittest.TestCase):
         twins = {m.slug for m in models_for(MODELS, 'codex')
                  if m.slug.startswith('openai/')}
         self.assertEqual(twins, {'openai/gpt-6-astra', 'openai/gpt-6.1-sol',
+                                 'openai/gpt-6.1-terra',
                                  'openai/gpt-6-luna'})
 
 if __name__ == '__main__':

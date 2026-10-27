@@ -49,7 +49,7 @@ are never copied between machines.
 `ai_router/clients/__init__.py`, `ai_router/clients/codex.py`,
 `ai_router/clients/registry.py`, `ai_router/clients/roster.py`,
 `ai_router/transport.py`, `ai_router/subscription_fallback.py`,
-`ai_router/codex_route.py`, `ai_router/routed_models.py`,
+`ai_router/codex_route.py`, `ai_router/codex_helpers.py`, `ai_router/routed_models.py`,
 `ai_router/usage_episodes.py`,
 `ai_router/subscription_history.py`, `ai_router/context_recovery.py`,
 `ai_router/provider_defs.py`, `ai_router/upstream.py`, `ai_router/ingress.py`,
@@ -174,6 +174,14 @@ to return to the ChatGPT subscription. The offer is written before its dialog
 appears and is owner-only (0600). A home that cannot be written therefore
 shows no dialog rather than the same one every minute, and a dialog that
 cannot be drawn is taken back off the list so a later pass offers it again.
+
+`installation-pending.json` retains the fixed Windows recovery inputs while an
+installation changes required components. It contains owned launchers, pointers,
+task definitions and Windows entry points. Independently refreshed catalogues stay outside rollback. It contains no
+credentials, client configuration or full Router state. A failed restoration keeps
+this record and both runtimes for the next maintenance attempt.
+`installed-cohort.json` records verified component versions and hashes after
+completion. Startup preferences remain independently controlled by the user.
 
 ## Switch Codex run log
 

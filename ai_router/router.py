@@ -210,7 +210,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.error(errors.unsupported_route())
             context, provider = resolve_route(policy, model, path, self.server.state, mode,
                 payload, self.headers, self.server.media_turns,
-                lambda ctx: subscription_recovery.request_models(self, model, path, ctx.catalogue))
+                lambda ctx: subscription_recovery.request_models(self, ctx.slug, path, ctx.catalogue))
             context = replace(context, request_id=self.lease_facts['request_id'])
             if provider.kind == provider_defs.EXTERNAL: reject_opaque_agent_items(payload.get('input'))
             if provider.kind == provider_defs.SUBSCRIPTION and not via_path:

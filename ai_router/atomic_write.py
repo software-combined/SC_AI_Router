@@ -44,8 +44,11 @@ def check_unchanged(path, expected):
     if expected is _ANY:
         return
     try:
-        with Path(path).open(newline='') as stream:
-            actual = stream.read()
+        if isinstance(expected, bytes) or expected is None:
+            actual = Path(path).read_bytes()
+        else:
+            with Path(path).open(newline='') as stream:
+                actual = stream.read()
     except FileNotFoundError:
         actual = None
     if actual != expected:
@@ -111,13 +114,24 @@ def _open_tmp(path, tmp_name, stale_tmp):
 
 def replace_text(path, text, mode=0o600, tmp_name=None, stale_tmp='reuse', *, newline=None, expected=_ANY):
     """Atomically replace text; newline='' preserves saved line endings."""
+    return _write(path, text, mode, tmp_name, stale_tmp, newline=newline, expected=expected)
+
+
+def replace_bytes(path, data, mode=0o600, tmp_name=None, stale_tmp='reuse', *, expected=_ANY):
+    """Atomically restore binary installation evidence with the same comparison guard."""
+    if not isinstance(data, bytes):
+        raise TypeError('Binary replacement requires bytes')
+    return _write(path, data, mode, tmp_name, stale_tmp, binary=True, expected=expected)
+
+
+def _write(path, value, mode, tmp_name, stale_tmp, *, newline=None, binary=False, expected=_ANY):
     path = Path(path)
     fd, tmp = _open_tmp(path, tmp_name, stale_tmp)
     stream = None
     try:
-        stream = os.fdopen(fd, 'w', newline=newline)
+        stream = os.fdopen(fd, 'wb') if binary else os.fdopen(fd, 'w', newline=newline)
         fd = None  # the stream owns the descriptor now
-        stream.write(text)
+        stream.write(value)
         stream.close()
         stream = None
         if mode is not None:

@@ -9,7 +9,7 @@ The path rows are built from their owners (Plan 125): `providers` owns the
 native service paths and `claude` owns the Messages paths, so a path added
 there is routable here without a second edit.
 """
-from .. import claude, image_provider, provider_defs, providers
+from .. import claude, codex_helpers, image_provider, provider_defs, providers
 from . import images, messages, responses
 
 POST = 'POST'
@@ -71,6 +71,8 @@ def select(method, path):
 
 def route(policy, model, path, state, mode, payload, headers, turns, native_models):
     """Resolve once; the Images policy also checks the originating chat turn."""
+    if policy is responses.POLICY:
+        model = codex_helpers.routed_slug(model, path, headers, mode)
     context = policy.resolve(model)
     if policy is images.POLICY:
         return policy.origin_route(model, path, state, mode, payload, headers, turns, context)

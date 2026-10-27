@@ -115,6 +115,8 @@ INSTALLER_PATHS = (
     'tools/check_installer_python39.py',
     'tools/ci_scope.py',
     'tools/verify_runtime_pins.py',
+    'tools/run_windows_standard.ps1',
+    'tools/windows_standard.py',
 ) + surface_paths()
 
 INSTALLER_TESTS = (
@@ -156,6 +158,7 @@ INSTALLER_TESTS = (
     'tests.test_desktop_recovery',
     'tests.test_windows_lifecycle',
     'tests.test_installation_evidence',
+    'tests.test_menu_installation_evidence',
     'tests.test_desktop_targets',
     'tests.test_desktop_management',
     'tests.test_desktop_platform_contracts',
@@ -177,6 +180,7 @@ INSTALLER_TESTS = (
     'tests.test_windows_native_lifecycle',
     'tests.test_windows_process_generation',
     'tests.test_windows_shutdown_race',
+    'tests.test_windows_update_policy',
     'tests.test_windows_process_snapshot',
     'tests.test_windows_switch_contention',
     'tests.test_windows_cli_resolution',
@@ -227,6 +231,10 @@ INSTALLER_TESTS = (
     'tests.test_windows_runtime_rebind',
     'tests.test_windows_native_fixture',
     'tests.test_windows_task_ownership',
+    'tests.test_windows_task_diagnostics',
+    'tests.test_windows_task_cohort',
+    'tests.test_windows_installation',
+    'tests.test_windows_shortcut_recovery',
     'tests.test_windows_task_state',
     'tests.test_windows_task_migration',
     'tests.test_windows_portability',

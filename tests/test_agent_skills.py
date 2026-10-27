@@ -86,7 +86,7 @@ class AgentSkillsTest(unittest.TestCase):
         for name in sorted(bundled):
             if not name.endswith('/SKILL.md'):
                 continue
-            text = (ROOT / name).read_text()
+            text = (ROOT / name).read_text(encoding='utf-8')
             for target in re.findall(r'\]\(([^)]+)\)', text):
                 path = target.split('#')[0]
                 if not path or '://' in path:
@@ -102,7 +102,7 @@ class AgentSkillsTest(unittest.TestCase):
         line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
                            run=run, which=_which({'codex'}))
         root = skills.marketplace_root(self.base)
-        manifest = json.loads((root / '.agents/plugins/marketplace.json').read_text())
+        manifest = json.loads((root / '.agents/plugins/marketplace.json').read_text(encoding='utf-8'))
         self.assertEqual(manifest['name'], 'scg-agent-plugins')
         self.assertEqual([e['name'] for e in manifest['plugins']],
                          ['scg-finance', 'scg-review'])
@@ -130,7 +130,7 @@ class AgentSkillsTest(unittest.TestCase):
         (root / 'someone-elses-file').write_text('keep me')
         line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
                            run=_Run(), which=_which({'codex'}))
-        self.assertEqual((root / 'someone-elses-file').read_text(), 'keep me')
+        self.assertEqual((root / 'someone-elses-file').read_text(encoding='utf-8'), 'keep me')
         self.assertFalse((root / '.agents').exists())
         self.assertFalse((root / skills.MARKER).exists())
         self.assertIn('skipped', line)
@@ -215,10 +215,10 @@ class AgentSkillsTest(unittest.TestCase):
         line = skills.retire_git_updater(base=self.base, run=_Run(),
                                          which=_which({'launchctl'}))
         self.assertFalse(runner.exists())
-        self.assertEqual((self.base / 'updater.py.migrated.0').read_text(), 'stale runner')
+        self.assertEqual((self.base / 'updater.py.migrated.0').read_text(encoding='utf-8'), 'stale runner')
         self.assertFalse(self.plist.exists())
         self.assertEqual(
-            self.plist.with_name(self.plist.name + '.migrated.0').read_text(), 'stale schedule')
+            self.plist.with_name(self.plist.name + '.migrated.0').read_text(encoding='utf-8'), 'stale schedule')
         self.assertIn('retired', line)
 
     def test_an_unrecognised_runner_is_left_in_place(self):
@@ -227,7 +227,7 @@ class AgentSkillsTest(unittest.TestCase):
         runner.write_text('not ours')
         line = skills.retire_git_updater(base=self.base, run=_Run(), which=_which(set()))
         self.assertTrue(runner.exists())
-        self.assertEqual(self.plist.read_text(), 'stale schedule')
+        self.assertEqual(self.plist.read_text(encoding='utf-8'), 'stale schedule')
         self.assertIn('unrecognised', line)
 
     def test_a_missing_plugin_tree_is_a_no_op(self):
@@ -241,7 +241,7 @@ class AgentSkillsTest(unittest.TestCase):
         skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
                     run=_Run(), which=_which({'codex'}))
         root = skills.marketplace_root(self.base)
-        good = (root / 'plugins/scg-review/skills/scg-review/SKILL.md').read_text()
+        good = (root / 'plugins/scg-review/skills/scg-review/SKILL.md').read_text(encoding='utf-8')
         (root / '.agents/plugins/marketplace.json').unlink()
         # A second pass dies part way through the copy loop.
         calls = {'n': 0}
@@ -261,7 +261,7 @@ class AgentSkillsTest(unittest.TestCase):
         # The manifest is the client's entry point, so it must not exist yet.
         self.assertFalse((root / '.agents/plugins/marketplace.json').exists())
         self.assertEqual(
-            (root / 'plugins/scg-review/skills/scg-review/SKILL.md').read_text(), good)
+            (root / 'plugins/scg-review/skills/scg-review/SKILL.md').read_text(encoding='utf-8'), good)
 
     def test_the_git_fallback_is_kept_when_no_client_accepts(self):
         self.base.mkdir(parents=True)
@@ -274,7 +274,7 @@ class AgentSkillsTest(unittest.TestCase):
         line = skills.sync({'clients': 'codex'}, self.plugins, base=self.base,
                            run=_Run(returncode=1), which=_which({'codex'}))
         self.assertTrue(runner.exists())
-        self.assertEqual(self.plist.read_text(), 'stale schedule')
+        self.assertEqual(self.plist.read_text(encoding='utf-8'), 'stale schedule')
         self.assertIn('kept', line)
 
     def test_the_git_fallback_is_retired_once_a_client_accepts(self):
@@ -290,7 +290,7 @@ class AgentSkillsTest(unittest.TestCase):
         self.assertFalse(runner.exists())
         self.assertFalse(self.plist.exists())
         self.assertEqual(
-            self.plist.with_name(self.plist.name + '.migrated.0').read_text(), 'stale schedule')
+            self.plist.with_name(self.plist.name + '.migrated.0').read_text(encoding='utf-8'), 'stale schedule')
         self.assertIn('retired', line)
 
 

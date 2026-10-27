@@ -14,7 +14,7 @@ from unittest import mock
 
 from tests.test_windows_backend import _backend, _install, _query, _state_file, _verbs, backend, service
 from tests.test_windows_task_state import _CurrentInstallerFixture
-from tests.windows_native_fixture import NativeChild, cleanup, write_launcher
+from tests.windows_native_fixture import NativeChild, cleanup, task_diagnostics, write_launcher
 
 
 class OwnershipTests(unittest.TestCase):
@@ -101,7 +101,8 @@ class NativeTaskTests(unittest.TestCase):
                     if result and result['instances'] and heartbeat.exists():
                         return result
                     time.sleep(0.2)
-                self.fail('disposable task did not start')
+                self.fail('disposable task did not start: ' + json.dumps(task_diagnostics(
+                    obj._call, name, heartbeat, home / 'logs' / backend.ROUTER_LOG)))
             try:
                 self.assertIsNone(call())
                 self.assertEqual(call('register')['state'], 1)
@@ -235,7 +236,7 @@ $null = $s.GetFolder('\').RegisterTaskDefinition($r.name, $d, 4, $r.sid, $null, 
             try:
                 renderers = (backend.render_router_xml, backend.render_update_xml, backend.render_express_xml)
                 for index, name in enumerate(names):
-                    args = (sys.executable, home, sid) if index == 0 else (sys.executable, home)
+                    args = (sys.executable, home, sid)
                     task(name, 'register', legacy=True, xml=renderers[index](*args))
                     if index != 2:
                         task(name, 'run', legacy=True)

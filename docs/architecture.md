@@ -50,7 +50,8 @@ Linux reloads and reads back the effective stable updater command before
 pruning. Loaded jobs and a running legacy updater retain their release files.
 `runtime_rebind` uses verified retained resource metadata after `setup-current`
 advances. The Windows task adapter snapshots all three owned definitions,
-changes only the executable and verifies its exact path, enabled and pending states.
+updates executable bindings and shared catch-up/sign-in policy, then verifies
+the expected path and policy while preserving enabled and pending states.
 Its JSON subprocess contract uses explicit UTF-8 output and decoding for Unicode paths and saved XML.
 A failed readback restores attempted definitions. Both runtimes remain retained.
 The outer maintenance cadence checks owned task paths without the installation lock.
@@ -89,6 +90,15 @@ unchanged regular and Express checks. Read-only preflight does not take the inst
 An attachment repair, runtime repair or changed attention result takes the lock without waiting
 and repeats verification. Healthy unchanged checks do not acquire it.
 Restart-notice presentation runs after the lock closes.
+`windows_installation` owns required Windows completion and interrupted recovery under
+that existing lock. It stages matching core, controller and native resources before
+activation. Its private journal captures only fixed owned files, task definitions
+and entry points. It never captures client configuration, credentials or full state.
+Completion verifies health and component bindings before writing the cohort receipt.
+After a runtime rollback, this transaction may select a verified matching older controller.
+Newer controller files stay retained; independent callers keep their non-downgrade rule.
+Verified restoration defers the update quietly. Incomplete restoration keeps both
+runtimes and exposes repair attention. Attachment and plugin outcomes remain separate.
 `codex_recovery` repairs only an absent block under a valid, active receipt and
 healthy Router. `codex_owned` validates absence, connection conflicts and TOML.
 Configuration and receipt writes compare their prior contents and verify readback.
@@ -182,7 +192,9 @@ predicates are exempt; preparation and recovery use capability data instead.
 
 `candidate_evidence.py` owns content-free onboarding proof beside `candidate.py`.
 It reads normalized registry capabilities, provider protocols and client IDs;
-request handling never imports it. `models.py` promotes a new row only after
+request handling never imports it. Git revision metadata is optional; source and
+capability fingerprints remain required on machines without Git.
+`models.py` promotes a new row only after
 every advertised route passes offline conformance and a real-client probe
 against unchanged source and capabilities. The ledger checker shares this
 validator. `tools/probe_candidate.py` owns one isolated send budget across the
@@ -419,12 +431,18 @@ anything is prepared or sent. Native service paths get the no-subscription
 answers; every other request gets one final `invalid_prompt` refusal, which
 `ingress.error` sends as a `response.failed` frame when the turn streams. The
 refusal names the twin row only when the portco allowlist, the key's
-availability snapshot and the Codex picker all admit it. Helper turns are
-refused too: the helper fallback moves a turn to its twin only after the
-subscription refuses it, and this route sends nothing to refuse.
+availability snapshot and the Codex picker all admit it. `codex_helpers.py`
+owns the bounded helper-source parser and bare Luna aliases. Before Responses
+adapter selection, known metadata helpers on the switched route or an install
+without a subscription resolve to the external Luna row. Normal model policy,
+availability and credential checks still apply; a denied Luna never falls back
+to Fable or the subscription. The normal subscription helper fallback stays opt-in.
 `routed_models.py` owns `routed-models.json`, the picker Switch Codex points
 Codex at: the rows no-subscription mode shows, under the mixed list's key and
-portco filters. `availability.sync_catalogue` rewrites it after the mixed list,
+portco filters, plus hidden bare Luna aliases only when Luna is admitted.
+Those aliases prevent the client from selecting its first chat model when its
+requested helper ID is missing. Readiness checks bind them to the real Luna row.
+`availability.sync_catalogue` rewrites it after the mixed list,
 never empty and never without a live snapshot, since Codex rejects an empty
 list and a stale one offers models the key cannot use. `codex_route.ready`
 answers whether Switch Codex may use it, reading "current" through
@@ -508,11 +526,16 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    `bundle.py` owns the release lifecycle (verify, install, prune,
    rollback). Unsupported OS is an explicit refusal. Backends do not import
    runtime providers or client catalogue policy.
-   `platforms/windows_tasks.py` owns structured Task Scheduler access and
-   principal/action checks; `windows.py` owns account-scoped names and lifecycle
+   `platforms/windows_tasks.py` owns fixed task names, structured access,
+   principal/action checks and definition snapshots. `windows.py` scopes names to
+   the account and owns lifecycle
    order. Owned legacy definitions remain available through registration and
    expected-version health checks. An active legacy updater keeps its ownership
    record until a later healthy install can remove it after exit.
+   An active owned task missing from its scoped view uses the service-wide view,
+   filtering its exact path before inspecting instance IDs. Restoration validates
+   the saved principal and action even when the definition must be recreated.
+   Text and binary installation restores share the atomic writer's comparison guard.
 5. A client is not a provider and an OS is neither. New clients reuse a
    proven wire protocol; a new protocol lands only after its contract is
    verified against the installed client version.
@@ -524,7 +547,8 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    `ci_unittest.py` owns bounded CI workers and their result reports, keeping
    unittest discovery and fixtures separate from router runtime behavior.
    `plugin_verification.py` owns conservative suite selection for local and CI
-   checks; unknown scope retains full discovery.
+   checks; unknown scope retains full discovery. Windows handoff waits for its
+   child and propagates failure instead of relying on process replacement.
    `packaging/` holds the modules an installed host executes. A new
    host-run script belongs in `packaging/`, even if nothing in `ai_router/`
    imports it. `packaging/release.py` includes only its named installed operator
@@ -816,20 +840,31 @@ failed build prints one line and never fails an install.
 
 `desktop_control.py` owns the redacted desktop status and fixed action IDs.
 It calls the existing client switchers, setup, support and update owners.
+Menu and graphical setup use `install_delivery.run_logged` for content-free
+launch and child-exit records in `update.log`. `native_payload.succeeded` rejects
+deferred zero exits consistently; child exit is separate from verified installation.
 `desktop_service.py` uses the platform service lifecycle for bounded restart.
 `desktop_model.py` gives native shells and the fallback window identical actions.
 `desktop_menu.py` runs one shell per installation and graphical session.
+Windows uses the native session ID rather than launcher environment variables.
+Only the lock-owning controller offers a startup warning, through its worker
+after the helper starts and the first menu document is sent.
 On Mac, a session-scoped reopen request tells that shell to open its menu.
 Fallback windows run one selected action and then close.
 It serializes actions in a worker, while native menus stay responsive.
 `desktop_startup.py` owns per-user startup entries and the persistent preference.
 Only explicit choices write that preference. Windows defaults missing or invalid choices to On.
+`native_shortcuts.py` snapshots and restores only its three fixed Windows shortcuts
+and named per-user Apps values. It checks ownership before recovery and reads back
+the result. Binary shortcut writes use the shared compare-before-write helper.
+Recovery keeps a concurrent explicit startup choice and reconciles its shortcut.
+These owner APIs support installation recovery; they never capture client settings.
 `desktop_launch.py` follows retained setup resources, independently of inference rollback.
 Closing the shell never stops routing. Polling is silent and makes no model calls.
 `native_resources.py` consumes only this target's signed Resources descriptor.
 It verifies archive size, checksum and matching core identity before retention.
-Installation owns its lock; failed menu delivery preserves the previous setup pointer.
-Same-version installs and cached update checks retry missing controls independently of service health.
+Installation owns its lock. Windows repairs missing controls through required cohort
+completion, including unchanged checks. Mac and Linux retain independent controls delivery.
 `native_resources_publish.py` validates all five archives before `publish_feed.py`
 uploads immutable resources and signs the channel document containing their map.
 
@@ -849,6 +884,12 @@ The platform backends own a separate minute Express job alongside the regular
 four-hour job. Both use `update_launch.py` (also installed as
 `express_launch.py`) and `updater.py`; an update-parent lock serializes
 them while the child installer retains its own installation lock.
+All three Windows tasks run for their installing user's sign-in and catch
+missed timed runs. Runtime reconciliation migrates these settings transactionally
+with task actions, while preserving enabled state, pending state and other settings.
+Registered-task inspection uses its own running instances, refreshed before ID reads.
+Only the documented not-running result is omitted; unknown errors still refuse.
+The adapter returns numeric HRESULT and identifier-only exception type without messages.
 
 ## Transitional owners (do not entrench)
 

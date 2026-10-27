@@ -1,6 +1,8 @@
 """Real Git transitions and runner handoff cannot hide required verification."""
 import json
+import importlib.util
 import os
+import shutil
 from pathlib import Path
 import signal
 import subprocess
@@ -8,6 +10,8 @@ import sys
 import tempfile
 import time
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = 'plugins/scg-example/skills/example/SKILL.md'
@@ -18,6 +22,7 @@ MODULES = ('test_plugin', 'test_agent_skills', 'test_prototypes_manifest',
            'test_plugin_verification')
 
 
+@unittest.skipUnless(shutil.which('git'), 'requires real Git integration')
 class PluginVerificationTests(unittest.TestCase):
     def setUp(self):
         temporary = self.enterContext(tempfile.TemporaryDirectory())
@@ -201,6 +206,23 @@ class PluginVerificationTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         report = json.loads(self.report.read_text())
         self.assertTrue(any('test_router.' in row['id'] for row in report['cases']))
+
+    def test_windows_handoff_waits_for_a_real_failing_child(self):
+        spec = importlib.util.spec_from_file_location('fixture_verification', self.root / 'tools/plugin_verification.py')
+        owner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(owner)
+        platform = SimpleNamespace(name='nt', chdir=os.chdir,
+                                   execv=mock.Mock(side_effect=AssertionError('Windows must wait for its child')))
+        previous = Path.cwd()
+        try:
+            with mock.patch.object(owner, 'os', platform), \
+                    mock.patch.object(sys, 'argv', self.command('--full', '--run', '--report', str(self.report))[1:]):
+                self.assertEqual(owner.main(), 1)
+        finally:
+            os.chdir(previous)
+        report = json.loads(self.report.read_text())
+        self.assertFalse(report['complete'])
+        self.assertEqual(report['summary']['failures'], 1)
 
     def test_failed_plugin_test_is_not_retried_with_full_discovery(self):
         self.write('tests/test_plugin.py', 'import unittest\nclass T(unittest.TestCase):\n'

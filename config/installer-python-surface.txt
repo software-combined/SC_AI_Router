@@ -15,6 +15,7 @@
 # tests/test_packaging.py::test_installer_surface_parses_as_python39.
 load packaging/install.py
 load packaging/install_delivery.py
+load packaging/windows_installation.py
 load packaging/repair_ui.py
 load packaging/download_auth.py
 load packaging/download_oauth.py

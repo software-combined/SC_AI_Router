@@ -205,6 +205,8 @@ def _release_key(name):
 
 def prune_releases(home, *keep):
     """Keep current plus two prior verified releases for rollback depth."""
+    if (Path(home) / 'installation-pending.json').exists():
+        return  # Both runtimes remain available until required completion or restoration.
     retained = {version for item in keep
                 for version in (item if isinstance(item, (tuple, list, set)) else (item,))}
     names = [p.name for p in (home / 'releases').glob('*') if p.is_dir()

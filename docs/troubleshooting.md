@@ -13,16 +13,29 @@ New resource updates launch the menu quietly, including when sign-in startup is 
 On Windows, missing or invalid preferences default to On. A valid saved Off stays Off.
 Installs and updates reconcile the startup shortcut without saving a preference.
 Use the menu's **Start at sign-in** action to save a choice.
+Windows menu locks use the native session ID, so scheduled updates share the existing menu.
+The menu starts before a startup repair warning; duplicate launches do not show another warning.
 
 Windows task logs record launch, completion and safe failure facts, including missing launch scripts.
 If no Python launch event exists, check Task Scheduler History and the task's last-result number.
 The launcher cannot record attempts Windows refuses before Python starts.
+Task-operation refusals include a numeric Windows error and a safe exception class when available.
+They exclude the error message, task paths and raw command output.
 `logs/update.log` records `installed <version>; health verified` after each verified installation.
+Windows records success after the required runtime, controls and task bindings verify.
+Verified restoration retries quietly. Incomplete restoration retains both runtimes and its recovery record for repair.
+Menu and graphical setup also record when an install starts, exits or fails.
+These events contain safe status fields; they do not copy installer output or settings.
 Attachment failures have separate maintenance events. Unchanged checks and rollbacks do not claim an installation.
 
 Windows updates verify the executable paths of all three owned scheduled tasks.
+All three Windows tasks catch missed timed checks and use the installing user's sign-in.
+Disabled schedules stay disabled. Windows normally delays catch-up runs by ten minutes;
+see [Microsoft's scheduling behavior](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-startwhenavailable).
 Failed verification restores prior definitions and retries on the next maintenance pass.
 Both runtime folders remain available. Do not remove old setup folders during recovery.
+See the [27 October Windows acceptance evidence](compatibility/windows-2026-10-27.md)
+for verified source changes and the remaining device checks.
 
 Temporary network, update-signature and download failures retry on the existing schedule.
 The current Router keeps running. Rejected updates cannot install.
@@ -129,6 +142,18 @@ For a diagnostic check, run:
 
 If you open a new PowerShell window or the router updates, paste the path block again.
 For a source installation, use its Python 3.14 interpreter and matching installer instead.
+
+## OpenRouter rejects every new Codex chat
+
+Codex can request `output.encrypted_content` in the Responses API `include` list.
+OpenRouter rejects that option before selecting a model provider. The router can
+then show `PROVIDER_REJECTED` and suggest a new chat, which has the same problem.
+Service health and a working key do not detect this request compatibility error.
+
+The compatibility fix removes only `output.encrypted_content` on the OpenRouter
+route. It preserves other include options and the ChatGPT subscription request.
+Verify with a fresh Codex reply and a tool round trip through the affected model.
+A minimal HTTP request can pass because it does not request encrypted output.
 
 ## Codex Send button is greyed out or ChatGPT subscription access is unavailable
 
