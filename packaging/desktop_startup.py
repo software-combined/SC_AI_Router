@@ -37,11 +37,15 @@ def _owned(path, home, kind):
         raise ValueError('Startup entry belongs to another application')
 
 
+def windows_target(user_home=None):
+    base = Path(os.environ.get('APPDATA') or Path(user_home or Path.home()) / 'AppData/Roaming')
+    return base / 'Microsoft/Windows/Start Menu/Programs/Startup/SCG Router.lnk'
+
+
 def _windows(home, python, on, user_home, run):
-    base = Path(os.environ.get('APPDATA') or user_home / 'AppData/Roaming')
-    directory = base / 'Microsoft/Windows/Start Menu/Programs/Startup'
+    target = windows_target(user_home)
+    directory = target.parent
     directory.mkdir(parents=True, exist_ok=True)
-    target = directory / 'SCG Router.lnk'
     quote = lambda value: "'" + str(value).replace("'", "''") + "'"
     arguments = subprocess.list2cmdline([str(home / 'desktop_launch.py'), '--autostart'])
     marker = IDENTITY + ':' + str(home)
@@ -76,9 +80,11 @@ def _configure(home, resources, on, *, platform_name=None, user_home=None, run=s
     doc = metadata(resources)
     python = resources / 'runtime' / doc['runtime_exec']
     atomic = load('atomic_write')
-    atomic.replace_text(home / 'desktop_launch.py',
-                        Path(__file__).with_name('desktop_launch.py').read_text())
+    load('service')._install_home_file(home, Path(__file__).resolve().parents[1], 'desktop_launch.py')
     if platform_name == 'win32':
+        python = python.with_name('pythonw.exe')
+        if not python.is_file():
+            raise ValueError('The bundled Windows setup application is incomplete.')
         _windows(home, python, on, user_home, run)
     else:
         if platform_name == 'darwin':

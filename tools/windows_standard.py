@@ -67,7 +67,7 @@ def run(expected_sid, report):
             ('core', lambda: unittest.defaultTestLoader.discover('tests', top_level_dir='.')),
             ('native', lambda: unittest.defaultTestLoader.loadTestsFromNames([
                 'tests.test_windows_native_lifecycle', 'tests.test_windows_acl_native',
-                'tests.test_windows_task_cohort']))):
+                'tests.test_windows_task_cohort', 'tests.test_windows_shortcut_recovery']))):
         started = time.monotonic()
         result = unittest.TextTestRunner(verbosity=1).run(suite())
         outcomes.append(dict(suite=name, tests=result.testsRun, skipped=len(result.skipped),

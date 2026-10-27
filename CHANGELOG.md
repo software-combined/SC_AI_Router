@@ -20,6 +20,8 @@
 - Require Windows core and native process, dialog and key-permission checks
   from a standard user account during main release acceptance.
 - Keep task logging open when a Windows launch has no standard output or error.
+- Verify and restore owned Windows shortcuts and the Apps entry during installation recovery.
+  Preserve explicit sign-in choices and launch the sign-in menu without a console.
 
 ## 1.3.21
 
