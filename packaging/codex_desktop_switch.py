@@ -28,6 +28,7 @@ _proof = _load('codex_config_proof')
 _receipts = _transaction._receipts
 _atomic = _transaction._atomic
 _service = _load('service')
+_installation = _load('windows_installation')
 _dialog = _load('native_dialog')
 CODEX = _platform.App('com.openai.codex', ())
 MARKER = _transaction.MARKER
@@ -63,6 +64,8 @@ CHECK_FAILED = 'Codex could not be checked. Nothing was changed. Try again.'
 WINDOWS_STAYED_OPEN = 'Codex is still running. Finish active work, quit Codex, then try again.'
 WINDOWS_CLOSE = 'Codex will fully close. Running tasks will stop.'
 WINDOWS_RECOVER = 'Finish an earlier Codex switch? It will restart. ' + WINDOWS_CLOSE
+INSTALLATION_REQUIRED = 'SCG Router needs an update or repair before Codex can switch. Open SCG Router to continue.'
+SERVING_NOT_READY = 'SCG Router is not ready. Open SCG Router, then try Switch Codex again.'
 
 
 SwitchError = _transaction.SwitchError
@@ -99,6 +102,9 @@ def switch(home, *, run=subprocess.run, platform_ops=None, prove=None, ready=Non
         # The installer's lock: an update rewrites the same config and receipt.
         with _switch_lock(home, record) as held:
             if held:
+                if sys.platform == 'win32' and not _installation.ready(home):
+                    record.update(operation='installation', reason='component_version_mismatch')
+                    raise SwitchError(INSTALLATION_REQUIRED)
                 target = _switch(home, run, _platform if platform_ops is None else platform_ops,
                                  _proof.prove if prove is None else prove,
                                  _route_ready if ready is None else ready, record, target)
@@ -132,7 +138,8 @@ def _switch(home, run, ops, prove, ready, record, target=None):
     def checked_proof(root):
         if sys.platform == 'win32' and identity and identity.get('family'):
             ops._checked_identity(sys.platform, run, CODEX, identity)
-        result = _timed(record, 'proof', lambda: supplied_proof(root))
+        result = _timed(record, 'proof', lambda: (sys.platform != 'win32' or _serving_current(home))
+                        and supplied_proof(root))
         record['proof_ok'] = result is True
         if sys.platform == 'win32' and identity and identity.get('family'):
             ops._checked_identity(sys.platform, run, CODEX, identity)
@@ -190,6 +197,9 @@ def _switch(home, run, ops, prove, ready, record, target=None):
     if target == SWITCHED:
         if entry.get('openai_mode') == 'none':
             raise SwitchError(NOTHING_TO_SWITCH)
+        if sys.platform == 'win32' and not _serving_current(home):
+            record.update(operation='installation', reason='serving_version_unavailable')
+            raise SwitchError(SERVING_NOT_READY)
         if not ready(home):
             raise SwitchError(NOT_READY)
         if root is None:
@@ -297,6 +307,15 @@ def _log(home, record, result):
             stream.write(json.dumps(line) + '\n')
     except Exception:
         pass
+
+
+def _serving_current(home):
+    try:
+        state = _service._state.read(_service._state.path(home))
+        body = _service.health(state, timeout=2) if isinstance(state, dict) else None
+        return bool(body and body.get('version') == _service.current_version(home))
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
 
 
 def _route_ready(home):

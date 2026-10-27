@@ -15,6 +15,14 @@
 - Use `https://hub.softwarecombined.com/install` as the staff install address.
   Let Hub read the public stable release metadata without credentials.
 
+- Keep Windows installation recovery records byte-exact across line endings.
+
+- Refuse Windows Codex switching before closing the app when required Router
+  components or the running service do not match. Keep switching back available offline.
+- Keep removal effective when an older update check finishes downloading.
+  Preserve legacy task recovery and use quiet fallback dialogs for older tray helpers.
+- Report safe task-operation timeout stages without exposing command output.
+
 - The OpenRouter picker now offers MiniMax M3.1 Flash on its paid endpoint,
   after the free entry was withdrawn. They are separate ids: the paid row
   passed both client route checks and keeps thread history on a switch.
