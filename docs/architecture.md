@@ -517,11 +517,16 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    `bundle.py` owns the release lifecycle (verify, install, prune,
    rollback). Unsupported OS is an explicit refusal. Backends do not import
    runtime providers or client catalogue policy.
-   `platforms/windows_tasks.py` owns structured Task Scheduler access and
-   principal/action checks; `windows.py` owns account-scoped names and lifecycle
+   `platforms/windows_tasks.py` owns fixed task names, structured access,
+   principal/action checks and definition snapshots. `windows.py` scopes names to
+   the account and owns lifecycle
    order. Owned legacy definitions remain available through registration and
    expected-version health checks. An active legacy updater keeps its ownership
    record until a later healthy install can remove it after exit.
+   An active owned task missing from its scoped view uses the service-wide view,
+   filtering its exact path before inspecting instance IDs. Restoration validates
+   the saved principal and action even when the definition must be recreated.
+   Text and binary installation restores share the atomic writer's comparison guard.
 5. A client is not a provider and an OS is neither. New clients reuse a
    proven wire protocol; a new protocol lands only after its contract is
    verified against the installed client version.
@@ -533,7 +538,8 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    `ci_unittest.py` owns bounded CI workers and their result reports, keeping
    unittest discovery and fixtures separate from router runtime behavior.
    `plugin_verification.py` owns conservative suite selection for local and CI
-   checks; unknown scope retains full discovery.
+   checks; unknown scope retains full discovery. Windows handoff waits for its
+   child and propagates failure instead of relying on process replacement.
    `packaging/` holds the modules an installed host executes. A new
    host-run script belongs in `packaging/`, even if nothing in `ai_router/`
    imports it. `packaging/release.py` includes only its named installed operator

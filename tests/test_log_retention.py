@@ -58,11 +58,10 @@ class PruneLogsTests(unittest.TestCase):
             target = _aged(logs / 'router.jsonl.9')
             link = logs / 'link.log'
             symlink_or_skip(target, link)
-            os.utime(link, (time.time() - 90 * _DAY,) * 2, follow_symlinks=False)
             nested = logs / 'nested'
             nested.mkdir()
             deep = _aged(nested / 'deep.log')
-            self.assertEqual(_SVC.prune_logs(logs), 1)
+            self.assertEqual(_SVC.prune_logs(logs, now=time.time() + 100 * _DAY), 1)
             self.assertFalse(target.exists())
             self.assertTrue(link.is_symlink())
             self.assertTrue(deep.exists())

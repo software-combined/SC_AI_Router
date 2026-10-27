@@ -5,6 +5,14 @@ import re
 import subprocess
 import xml.etree.ElementTree as ET
 
+NAMES = ('CodexMixedModelRouter', 'CodexMixedModelRouterUpdate', 'CodexMixedModelRouterUpdateExpress')
+
+
+def pythonw(python):
+    if python.lower().endswith('python.exe'):
+        return python[:-10] + 'pythonw.exe'
+    return python
+
 _SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
@@ -33,6 +41,22 @@ function Test-Python($path) {
             $info.OriginalFilename -match '^pythonw?(_d)?\.exe$')
     } catch { return $false }
 }
+function Test-Owned($d, $r) {
+    $principal = $d.Principal.UserId
+    if ($principal -notmatch '^S-1-') {
+        $principal = ([Security.Principal.NTAccount]::new($principal)).Translate(
+            [Security.Principal.SecurityIdentifier]).Value
+    }
+    $owned = $principal -eq $r.sid -and $d.Principal.LogonType -eq 3 -and
+        $d.Principal.RunLevel -eq 0 -and $d.Actions.Count -eq 1 -and
+        $d.Actions.Item(1).Type -eq 0 -and
+        $d.Actions.Item(1).Arguments -ieq $r.arguments -and
+        $d.RegistrationInfo.Author -eq 'codex-router-installer'
+    if ($owned) {
+        $owned = Test-Python ($d.Actions.Item(1).Path)
+    }
+    return $owned
+}
 try {
     $r = [Console]::In.ReadToEnd() | ConvertFrom-Json
     $service = New-Object -ComObject Schedule.Service
@@ -53,28 +77,22 @@ try {
         }
     }
     if ($null -ne $task) {
-        $d = $task.Definition
-        $principal = $d.Principal.UserId
-        if ($principal -notmatch '^S-1-') {
-            $principal = ([Security.Principal.NTAccount]::new($principal)).Translate(
-                [Security.Principal.SecurityIdentifier]).Value
-        }
-        $owned = $principal -eq $r.sid -and $d.Principal.LogonType -eq 3 -and
-            $d.Principal.RunLevel -eq 0 -and $d.Actions.Count -eq 1 -and
-            $d.Actions.Item(1).Type -eq 0 -and
-            $d.Actions.Item(1).Arguments -ieq $r.arguments -and
-            $d.RegistrationInfo.Author -eq 'codex-router-installer'
-        if ($owned) {
-            # Read CPython's version resource; never execute a task's claimed interpreter.
-            $owned = Test-Python ($d.Actions.Item(1).Path)
-        }
-        if (-not $owned) {
+        if (-not (Test-Owned $task.Definition $r)) {
             @{kind = 'foreign'} | ConvertTo-Json -Compress
             exit 0
         }
     }
     $created = $null -eq $task
-    if ($r.operation -eq 'register') {
+    if ($r.operation -eq 'restore') {
+        $definition = $service.NewTask(0)
+        $definition.XmlText = $r.xml
+        if (-not (Test-Owned $definition $r)) {
+            @{kind = 'foreign'} | ConvertTo-Json -Compress
+            exit 0
+        }
+        $flags = if ($created) { 2 } else { 4 }
+        $task = $folder.RegisterTaskDefinition($r.name, $definition, $flags, $r.sid, $null, 3, $null)
+    } elseif ($r.operation -eq 'register') {
         $definition = $service.NewTask(0)
         $definition.XmlText = $r.xml
         $definition.Principal.UserId = $r.sid
@@ -86,11 +104,7 @@ try {
         $flags = if ($null -eq $task) { 2 } else { 4 }
         $task = $folder.RegisterTaskDefinition($r.name, $definition, $flags, $r.sid, $null, 3, $null)
     } elseif ($null -ne $task) {
-        if ($r.operation -eq 'restore') {
-            $definition = $service.NewTask(0)
-            $definition.XmlText = $r.xml
-            $task = $folder.RegisterTaskDefinition($r.name, $definition, 4, $r.sid, $null, 3, $null)
-        } elseif ($r.operation -eq 'rebind') {
+        if ($r.operation -eq 'rebind') {
             if (-not (Test-Python $r.executable)) { throw 'invalid runtime' }
             $definition = $task.Definition
             $definition.Actions.Item(1).Path = $r.executable
@@ -126,8 +140,15 @@ try {
     if ($null -eq $task) {
         @{kind = 'missing'} | ConvertTo-Json -Compress
     } else {
-        # Include hidden instances and old invocations after their definition changes.
-        $instances = @(foreach ($instance in $task.GetInstances(0)) {
+        $running = @($task.GetInstances(0))
+        if ($running.Count -eq 0 -and [int]$task.State -in @(2,4)) {
+            # GetInstances can omit an active instance from another security context.
+            # The definition is already owned; inspect IDs only after its exact path matches.
+            $running = @(foreach ($instance in $service.GetRunningTasks(1)) {
+                if ($instance.Path -ieq ('\' + $r.name)) { $instance }
+            })
+        }
+        $instances = @(foreach ($instance in $running) {
             $id = Get-InstanceId $instance
             if ($id) { $id }
         })
@@ -288,3 +309,71 @@ def rebind(call, home, executable, names, sid):
             raise SystemExit('Windows runtime repair could not restore every task; retained runtimes kept') from None
         raise
     return bool(changed)
+
+def snapshot_cohort(self, home):
+    result = {}
+    for scope, legacy in (('current', False), ('legacy', True)):
+        result[scope] = {}
+        for name in NAMES:
+            present = self._task_state(name, home, legacy=legacy)
+            row = self._task_state(name, home, 'snapshot', legacy=legacy) if present else None
+            result[scope][name] = None if row is None else dict(
+                xml=row['xml'], enabled=row['enabled'], pending=row['pending'],
+                executable=row['executable'], active=row['state'] in (2, 4) or bool(row['instances']))
+    return result
+
+
+def _cohort_rows(doc):
+    if not isinstance(doc, dict) or set(doc) != {'current', 'legacy'}:
+        raise ValueError('Invalid task recovery record')
+    for scope in ('current', 'legacy'):
+        if not isinstance(doc[scope], dict) or set(doc[scope]) != set(NAMES):
+            raise ValueError('Invalid task recovery record')
+        for row in doc[scope].values():
+            if row is not None and (not isinstance(row, dict)
+                    or set(row) != {'xml', 'enabled', 'pending', 'executable', 'active'}
+                    or any(type(row[key]) is not bool for key in ('enabled', 'pending', 'active'))
+                    or any(not isinstance(row[key], str) or not row[key] for key in ('xml', 'executable'))):
+                raise ValueError('Invalid task recovery record')
+    return doc
+
+
+def restore_cohort(self, home, doc):
+    """Caller drains the Router; live new tasks defer removal without killing the updater."""
+    doc = _cohort_rows(doc)
+    for scope, legacy in (('current', False), ('legacy', True)):
+        for name, before in doc[scope].items():
+            current = self._task_state(name, home, legacy=legacy)
+            if before is None:
+                if current is not None:
+                    self._task_state(name, home, 'disable', legacy=legacy)
+                    if not self._wait_stopped(name, 10, home, legacy=legacy):
+                        raise ValueError('New Windows task is still running; restoration deferred')
+                    self._task_state(name, home, 'delete', legacy=legacy)
+                    if self._task_state(name, home, legacy=legacy) is not None:
+                        raise ValueError('Removed Windows task readback did not match')
+                continue
+            self._task_state(name, home, 'restore', xml=before['xml'], legacy=legacy)
+            if name == NAMES[0] and before['active']:
+                self._run_task(name, home, legacy=legacy)
+                # Run enables the definition; restore saved disabled/pending state too.
+                self._task_state(name, home, 'restore', xml=before['xml'], legacy=legacy)
+            after = self._task_state(name, home, 'snapshot', legacy=legacy)
+            if not _matches(after, before, before['executable']) or after['xml'] != before['xml']:
+                raise ValueError('Restored task readback did not match')
+
+
+def preserve_cohort(self, home, doc, executable):
+    """Keep existing task identity, triggers, options and flags after verified health."""
+    doc = _cohort_rows(doc)
+    executable = pythonw(str(executable))
+    for name, before in doc['current'].items():
+        if before is None:
+            continue  # New and legacy migrations retain the normal install owner's contract.
+        xml = update_policy_xml(before['xml'], self._identity(), executable)
+        self._task_state(name, home, 'restore', xml=xml)
+        after = self._task_state(name, home, 'snapshot')
+        if not _matches(after, before, executable) or not update_policy_ready(after):
+            raise ValueError('Installed task state did not match')
+        if name == NAMES[0] and not before['enabled'] and not before['pending'] and not before['active']:
+            self._stop_task(name, home)

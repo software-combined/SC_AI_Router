@@ -12,6 +12,7 @@
   a different environment. Start the menu before offering a repair warning.
 - Report safe Windows task error codes and inspect only the owned task's instances.
   Ignore confirmed completed instances; refuse unknown or unreadable task state.
+  Include active owned instances that Windows omits from the caller's scoped view.
 - Record menu and setup installation launches, child exits and failures in the
   update log. A deferred menu install reports busy instead of reporting completion.
 - Keep model verification usable without Git. Preserve source and capability

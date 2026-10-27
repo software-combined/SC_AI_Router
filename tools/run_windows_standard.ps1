@@ -12,6 +12,14 @@ $password = ConvertTo-SecureString ('Aa1!' + [Guid]::NewGuid().ToString('N')) -A
 $source = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $temporary = Join-Path $env:RUNNER_TEMP $name
 $git = (Get-Command git -ErrorAction Stop).Source
+$gitCore = (& $git --exec-path).Trim()
+if ($LASTEXITCODE -ne 0) { throw 'Git prerequisites are unavailable.' }
+$gitRoot = Split-Path (Split-Path (Split-Path $gitCore))
+$gitBin = Join-Path $gitRoot 'bin'
+$gitUnix = Join-Path $gitRoot 'usr/bin'
+if (-not (Test-Path (Join-Path $gitBin 'bash.exe')) -or -not (Test-Path (Join-Path $gitUnix 'grep.exe'))) {
+    throw 'The complete Git for Windows toolchain is required.'
+}
 $process = $null
 $started = $false
 $account = $null
@@ -24,7 +32,7 @@ try {
     & icacls $temporary /grant "*${sid}:(OI)(CI)F" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Cannot prepare CI working directory.' }
     # Read source and toolchains; all mutable fixtures belong to the temporary user.
-    foreach ($directory in @($source, (Split-Path $Python), (Split-Path $git))) {
+    foreach ($directory in @($source, (Split-Path $Python), $gitRoot)) {
         & icacls $directory /grant "*${sid}:(OI)(CI)RX" | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'Cannot prepare CI prerequisites.' }
     }
@@ -49,7 +57,7 @@ try {
     $start.EnvironmentVariables['USERDOMAIN'] = $env:COMPUTERNAME
     $start.EnvironmentVariables['TEMP'] = $temporary
     $start.EnvironmentVariables['TMP'] = $temporary
-    $start.EnvironmentVariables['PATH'] = (Split-Path $Python) + ';' + (Split-Path $git) + ';' + $env:SystemRoot + '\System32;' + $env:SystemRoot + '\System32\WindowsPowerShell\v1.0'
+    $start.EnvironmentVariables['PATH'] = (Split-Path $Python) + ';' + $gitBin + ';' + $gitUnix + ';' + (Split-Path $git) + ';' + $env:SystemRoot + '\System32;' + $env:SystemRoot + '\System32\WindowsPowerShell\v1.0'
     $start.EnvironmentVariables['PYTHONIOENCODING'] = 'utf-8'
     $process = [Diagnostics.Process]::new()
     $process.StartInfo = $start
