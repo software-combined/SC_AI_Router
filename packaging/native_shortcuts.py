@@ -136,6 +136,7 @@ foreach($row in $request) {
         $target=[IO.Path]::GetFullPath($link.TargetPath)
         if($link.Arguments -cne $row.arguments -or ($row.marker -and $link.Description -cne $row.marker) -or
            !$target.StartsWith($row.root,[StringComparison]::OrdinalIgnoreCase) -or
+           ($row.target -and $target -ine $row.target -and $target -ine $row.alternative) -or
            [IO.Path]::GetFileName($target) -notin @('python.exe','pythonw.exe')) {throw 'ownership'}
         $reply[$row.name]=[Convert]::ToBase64String([IO.File]::ReadAllBytes($row.path))
     }
@@ -162,7 +163,8 @@ def _valid_registry(home, values):
     if values is None:
         return
     if (not isinstance(values, dict) or set(values) - set(_REGISTRY_NAMES)
-            or os.path.normcase(str(values.get('InstallLocation'))) != os.path.normcase(str(home))):
+            or os.path.normcase(str(Path(str(values.get('InstallLocation'))).resolve()))
+            != os.path.normcase(str(Path(home).resolve()))):
         raise ValueError('Invalid SCG Router registration snapshot')
     for name, value in values.items():
         if type(value) is not (int if name in ('NoModify', 'NoRepair') else str):
@@ -214,6 +216,36 @@ def snapshot(home, run=subprocess.run):
     home = Path(home).resolve()
     return dict(links=_read_links(_cohort_links(home), run), registry=_registry_snapshot(home),
                 startup_on=load('desktop_startup').enabled(home, platform_name='win32'))
+
+
+def verify(home, resources, python, run=subprocess.run, *, legacy=False):
+    """Read back the exact retained runtime before installation completion."""
+    home, resources = Path(home).resolve(), Path(resources).resolve()
+    pythonw = str(Path(python).with_name('pythonw.exe'))
+    rows = [dict(row, target=pythonw) for row in _cohort_links(home)]
+    if legacy:
+        rows[-1]['alternative'] = str(python)
+    links = _read_links(rows, run)
+    on = load('desktop_startup').enabled(home, platform_name='win32')
+    values = _registry_snapshot(home)
+    if (links['open'] is None or links['remove'] is None or (links['startup'] is not None) != on
+            or values is None or values.get('DisplayVersion') != metadata(resources)['version']
+            or values.get('UninstallString') != subprocess.list2cmdline(
+                [pythonw, str(home / 'native_launch.py'), '--action', 'remove'])
+            or values.get('DisplayIcon') != str(resources / 'router-icon.ico')):
+        raise ValueError('Installed Windows entry points did not match')
+
+
+def fingerprint(home):
+    """Read sealed entry-point bytes without PowerShell; startup remains user-controlled."""
+    import hashlib
+    import json
+    home = Path(home).resolve()
+    rows = _cohort_links(home)[:2]
+    values = _registry_snapshot(home)
+    return dict(version=values.get('DisplayVersion') if values else None,
+                links={row['name']: hashlib.sha256(Path(row['path']).read_bytes()).hexdigest() for row in rows},
+                registry=hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest())
 
 
 def _registry_restore(home, before):

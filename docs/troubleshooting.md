@@ -22,6 +22,8 @@ The launcher cannot record attempts Windows refuses before Python starts.
 Task-operation refusals include a numeric Windows error and a safe exception class when available.
 They exclude the error message, task paths and raw command output.
 `logs/update.log` records `installed <version>; health verified` after each verified installation.
+Windows records success after the required runtime, controls and task bindings verify.
+Verified restoration retries quietly. Incomplete restoration retains both runtimes and its recovery record for repair.
 Menu and graphical setup also record when an install starts, exits or fails.
 These events contain safe status fields; they do not copy installer output or settings.
 Attachment failures have separate maintenance events. Unchanged checks and rollbacks do not claim an installation.

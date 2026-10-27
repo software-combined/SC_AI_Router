@@ -106,6 +106,7 @@ class NativeRepairArgumentsTests(unittest.TestCase):
     def test_native_repair_clears_controls_only_after_verified_shortcuts_are_installed(self):
         from tests.test_native_resources import NativeResourcesTests
         setup = module('native_setup')
+        setup.sys = SimpleNamespace(platform='linux')  # Independent delivery; Windows completes in the child.
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             owner, home, _, _ = NativeResourcesTests().fixture(root)

@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests import test_client_choice as fixtures
-from tests.install_fixtures import _craft_bundle
+from tests.install_fixtures import _craft_bundle, install_mod_factory
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -63,6 +63,58 @@ class TaskEvidenceTests(unittest.TestCase):
 
 
 class InstallationEvidenceTests(unittest.TestCase):
+    def test_install_text_waits_for_required_completion(self):
+        delivery = fixtures.install_mod._delivery
+        with tempfile.TemporaryDirectory() as temporary:
+            home = fixtures._home(temporary)
+            def fail_completion(*_):
+                self.assertNotIn('installed 1.0.1', sys.stdout.getvalue())
+                raise SystemExit(9)
+            with mock.patch.object(fixtures.install_mod, 'platform_backend'), \
+                    mock.patch.object(delivery, '_finalize', side_effect=fail_completion):
+                with self.assertRaises(SystemExit) as stopped:
+                    fixtures._full_install(self, temporary, home, '1.0.1', ['--clients', 'none'])
+            self.assertEqual(stopped.exception.code, 9)
+            self.assertFalse((home / 'logs/update.log').exists())
+
+    def test_windows_update_requires_completed_components_even_when_target_is_healthy(self):
+        for coherent, status in ((False, 0), (False, 7), (True, 0), (True, 7)):
+            with self.subTest(coherent=coherent, status=status), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary)
+                (home / 'current').write_text('1.0.0')
+                (home / 'releases/1.0.0').mkdir(parents=True)
+                (home / 'mixed-router-state.json').write_text(json.dumps(dict(port=1, token='synthetic', clients='none')))
+                install = install_mod_factory()
+                updater = install._updater
+                blob, latest = _craft_bundle('1.0.1')
+                args = install.build_parser().parse_args(['--home', str(home), '--update', '--feed', 'file:///latest.json'])
+                def child(*_, **__):
+                    (home / 'releases/1.0.1').mkdir()
+                    (home / 'current').write_text('1.0.1')
+                    if not coherent:
+                        (home / 'installation-pending.json').write_text('{}')
+                    return SimpleNamespace(returncode=status, stdout='', stderr='')
+                output = io.StringIO()
+                with mock.patch.object(updater, 'sys', SimpleNamespace(platform='win32', executable=sys.executable, exc_info=sys.exc_info)), \
+                        mock.patch.object(updater._svc, 'run', side_effect=child), \
+                        mock.patch.object(updater._svc, 'wait_version', return_value=True), \
+                        mock.patch.object(updater._svc.notice, 'show_pending'), \
+                        mock.patch.object(updater._resources, 'ready', return_value=coherent), \
+                        mock.patch.object(updater._models, 'refresh'), mock.patch.object(updater._models, 'accept'), \
+                        mock.patch.object(updater._reconcile, 'run'), mock.patch.object(updater, '_offer_notices'), \
+                        contextlib.redirect_stdout(output):
+                    try:
+                        result = install.do_update(args, _fetch=lambda _: blob,
+                            _read_feed=lambda *_: (200, json.dumps(latest).encode(), None),
+                            _sleep=lambda _: None, _announce=lambda *_: None)
+                    except SystemExit as error:
+                        result = error.code
+                self.assertEqual(result, status)
+                state = json.loads((home / 'mixed-router-state.json').read_text())
+                self.assertEqual(state.get('last_applied_version'), '1.0.1' if coherent else None)
+                self.assertEqual('installed 1.0.1' in output.getvalue(), coherent)
+                self.assertEqual((home / 'logs/update.log').exists(), coherent)
+
     def test_direct_regular_express_and_beta_installs_share_the_verified_completion_record(self):
         installer = fixtures.install_mod
         for route in ('direct', 'regular', 'express', 'beta'):

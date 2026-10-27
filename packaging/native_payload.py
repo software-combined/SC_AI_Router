@@ -52,15 +52,19 @@ def metadata(resources, expected_target=None):
             '..' in executable.parts or
             not (resources / 'runtime' / executable).is_file()):
         raise ValueError('The bundled Python is missing.')
+    if doc['target'].startswith('windows/') and not (resources / 'runtime' / executable.with_name('pythonw.exe')).is_file():
+        raise ValueError('The bundled Python is missing.')
     blob = resources / 'payload' / 'bundle.tar.gz'
     digest = hashlib.sha256(blob.read_bytes()).hexdigest()
     feed = json.loads((resources / 'payload' / 'latest.json').read_text())
     if (digest != doc.get('sha256') or digest != feed.get('sha256') or
             feed.get('version') != doc['version']):
         raise ValueError('The installer files did not pass verification.')
-    for name in ('install.py', 'native_setup.py'):
+    for name in ('install.py', 'native_setup.py', 'VERSION'):
         if not (resources / 'router' / 'packaging' / name).is_file():
             raise ValueError('The installer is incomplete.')
+    if (resources / 'router/packaging/VERSION').read_text().strip() != doc['version']:
+        raise ValueError('The installer files did not pass verification.')
     if 'menu_sha256' in doc:
         helper = resources / 'control' / ('scg-router-menu.exe' if doc['target'].startswith('windows/') else 'scg-router-menu')
         if (not re.fullmatch('[0-9a-f]{64}', str(doc['menu_sha256'])) or not helper.is_file()

@@ -20,6 +20,9 @@
 - Require Windows core and native process, dialog and key-permission checks
   from a standard user account during main release acceptance.
 - Keep task logging open when a Windows launch has no standard output or error.
+- Stage required Windows components before activation. Verify completion before
+  recording installation success, and restore prior bindings after a required failure.
+  Retry quietly after verified restoration; retain recovery evidence when restoration fails.
 - Verify and restore owned Windows shortcuts and the Apps entry during installation recovery.
   Preserve explicit sign-in choices and launch the sign-in menu without a console.
 

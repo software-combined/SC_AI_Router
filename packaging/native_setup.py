@@ -56,6 +56,7 @@ def run_installer(resources, home, flags=(), run=subprocess.run):
             args.append('--desktop')
     env = environment(resources)
     env.update(ROUTER_NO_KEY_WINDOW='1', ROUTER_NO_CLIENT_CHOOSER='1')
+    env['SCG_NATIVE_RESOURCES'] = str(resources)
     return load('install_delivery').run_logged(home, 'setup',
         'key' if key else 'repair' if repair else 'install',
         lambda: run(args, capture_output=True, text=True, timeout=900, env=env))
@@ -282,7 +283,8 @@ def onboard(resources, home, action=None):
     with dialog.Progress() as progress:
         permanent = retained(resources, home)
         python = permanent / 'runtime' / doc['runtime_exec']
-        load('native_shortcuts').install(home, permanent, python)
+        if sys.platform != 'win32':
+            load('native_shortcuts').install(home, permanent, python)
         if not (home / 'channel').exists():
             load('atomic_write').replace_text(
                 home / 'channel', ('stable' if existing else doc['channel']) + '\n')
@@ -297,10 +299,12 @@ def onboard(resources, home, action=None):
     except (OSError, ValueError, KeyError):
         pass
     source = permanent / 'router'
-    load('native_controller').install(home, source)
+    if sys.platform != 'win32':
+        load('native_controller').install(home, source)
     python = permanent / 'runtime' / doc['runtime_exec']
-    load('native_shortcuts').install(home, permanent, python)
-    load('native_resources').confirm_controls(home, permanent)
+    if sys.platform != 'win32':
+        load('native_shortcuts').install(home, permanent, python)
+        load('native_resources').confirm_controls(home, permanent)
     load('desktop_menu').start(home, permanent)
     atomic = load('atomic_write')
     atomic.replace_json(home / 'setup-progress.json',

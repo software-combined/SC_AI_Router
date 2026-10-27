@@ -62,6 +62,15 @@ class ShortcutRecoveryTests(unittest.TestCase):
                     self.assertEqual(path.read_bytes(), b'current')
                 registry.assert_not_called()
 
+    def test_registration_ownership_resolves_equivalent_home_paths(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary) / 'home'
+            home.mkdir()
+            owner = module('native_shortcuts')
+            owner._valid_registry(home.resolve(), {'InstallLocation': str(home / '..' / 'home')})
+            with self.assertRaises(ValueError):
+                owner._valid_registry(home, {'InstallLocation': str(home.parent / 'foreign')})
+
     def test_changed_signin_choice_is_reconciled_without_restoring_old_startup_link(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -111,7 +120,7 @@ class NativeShortcutRecoveryTests(unittest.TestCase):
         import winreg
         owner = module('native_shortcuts')
         with tempfile.TemporaryDirectory(prefix='shortcut é ') as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             home = root / 'home'
             home.mkdir()
             key = r'Software\SCG-CI-' + uuid.uuid4().hex
