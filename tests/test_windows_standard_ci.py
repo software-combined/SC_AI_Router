@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -21,6 +22,28 @@ def tool():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+class ProfileBootstrapTests(unittest.TestCase):
+    def test_profile_precedes_installer_imports_in_a_fresh_process_without_home(self):
+        script = '''
+import importlib.util, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location('ci_child', sys.argv[1])
+owner = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(owner)
+class ProfileReached(Exception): pass
+def profile(): raise ProfileReached()
+def missing_home(): raise RuntimeError('Home is not initialized')
+owner.profile = profile
+Path.home = missing_home
+try: owner.run('synthetic-sid', 'unused-report')
+except ProfileReached: print('profile-first')
+'''
+        result = subprocess.run([sys.executable, '-I', '-c', script, str(Path(tool().__file__))],
+                                capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), 'profile-first')
 
 
 class StandardUserCleanupTests(unittest.TestCase):

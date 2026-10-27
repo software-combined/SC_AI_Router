@@ -17,6 +17,24 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class TaskEvidenceTests(unittest.TestCase):
+    def test_consoleless_launch_with_closed_standard_descriptors_keeps_its_log_open(self):
+        for closed in ((1, 2), (2,), (0, 1, 2)):
+            with self.subTest(closed=closed), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary)
+                launcher = home / 'task_launch.py'
+                launcher.write_bytes((ROOT / 'packaging/task_launch.py').read_bytes())
+                (home / 'router_launch.py').write_text('pass', encoding='utf-8')
+                child = ('import os,runpy,sys\n'
+                         'for fd in ' + repr(closed) + ': os.close(fd)\n'
+                         'sys.argv=[sys.argv[1],"task.log","router_launch.py"]\n'
+                         'runpy.run_path(sys.argv[0],run_name="__main__")\n')
+                result = subprocess.run([sys.executable, '-I', '-c', child, str(launcher)],
+                                        capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 0)
+                rows = [json.loads(line) for line in (home / 'logs/task.log').read_text().splitlines()]
+                self.assertEqual([row['event'] for row in rows], ['launch', 'completed'])
+                self.assertEqual(rows[-1]['status'], 0)
+
     def test_launch_completion_and_pre_target_failures_preserve_status_without_exception_text(self):
         for script, text, status, reason in (
                 ('router_launch.py', 'pass', 0, None),

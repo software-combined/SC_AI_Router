@@ -267,7 +267,8 @@ class WarningMenuTests(unittest.TestCase):
         service = mock.Mock()
         service.install_lock.return_value = contextlib.nullcontext(True)
         owners = dict(desktop_model=model, desktop_control=control, native_dialog=dialog,
-                      native_shortcuts=module('native_shortcuts'), service=service)
+                      native_shortcuts=module('native_shortcuts'), service=service,
+                      windows_native=SimpleNamespace(Native=lambda: SimpleNamespace(session=lambda: 1)))
         with mock.patch.object(menu, 'load', side_effect=owners.__getitem__):
             menu.fallback(Path('/synthetic/home'), Path('/synthetic/resources'))
         text, choices = dialog.choose.call_args.args

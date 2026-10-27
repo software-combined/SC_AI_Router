@@ -45,6 +45,7 @@ def run(expected_sid, report):
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root))
     os.chdir(root)
+    profile()
     from tests.test_native_setup import module
     api = module('windows_native').Native()
     sid = api.user()
@@ -57,7 +58,6 @@ def run(expected_sid, report):
         api.CloseHandle(token)
     if sid != expected_sid or elevated.value or C.windll.shell32.IsUserAnAdmin():
         raise RuntimeError('CI child must use the expected standard account')
-    profile()
     subprocess.run(['git', '--version'], check=True, timeout=10)
     os.environ['SCG_REQUIRE_STANDARD_USER'] = '1'
     os.environ.pop('SCG_RUN_INSTALLER_TESTS', None)
