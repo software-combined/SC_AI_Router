@@ -270,12 +270,14 @@ class StartupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source, home = resources(root / 'Resources'), root / 'home'
+            (source / 'runtime/python/bin/pythonw.exe').touch()
             home.mkdir()
             run = mock.Mock()
             with mock.patch.dict(os.environ, {'APPDATA': str(root / 'AppData')}):
                 startup.configure(home, source, True, platform_name='win32', run=run)
                 self.assertIn('$s.Description -ne', run.call_args.args[0][-1])
                 self.assertIn('--autostart', run.call_args.args[0][-1])
+                self.assertIn('pythonw.exe', run.call_args.args[0][-1])
                 startup.configure(home, source, False, platform_name='win32', run=run)
                 self.assertIn('Remove-Item -LiteralPath', run.call_args.args[0][-1])
             self.assertFalse(startup.enabled(home))

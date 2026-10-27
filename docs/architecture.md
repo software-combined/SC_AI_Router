@@ -845,6 +845,11 @@ Fallback windows run one selected action and then close.
 It serializes actions in a worker, while native menus stay responsive.
 `desktop_startup.py` owns per-user startup entries and the persistent preference.
 Only explicit choices write that preference. Windows defaults missing or invalid choices to On.
+`native_shortcuts.py` snapshots and restores only its three fixed Windows shortcuts
+and named per-user Apps values. It checks ownership before recovery and reads back
+the result. Binary shortcut writes use the shared compare-before-write helper.
+Recovery keeps a concurrent explicit startup choice and reconciles its shortcut.
+These owner APIs support installation recovery; they never capture client settings.
 `desktop_launch.py` follows retained setup resources, independently of inference rollback.
 Closing the shell never stops routing. Polling is silent and makes no model calls.
 `native_resources.py` consumes only this target's signed Resources descriptor.

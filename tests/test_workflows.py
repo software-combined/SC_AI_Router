@@ -255,8 +255,8 @@ class InstallerCiGateTests(unittest.TestCase):
                         ['bash', '-e', '-c', run_block('Require an accepted commit')],
                         cwd=tmp, env={**env, 'GITHUB_REF_NAME': tag, 'GITHUB_SHA': sha,
                                      'ACCEPTANCE_COUNT': str(count)}, capture_output=True)
-                    self.assertEqual(result.returncode == 0, allowed)
-                    self.assertEqual(Path(tmp, 'gh-called').exists(), asks_gh)
+                    self.assertEqual(result.returncode == 0, allowed, result.stderr.decode(errors='replace'))
+                    self.assertEqual(Path(tmp, 'gh-called').exists(), asks_gh, result.stderr.decode(errors='replace'))
 
     @unittest.skipUnless(shutil.which('jq'), 'requires jq to evaluate the gh filter')
     def test_acceptance_query_only_counts_successful_main_runs(self):
