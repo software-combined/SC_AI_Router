@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The OpenRouter picker no longer offers MiniMax M3.1 Flash (free). OpenRouter
+  withdrew the free endpoint, so the router drops the row instead of keeping a
+  model that can no longer answer.
+
 - The OpenRouter picker now offers GPT-6.1 Terra. It passed the isolated Codex
   and Claude Code route checks, so both clients can switch to it and keep
   their thread history.
