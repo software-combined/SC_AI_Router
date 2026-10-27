@@ -40,7 +40,7 @@ class PluginTest(unittest.TestCase):
                     ('codex', 'add', '.agents/plugins/marketplace.json'),
                     ('claude', 'install', '.claude-plugin/marketplace.json')):
                 with self.subTest(client=client):
-                    entries = json.loads((root / manifest).read_text())['plugins']
+                    entries = json.loads((root / manifest).read_text(encoding='utf-8'))['plugins']
                     self.assertEqual([p['name'] for p in entries].count('scg-ponytail'), 1)
                     run = _Client()
                     _, refused = skills.register(client, root, names, run=run, which=_found)
@@ -93,9 +93,9 @@ class PluginTest(unittest.TestCase):
         self.assertIn("same model with the same brief", review)
 
     def test_simplification_wait_guidance_prevents_duplicate_passes(self):
-        review = (PLUGIN / "skills/pre-commit-review/SKILL.md").read_text()
-        simplifier = (PLUGIN / "skills/code-simplifier/SKILL.md").read_text()
-        tool_guide = (ROOT / "plugins/agents/scg-subagents/skills/optimal-subagents/references/tool-guide.md").read_text()
+        review = (PLUGIN / "skills/pre-commit-review/SKILL.md").read_text(encoding='utf-8')
+        simplifier = (PLUGIN / "skills/code-simplifier/SKILL.md").read_text(encoding='utf-8')
+        tool_guide = (ROOT / "plugins/agents/scg-subagents/skills/optimal-subagents/references/tool-guide.md").read_text(encoding='utf-8')
         for text in (review, simplifier, tool_guide):
             self.assertIn("quiet", text.lower())
             self.assertIn("duplicate", text)
@@ -105,7 +105,7 @@ class PluginTest(unittest.TestCase):
         self.assertIn("Do not cancel or\nrestart an active simplifier", simplifier)
 
     def test_lane_verdicts_keep_their_label_and_emoji_in_every_relay(self):
-        review = (PLUGIN / "skills/pre-commit-review/SKILL.md").read_text()
+        review = (PLUGIN / "skills/pre-commit-review/SKILL.md").read_text(encoding='utf-8')
         for verdict in ("`✅ All Clear`", "`📝 Proceed With Notes`", "`❌ Block`"):
             self.assertIn(verdict, review)
         self.assertIn("whole verdict vocabulary", review)
@@ -196,7 +196,7 @@ class PluginTest(unittest.TestCase):
                 hook.write_text("user-owned hook\n")
                 with self.assertRaisesRegex(ValueError, "adapter differs"):
                     setup.provision(repo, config, install=True, home=home)
-                self.assertEqual(hook.read_text(), "user-owned hook\n")
+                self.assertEqual(hook.read_text(encoding='utf-8'), "user-owned hook\n")
                 subprocess.run(["git", "-C", str(repo), "config", "core.hooksPath", "/user/hooks"], check=True)
                 with self.assertRaisesRegex(ValueError, "different core.hooksPath"):
                     setup.provision(repo, config, install=True, home=home)

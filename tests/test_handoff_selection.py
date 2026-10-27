@@ -45,13 +45,13 @@ class SelectionGuidanceTests(unittest.TestCase):
         # both, so no document may pick tools by the recipient or retry next turn.
         for path in CODEX_GUIDANCE:
             with self.subTest(path=str(path.relative_to(ROOT))):
-                prose = ' '.join(path.read_text().split())
+                prose = ' '.join(path.read_text(encoding='utf-8').split())
                 self.assertIn(OFFERED_TOOLS_RULE, prose)
                 self.assertNotRegex(
                     prose, r"externally billed recipient|recipient's provider route|next user turn")
 
     def test_claude_code_parents_get_their_own_section_and_listing_ids(self):
-        guide = (SUBAGENTS / 'references/tool-guide.md').read_text()
+        guide = (SUBAGENTS / 'references/tool-guide.md').read_text(encoding='utf-8')
         section = re.search(r'^## Claude Code\n(.*?)(?=^## |\Z)', guide, re.S | re.M).group(1)
         section = ' '.join(section.split())
         for needed in ('SendMessage', '`run_in_background: false`', '`model: inherit`',
@@ -59,7 +59,7 @@ class SelectionGuidanceTests(unittest.TestCase):
             self.assertIn(needed, section)
         # Codex tool shapes mean nothing to Claude Code.
         self.assertNotRegex(section, r'collaboration\w*\.|spawn_agent|fork_turns|reasoning_effort')
-        entry = ' '.join((SUBAGENTS / 'SKILL.md').read_text().split())
+        entry = ' '.join((SUBAGENTS / 'SKILL.md').read_text(encoding='utf-8').split())
         self.assertIn('Claude Code reads the Claude Code section', entry)
         # The guide sends attached sessions to --list for the id a definition's model: takes.
         with tempfile.TemporaryDirectory() as home, patch.object(worker, 'ROUTER_HOME', Path(home)):
@@ -85,7 +85,7 @@ class InstallerSelectionTests(unittest.TestCase):
                                 {'port': 1234, 'token': 'synthetic'}, mode, static_catalogue=True)
                             block, _, desktop, reviewer = codex_config.attach_config(config, block, previous)
                             previous = {'inserted_block': block, 'desktop': desktop, 'reviewer': reviewer}
-                            self.assertEqual(tomllib.loads(config.read_text()).get('agents', {}), expected)
+                            self.assertEqual(tomllib.loads(config.read_text(encoding='utf-8')).get('agents', {}), expected)
 
 
 if __name__ == '__main__':

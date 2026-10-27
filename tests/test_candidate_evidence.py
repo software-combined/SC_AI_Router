@@ -3,6 +3,7 @@ from copy import deepcopy
 from dataclasses import replace
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from ai_router import candidate_evidence as evidence, registry
@@ -11,6 +12,13 @@ from tools import check_acceptance_ledger
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_missing_git_keeps_fingerprints_and_marks_revision_unknown(self):
+        with patch.object(evidence.subprocess, 'run', side_effect=FileNotFoundError):
+            record = evidence.binding(self.row)
+        self.assertIsNone(record['router_revision'])
+        self.assertEqual(record['runtime_fingerprint'], evidence.runtime_fingerprint())
+        self.assertEqual(record['capability_fingerprint'], evidence.capability_fingerprint(self.row))
+
     def setUp(self):
         self.row = registry.MODELS[0]
         self.proof = proof(self.row)

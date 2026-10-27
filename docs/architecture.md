@@ -183,7 +183,9 @@ predicates are exempt; preparation and recovery use capability data instead.
 
 `candidate_evidence.py` owns content-free onboarding proof beside `candidate.py`.
 It reads normalized registry capabilities, provider protocols and client IDs;
-request handling never imports it. `models.py` promotes a new row only after
+request handling never imports it. Git revision metadata is optional; source and
+capability fingerprints remain required on machines without Git.
+`models.py` promotes a new row only after
 every advertised route passes offline conformance and a real-client probe
 against unchanged source and capabilities. The ledger checker shares this
 validator. `tools/probe_candidate.py` owns one isolated send budget across the

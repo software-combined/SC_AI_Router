@@ -12,6 +12,8 @@
   Ignore confirmed completed instances; refuse unknown or unreadable task state.
 - Record menu and setup installation launches, child exits and failures in the
   update log. A deferred menu install reports busy instead of reporting completion.
+- Keep model verification usable without Git. Preserve source and capability
+  fingerprints when the optional repository revision is unavailable.
 
 ## 1.3.21
 
