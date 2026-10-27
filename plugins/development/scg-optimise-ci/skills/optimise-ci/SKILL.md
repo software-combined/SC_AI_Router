@@ -176,6 +176,15 @@ Cache keys must account for relevant sources, dependencies, toolchains and envir
 Reusing downloaded dependencies differs from reusing a passing test result.
 Reuse results only when tested inputs and the relevant environment remain equivalent.
 
+## Cache downloads, not results
+
+Cache downloads and toolchains, not test outcomes; result reuse stays governed by the equivalence rule above.
+Prefer the platform's own switch: setup-python `cache: pip`, setup-node `cache: npm`, setup-uv `enable-cache`.
+Key each cache on the lock or requirements files that resolve it, plus any toolchain version those artifacts need.
+A cache miss must run the same install and the same tests, only slower.
+Verify a cache change with one cold run and one warm run of the same revision, and report both.
+A cache that changes resolved versions, hides a failed install or lets a required check skip is a defect, not an optimisation.
+
 ## Validate and benchmark
 
 Freeze each candidate during measurement. Keep setup environments outside scanned source directories.

@@ -170,6 +170,14 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
+        with:
+          # This job is the one place that downloads wheels (ruff, cfn-lint).
+          # Key it on the hashed lint requirements and on this workflow, so
+          # changing cfn-lint's inline pin below also re-warms the cache.
+          cache: pip
+          cache-dependency-path: |
+            .github/requirements-lint.txt
+            .github/workflows/check.yml
       - name: Shell syntax
         shell: bash
         # The bootstrap and installer shells ship to every host; a syntax
