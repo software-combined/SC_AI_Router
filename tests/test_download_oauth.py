@@ -1,7 +1,10 @@
 """PKCE binds one browser callback and never redirects credential requests."""
 import base64
 import hashlib
+import http.client
 import io
+import re
+import threading
 import unittest
 import urllib.error
 import urllib.parse
@@ -13,6 +16,41 @@ oauth = auth._oauth
 
 
 class OAuthTests(unittest.TestCase):
+    def test_callback_shows_branded_confirmation_without_exposing_the_code(self):
+        with oauth.http.server.HTTPServer(('127.0.0.1', 0), oauth._Callback) as server:
+            server.state, server.result = 'right', None
+            server.expected_host = 'localhost:' + str(server.server_port)
+            worker = threading.Thread(target=server.handle_request, daemon=True)
+            worker.start()
+            connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=5)
+            try:
+                connection.request('GET', '/scg-router/signin?state=right&code=synthetic-private-code',
+                                   headers={'Host': server.expected_host})
+                response = connection.getresponse()
+                body = response.read().decode()
+                policy = response.getheader('Content-Security-Policy')
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.getheader('Content-Type'), 'text/html; charset=utf-8')
+                self.assertEqual(response.getheader('Cache-Control'), 'no-store')
+                self.assertEqual(response.getheader('Referrer-Policy'), 'no-referrer')
+            finally:
+                connection.close()
+                worker.join(timeout=5)
+        self.assertEqual(server.result, 'synthetic-private-code')
+        self.assertIn("You're signed in", body)
+        self.assertIn('You can close this tab.', body)
+        self.assertIn('alt="Software Combined"', body)
+        self.assertIn('data:image/png;base64,', body)
+        self.assertEqual(body.count('data:font/woff2;base64,'), 2)
+        self.assertNotIn('synthetic-private-code', body)
+        self.assertNotIn('return to', body.lower())
+        self.assertNotIn('__NONCE__', body)
+        self.assertIn('history.replaceState(null,"","/complete")', body)
+        nonce = re.search(r'<script nonce="([A-Za-z0-9_-]+)">', body)[1]
+        self.assertIn("script-src 'nonce-" + nonce + "'", policy)
+        self.assertIn("style-src 'nonce-" + nonce + "'", policy)
+        self.assertIn("default-src 'none'", policy)
+
     def test_state_mismatch_duplicate_or_missing_state_never_yields_code(self):
         for query in ('state=wrong&code=secret', 'code=secret',
                       'state=right&state=right&code=secret',

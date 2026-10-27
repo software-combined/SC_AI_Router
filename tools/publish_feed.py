@@ -44,15 +44,20 @@ def _aws(args):
 
 
 def publish_setup_page(bucket):
-    """Public recovery remains available without accepted native packages."""
+    """Publish the public install page and its shared assets."""
     root = Path(__file__).resolve().parents[1] / 'packaging'
     for path in sorted((root / 'download-page').iterdir()):
         content_type = {'.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript',
                         '.svg': 'image/svg+xml'}[path.suffix]
         _aws(['s3', 'cp', str(path), 's3://' + bucket + '/install/' + path.name,
               '--cache-control', 'no-cache', '--content-type', content_type])
-    _aws(['s3', 'cp', str(root / 'assets/router-icon.png'),
-          's3://' + bucket + '/install/router-icon.png', '--content-type', 'image/png'])
+    for name, content_type in (('router-icon.png', 'image/png'),
+                               ('inter-400.woff2', 'font/woff2'),
+                               ('space-grotesk-400.woff2', 'font/woff2'),
+                               ('inter-OFL.txt', 'text/plain'),
+                               ('space-grotesk-OFL.txt', 'text/plain')):
+        _aws(['s3', 'cp', str(root / 'assets' / name), 's3://' + bucket + '/install/' + name,
+              '--cache-control', 'no-cache', '--content-type', content_type])
     for name in ('bootstrap.sh', 'bootstrap.ps1'):
         _aws(['s3', 'cp', str(root / name), 's3://' + bucket + '/install/' + name,
               '--cache-control', 'no-cache', '--content-type', 'text/plain'])

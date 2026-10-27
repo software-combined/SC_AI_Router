@@ -77,7 +77,12 @@ The switch gives Codex five seconds to close, then ends its verified root before
 It waits for confirmed exits before changing settings. Exiting processes need no further identity reads.
 Reopening can take up to thirty seconds on a cold start.
 A failure restores the previous connection and attempts reopening.
-Confirmation and waiting windows use the verified native helper, without PowerShell.
+Confirmation and waiting windows use the verified native helper. Older helpers use
+a hidden PowerShell dialog with the same icon and safe Cancel action.
+If required Router components differ, switching refuses before closing Codex.
+Open SCG Router to finish its update or repair. A temporary service check failure
+asks you to retry; it does not establish installation damage.
+Switching back remains available with coherent files when the Router is offline.
 Claude desktop process checks retain a sixty-second limit for busy sessions.
 A failed check refuses before changing settings.
 If an update owns the installation lock, Switch Codex waits up to sixty seconds.
@@ -87,6 +92,8 @@ The switch log distinguishes identity timeouts, query failures and rejected comm
 It records identity, quit, proof and reopen durations, plus scan count and maximum scan time.
 Its command paths are relative to the package. Protected unrelated Windows processes
 do not block switching; an unreadable relevant app process still requires attention.
+Task timeouts record a closed stage name. Report that name to IT; raw command output
+and private paths are excluded. Task Scheduler history covers failures before Python starts.
 
 Symptom-first remedies for a machine that runs the router. Every command here
 is safe to run and prints no secrets. Replace the home path if you installed

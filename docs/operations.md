@@ -458,11 +458,11 @@ tag and watch a new beta on the new `development` commit first. Once the `Check`
 run for the push to `main` passes on the merge commit, tag that merge commit
 `v<VERSION>` for stable.
 
-The stable publisher refreshes the public setup and repair page independently
+The stable publisher refreshes the legacy public install page independently
 of native-installer acceptance. It publishes the stable feed before shared setup
 scripts. Beta releases leave those shared files in place. Keep native acceptance
 flags unchanged until their desktop evidence is complete. After publication,
-verify anonymous downloads through [the repair page](https://hub.softwarecombined.com/router)
+verify anonymous downloads through [the install page](https://hub.softwarecombined.com/install)
 and both channel feeds. Distribute the notice in [recovery](recovery.md) only
 after those checks. Older blocked updaters still need that one external action.
 
@@ -922,8 +922,29 @@ Prompts, tool data, credentials and raw error bodies are excluded.
 
 ## Per-user OpenRouter keys (IT issue and revoke)
 
-Owner decision 2026-09-09: IT issues one OpenRouter key per portco user;
-there is no self-service provisioning. The flow per user:
+Work-account provisioning uses Microsoft sign-in and the Hub's dedicated
+`Router.Provision` permission. The backend selects the approved company workspace
+from the verified home tenant and issues one personal key with a US$50 monthly
+limit. A tenant is a company's Microsoft account directory. Reinstalls and additional
+computers receive that same key and allowance. Unknown or ambiguous company
+tenants are refused. Existing manual keys require
+IT migration before a new allowance can be issued.
+
+The public release contains only public sign-in settings. Management credentials
+and encrypted personal keys stay in the Hub backend. OAuth tokens remain in memory;
+the local setup route writes only the personal inference key through its existing
+protected writer. Downloads and updates remain public.
+
+Sign-in uses the dedicated Router API and does not require directory read access.
+Each company can connect a separate read-only directory app for automatic key
+revocation after an account is disabled or deleted. That connection requires one
+company administrator approval. Until connected, IT must revoke keys manually.
+Offboarding must disable the OpenRouter key as well as Entra access. Replacement
+keys need an explicit remaining-budget decision; automatic rotation is not enabled.
+The legacy `tools/provision_key.py` does not implement this managed contract and
+must not be used for work-account issuance.
+
+For a separately issued unmanaged key, the existing IT flow remains available:
 
 One key file per external provider (Plan 139): the installer and the setup
 window name the provider whose key they are collecting, and a second

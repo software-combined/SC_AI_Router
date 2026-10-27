@@ -252,11 +252,11 @@ class InstallerCiGateTests(unittest.TestCase):
                 with self.subTest(tag=tag, sha=sha, count=count):
                     Path(tmp, 'gh-called').unlink(missing_ok=True)
                     result = subprocess.run(
-                        ['bash', '-e', '-c', run_block('Require an accepted commit')],
+                        [shutil.which('bash'), '-e', '-c', run_block('Require an accepted commit')],
                         cwd=tmp, env={**env, 'GITHUB_REF_NAME': tag, 'GITHUB_SHA': sha,
                                      'ACCEPTANCE_COUNT': str(count)}, capture_output=True)
-                    self.assertEqual(result.returncode == 0, allowed, result.stderr.decode(errors='replace'))
-                    self.assertEqual(Path(tmp, 'gh-called').exists(), asks_gh, result.stderr.decode(errors='replace'))
+                    self.assertEqual(result.returncode == 0, allowed, repr((result.returncode, result.stdout, result.stderr)))
+                    self.assertEqual(Path(tmp, 'gh-called').exists(), asks_gh, repr((result.returncode, result.stdout, result.stderr)))
 
     @unittest.skipUnless(shutil.which('jq'), 'requires jq to evaluate the gh filter')
     def test_acceptance_query_only_counts_successful_main_runs(self):

@@ -14,7 +14,7 @@
       const heading = document.createElement('h3'); heading.textContent = title;
       const links = linksFor(prefix);
       if (!links.length) {
-        const note = document.createElement('span'); note.className = 'package script pending';
+        const note = document.createElement('span'); note.className = 'package pending';
         note.textContent = 'Not available yet'; links.push(note);
       }
       tile.replaceChildren(icon, heading, ...links);
@@ -42,7 +42,8 @@
     tiles(prefix => checked.filter(item => item.target.startsWith(prefix)).map(item => {
       const link = document.createElement('a');
       link.className = 'package'; link.href = item.url;
-      link.textContent = (prefix === 'linux/' ? 'Ubuntu ' : '') + labels[item.target].split(' · ')[1];
+      link.textContent = prefix === 'windows/' ? 'Download installer' :
+        (prefix === 'linux/' ? 'Ubuntu ' : '') + labels[item.target].split(' · ')[1];
       link.setAttribute('aria-label', 'Download for ' + labels[item.target]);
       return link;
     }));

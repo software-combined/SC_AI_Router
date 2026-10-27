@@ -441,7 +441,7 @@ def _apply_update(args, home, sleep, _fetch, _read_feed, _announce):
             cmd += ['--feed', feed]
         try:
             result = _svc.run(cmd, capture_output=True, text=True, timeout=900,
-                              env=dict(os.environ, ROUTER_NO_KEY_WINDOW='1'))
+                              env=dict(os.environ, ROUTER_NO_KEY_WINDOW='1', ROUTER_AUTOMATIC_UPDATE='1'))
         except subprocess.SubprocessError as exc:
             # A child that is killed or never starts reports nothing itself,
             # so count it here or a hanging release retries every poll

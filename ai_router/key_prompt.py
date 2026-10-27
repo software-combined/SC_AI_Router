@@ -22,7 +22,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
-from . import key_dialog, provider_defs, setup_page
+from . import key_dialog, provider_defs, setup_page, work_account
 
 
 def submit(url, fields, opener=None):
@@ -57,7 +57,11 @@ def _mode_line(mode, provider_id=None):
             else '%s models only' % label)
 
 
-def _confirm_text(payload, which='codex'):
+def _confirm_text(payload, which='codex', *, managed=False):
+    if managed:
+        action = ('Continue installation' if which == 'none'
+                  else setup_page.RESTART[key_dialog.clients(which)] + ', then start a new chat')
+        return 'Your work key is ready.\n\n' + action + '.'
     lines = []
     if which in ('codex', 'both'):
         lines.append('Codex: ' + _mode_line(payload.get('mode')))
@@ -86,8 +90,10 @@ def _open_page(url, opener=None, label=provider_defs.label_for(provider_defs.DEF
 
 def run_window(url, tool_path=None, platform_name=None, which=None, run=None,
                opener=None, clients='codex', post=None, provider_id=None,
-               label=provider_defs.label_for(provider_defs.DEFAULT_EXTERNAL)):
+               label=provider_defs.label_for(provider_defs.DEFAULT_EXTERNAL), work=False):
     """Prompt, submit, confirm. 0 stored, 2 cancelled, 3 no GUI, 1 refused."""
+    if not _local_setup_url(url):
+        return 1
     if platform_name is None:
         platform_name = sys.platform
     clients = key_dialog.clients(clients)
@@ -96,11 +102,22 @@ def run_window(url, tool_path=None, platform_name=None, which=None, run=None,
     if tool_path is None:
         _open_page(url, opener, label)
         return 3
+    managed = work and (provider_id or provider_defs.DEFAULT_EXTERNAL) == provider_defs.OPENROUTER.id
     while True:
         try:
-            collected = key_dialog.collect(tool_path, platform_name=platform_name,
-                                           run=run, which=clients,
-                                           provider_id=provider_id)
+            collected = work_account.MANUAL
+            if managed:
+                collected = work_account.collect(tool_path, platform_name, clients, run)
+                if collected is work_account.CANCELLED:
+                    return 2
+            if collected is work_account.MANUAL:
+                managed = False
+                collected = key_dialog.collect(tool_path, platform_name=platform_name,
+                                               run=run, which=clients,
+                                               provider_id=provider_id)
+        except work_account.SignInFailed as exc:
+            key_dialog.message(tool_path, str(exc), platform_name=platform_name, run=run)
+            return 1
         except (OSError, subprocess.SubprocessError):
             _open_page(url, opener, label)
             return 3
@@ -120,7 +137,7 @@ def run_window(url, tool_path=None, platform_name=None, which=None, run=None,
                                platform_name=platform_name, run=run)
             return 1
         if payload.get('ok'):
-            key_dialog.message(tool_path, _confirm_text(payload, clients),
+            key_dialog.message(tool_path, _confirm_text(payload, clients, managed=managed),
                                platform_name=platform_name, run=run)
             return 0
         error = payload.get('error') or 'setup failed (%s)' % status
@@ -128,7 +145,7 @@ def run_window(url, tool_path=None, platform_name=None, which=None, run=None,
             error = 'A key is already saved on this computer. Open SCG Router and choose Check setup.'
         key_dialog.message(tool_path, error,
                            platform_name=platform_name, run=run)
-        if status in (404, 409):
+        if managed or status in (404, 409):
             return 1
 
 
@@ -149,11 +166,11 @@ def open_window(url, thread=False, which=None, opener=None, platform_name=None,
     if not thread:
         return run_window(url, platform_name=platform_name, which=which, run=run,
                           opener=opener, clients=clients, post=post,
-                          provider_id=provider_id, label=label) == 0
+                          provider_id=provider_id, label=label, work=True) == 0
     threading.Thread(target=run_window, args=(url,),
                      kwargs=dict(platform_name=platform_name, which=which,
                                  run=run, opener=opener, clients=clients, post=post,
-                                 provider_id=provider_id, label=label),
+                                 provider_id=provider_id, label=label, work=True),
                      daemon=True).start()
     return True
 
@@ -166,9 +183,22 @@ def _parse(argv):
     if args == ['--stdin']:
         # The installer pipes the URL here so the token never appears in `ps`.
         args = [sys.stdin.readline().strip()]
-    if len(args) != 1 or not args[0].startswith('http://127.0.0.1:'):
+    if len(args) != 1 or not _local_setup_url(args[0]):
         return None, None
     return args[0], which
+
+
+def _local_setup_url(url):
+    """A work key may be submitted only to the Router's local setup route."""
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        return (parsed.scheme == 'http' and parsed.hostname == '127.0.0.1'
+                and parsed.username is None and parsed.password is None
+                and parsed.port is not None and 0 < parsed.port <= 65535
+                and not parsed.query and not parsed.fragment
+                and parsed.path.startswith('/'))
+    except (ValueError, TypeError, AttributeError):
+        return False
 
 
 def main(argv=None):
@@ -178,7 +208,7 @@ def main(argv=None):
         print('usage: python -m ai_router.key_prompt (<loopback setup URL> | --stdin) '
               '[--clients codex|claude|both|none]', file=sys.stderr)
         return 1
-    return run_window(url, clients=which)
+    return run_window(url, clients=which, work=True)
 
 
 if __name__ == '__main__':

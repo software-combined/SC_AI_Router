@@ -61,6 +61,14 @@ It retries an unexpected helper exit once after one second within the controller
 Quit and removal stop it. Resource replacement uses the existing reload path.
 Resource advancement launches with `--after-update`, bypassing only sign-in preferences.
 That path never opens a chooser or warning. A held session lock leaves reload to its owner.
+`work_account` owns native Microsoft sign-in and calls the Hub's dedicated
+provisioning endpoint. Public sign-in settings ship with the release. It reuses
+the PKCE transport in `download_oauth` and the shared client-choice dialog;
+the Hub owns company entitlement, workspace selection and personal-key budgets.
+`key_prompt` submits the result to the existing local setup writer. Work keys,
+OAuth tokens and management credentials never become release configuration.
+The Microsoft callback shows a self-contained Hub-style confirmation with bundled
+brand fonts and logo, and clears the consumed code from the browser address.
 `feed` downloads public software without credentials. Legacy `download_auth`,
 `download_oauth` and `download_session` helpers are retained for compatibility,
 but the installer and updater no longer require them. `control_models` checks
@@ -119,6 +127,13 @@ by the client transition and profile locks. Repeated destination selections
 do nothing. Existing shortcuts retain their toggle behaviour. Platform identity
 and lifecycle helpers serve both clients; the configuration proof uses the
 CLI bundled with the verified desktop app.
+Windows switching checks the required-component receipt under the installation lock
+before identity discovery or pending-switch recovery. Forward preflight and proof
+also check the serving version; reverse recovery can proceed offline without a CLI.
+Legacy tray resources use the existing quiet Windows dialog rather than unsupported helper modes.
+The updater marks an automatic installer child once. Installation consumes that marker
+and respects removal under its lock. Explicit setup can reinstall. Runtime-only legacy
+installs retain their pending-task protocol; native installations never use that bypass.
 
 ```
 provider_defs (one definition per upstream, imports nothing) + errors,

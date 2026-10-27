@@ -2,6 +2,7 @@
 import contextlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -89,6 +90,7 @@ class InstallationEvidenceTests(unittest.TestCase):
                 blob, latest = _craft_bundle('1.0.1')
                 args = install.build_parser().parse_args(['--home', str(home), '--update', '--feed', 'file:///latest.json'])
                 def child(*_, **__):
+                    self.assertEqual(__['env'].get('ROUTER_AUTOMATIC_UPDATE'), '1')
                     (home / 'releases/1.0.1').mkdir()
                     (home / 'current').write_text('1.0.1')
                     if not coherent:
@@ -172,3 +174,49 @@ class InstallationEvidenceTests(unittest.TestCase):
             text = (home / 'logs/maintenance.jsonl').read_text()
             self.assertIn('attachment_failed', text)
             self.assertNotIn('private configuration', text)
+
+
+class AutomaticRemovalTests(unittest.TestCase):
+    def test_native_components_never_use_the_legacy_unjournaled_recovery_path(self):
+        delivery = fixtures.install_mod._delivery
+        with tempfile.TemporaryDirectory() as temporary:
+            home, backend = Path(temporary), mock.Mock()
+            record = dict(platform='win32', dry_run=False, latest={}, backend=backend)
+            with mock.patch.dict(os.environ, {'SCG_NATIVE_RESOURCES': ''}):
+                for marker in ('setup-current', 'control-version'):
+                    (home / marker).touch()
+                    delivery.recover_current(home, record, 'python', '1.0.0')
+                    (home / marker).unlink()
+                record['latest']['native_resources'] = {'windows/x86_64': {}}
+                delivery.recover_current(home, record, 'python', '1.0.0')
+                record['latest'].clear()
+                with mock.patch.dict(os.environ, {'SCG_NATIVE_RESOURCES': 'candidate'}):
+                    delivery.recover_current(home, record, 'python', '1.0.0')
+            backend.recover_pending.assert_not_called()
+
+    def test_automatic_child_cannot_reinstall_after_removal_but_explicit_setup_can(self):
+        delivery = fixtures.install_mod._delivery
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            (home / '.router-removed').touch()
+            args = SimpleNamespace(home=str(home), dry_run=False)
+            owner = SimpleNamespace(pending=mock.Mock(return_value=False), restore=mock.Mock())
+            original = delivery._load
+            def install(record):
+                record.update(platform='win32', backend=mock.Mock())
+                delivery.recover(home, record)
+                return 7
+            with mock.patch.object(delivery, '_load', side_effect=lambda name:
+                    owner if name == 'windows_installation' else original(name)), \
+                    mock.patch.dict(os.environ, {'ROUTER_AUTOMATIC_UPDATE': '1'}), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaises(SystemExit) as stopped:
+                    delivery.run_install(args, install, run=mock.Mock(), fetch=None)
+                self.assertEqual(stopped.exception.code, 0)
+                self.assertNotIn('ROUTER_AUTOMATIC_UPDATE', os.environ)
+                owner.pending.assert_not_called()
+                with mock.patch.dict(os.environ, {'ROUTER_AUTOMATIC_UPDATE': '0'}):
+                    self.assertEqual(delivery.run_install(args, install, run=mock.Mock(), fetch=None), 7)
+            owner.pending.assert_called_once()
+            owner.restore.assert_not_called()
+            self.assertFalse((home / 'logs/update.log').exists())

@@ -127,7 +127,7 @@ def _hash(value):
 
 
 def _journal(home):
-    before = (home / JOURNAL).read_text(encoding='utf-8')
+    before = (home / JOURNAL).read_bytes()
     doc = json.loads(before)
     if (not isinstance(doc, dict) or doc.get('format') != 1
             or not load('update_status').version(doc.get('target'))
@@ -240,7 +240,7 @@ def ready(home):
 
 def complete(home, prepared, backend):
     home = Path(home)
-    doc, _ = _journal(home)
+    doc, before = _journal(home)
     resources = Path(prepared['resources'])
     native = load('native_payload').metadata(resources)
     python = resources / 'runtime' / native['runtime_exec']
@@ -260,7 +260,7 @@ def complete(home, prepared, backend):
     if not ready_after_commit(home, actual):
         raise ValueError('Installation receipt did not match')
     _attention(home, False)
-    load('atomic_write').remove(home / JOURNAL, expected=(home / JOURNAL).read_text(encoding='utf-8'))
+    load('atomic_write').remove(home / JOURNAL, expected=before)
     prepared['completed'] = True
     load('bundle').prune_releases(home, doc['target'], doc['previous'], backend.pinned_release(home))
     if _decode(doc['files']['setup-current']) != _read(home, 'setup-current'):

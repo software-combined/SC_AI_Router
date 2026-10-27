@@ -11,6 +11,7 @@ import io
 import json
 import os
 import shlex
+import sys
 import tarfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -48,6 +49,8 @@ def install_mod_factory():
     # This existing rig exercises launchd on every host. Linux lifecycle
     # tests explicitly select linux and use the same installer seams.
     module.PLATFORM = 'darwin'
+    module._updater.sys = SimpleNamespace(platform='darwin', executable=sys.executable, exc_info=sys.exc_info)
+    module._delivery.sys = SimpleNamespace(platform='darwin')
     # Installer tests must never open the real client chooser. Tests that
     # exercise the chooser replace these seams with their own fake dialog.
     module._client_choice._dialog.tool = lambda *args, **kwargs: None
