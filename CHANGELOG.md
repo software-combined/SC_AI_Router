@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Connect approved work accounts through Microsoft sign-in, without copying keys.
+  Reuse one personal OpenRouter key and US$50 monthly allowance across computers.
+  Keep work credentials outside the public repository and release packages.
+
 - The OpenRouter picker now offers MiniMax M3.1 Flash on its paid endpoint,
   after the free entry was withdrawn. They are separate ids: the paid row
   passed both client route checks and keeps thread history on a switch.

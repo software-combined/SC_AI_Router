@@ -61,6 +61,12 @@ It retries an unexpected helper exit once after one second within the controller
 Quit and removal stop it. Resource replacement uses the existing reload path.
 Resource advancement launches with `--after-update`, bypassing only sign-in preferences.
 That path never opens a chooser or warning. A held session lock leaves reload to its owner.
+`work_account` owns native Microsoft sign-in and calls the Hub's dedicated
+provisioning endpoint. Public sign-in settings ship with the release. It reuses
+the PKCE transport in `download_oauth` and the shared client-choice dialog;
+the Hub owns company entitlement, workspace selection and personal-key budgets.
+`key_prompt` submits the result to the existing local setup writer. Work keys,
+OAuth tokens and management credentials never become release configuration.
 `feed` downloads public software without credentials. Legacy `download_auth`,
 `download_oauth` and `download_session` helpers are retained for compatibility,
 but the installer and updater no longer require them. `control_models` checks
