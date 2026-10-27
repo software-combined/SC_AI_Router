@@ -458,11 +458,11 @@ tag and watch a new beta on the new `development` commit first. Once the `Check`
 run for the push to `main` passes on the merge commit, tag that merge commit
 `v<VERSION>` for stable.
 
-The stable publisher refreshes the public setup and repair page independently
+The stable publisher refreshes the legacy public install page independently
 of native-installer acceptance. It publishes the stable feed before shared setup
 scripts. Beta releases leave those shared files in place. Keep native acceptance
 flags unchanged until their desktop evidence is complete. After publication,
-verify anonymous downloads through [the repair page](https://hub.softwarecombined.com/router)
+verify anonymous downloads through [the install page](https://hub.softwarecombined.com/install)
 and both channel feeds. Distribute the notice in [recovery](recovery.md) only
 after those checks. Older blocked updaters still need that one external action.
 

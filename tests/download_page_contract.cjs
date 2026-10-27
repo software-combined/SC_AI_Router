@@ -105,9 +105,13 @@ const notReady = app => assert.deepEqual(Array.from(app.element('packages').chil
   assert.doesNotMatch(redacted.element('status').textContent, /private token/);
   assert.match(redacted.element('status').textContent, /not ready yet/);
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  assert.doesNotMatch(html, /signin.js|id="signin"|Sign in with Microsoft/);
+  assert.doesNotMatch(html, /signin.js|id="signin"|<form\b/);
   assert.doesNotMatch(html, /id="channel"|Beta —|early access/);
-  assert.match(html, /Advanced: setup scripts for IT[^]*bootstrap.ps1[^]*bootstrap.sh/);
+  assert.match(html, /Advanced: install scripts for IT[^]*bootstrap.ps1[^]*bootstrap.sh/);
+  assert.match(html, /<h1[^>]*>Install SCG Router<\/h1>/);
+  assert.match(html, /<h3>Sign in with Microsoft<\/h3>/);
+  assert.doesNotMatch(html, /\brepair\b|allowance|US\$50/i);
+  assert.match(template, /font-src 'self'/);
   assert.doesNotMatch(html.split('<div id="packages">')[1].split('</div>')[0], /bootstrap/);
   assert.doesNotMatch(html, /id="downloads" hidden/);
   assert.equal((html.match(/class="system"/g) || []).length, 3);

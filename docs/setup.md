@@ -25,7 +25,7 @@ assistant settings and adds a background service and automatic update jobs.
 
 ## Setup for Software Combined staff
 
-Download SCG Router from `https://hub.softwarecombined.com/router` and choose
+Download SCG Router from `https://hub.softwarecombined.com/install` and choose
 your computer. Open the DMG on macOS, EXE on Windows, or AppImage on Ubuntu.
 Ubuntu may require allowing execution in the file's Properties window.
 No separate FUSE installation is needed. These packages have no paid publisher

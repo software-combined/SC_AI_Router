@@ -140,11 +140,32 @@ class SetupTests(unittest.TestCase):
 
     def test_managed_local_failure_does_not_repeat_browser_sign_in(self):
         with mock.patch.object(work_account, 'collect', return_value={'key': KEY}) as issue, \
-             mock.patch.object(key_dialog, 'message'), \
+             mock.patch.object(key_dialog, 'message') as message, \
              mock.patch.object(key_prompt, 'submit', return_value=(503, {'ok': False})):
             self.assertEqual(key_prompt.run_window('http://127.0.0.1:1/t/setup/n',
                 tool_path='/dialog', platform_name='linux', work=True), 1)
         issue.assert_called_once()
+        self.assertNotIn('Your work key is ready', message.call_args.args[1])
+
+    def test_work_key_confirmation_follows_success_and_names_installed_clients(self):
+        for clients, expected in (('codex', 'Restart Codex'),
+                                  ('claude', 'Restart Claude Code'),
+                                  ('both', 'Quit and reopen Codex, and restart Claude Code'),
+                                  ('none', 'Continue installation')):
+            with self.subTest(clients), \
+                 mock.patch.object(work_account, 'collect', return_value={'key': KEY}), \
+                 mock.patch.object(key_dialog, 'message') as message, \
+                 mock.patch.object(key_prompt, 'submit', return_value=(200, {'ok': True})):
+                self.assertEqual(key_prompt.run_window('http://127.0.0.1:1/t/setup/n',
+                    tool_path='/dialog', platform_name='linux', work=True, clients=clients), 0)
+            text = message.call_args.args[1]
+            self.assertIn('Your work key is ready.', text)
+            self.assertIn(expected, text)
+            if clients == 'claude':
+                self.assertNotIn('Codex', text)
+            if clients == 'none':
+                self.assertNotIn('Restart', text)
+            self.assertNotIn('Credit left', text)
 
     def test_managed_key_uses_the_existing_setup_submission(self):
         fields = {'key': KEY, 'mode': 'none', 'profile': 'general'}
