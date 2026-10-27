@@ -1,5 +1,23 @@
 # Compatibility
 
+## Codex encrypted output include, 27 October 2026
+
+Linux Codex CLI `0.164.0-alpha.11.1`, through the running desktop app, sent
+`include: ["reasoning.encrypted_content", "output.encrypted_content"]` to
+OpenRouter on a fresh `deepseek/deepseek-v4.1-flash-1017` session at Low effort.
+OpenRouter returned HTTP 400 `invalid_prompt`. Its validation detail named
+`include[1]` and an enum that excludes `output.encrypted_content`.
+
+The installed router `1.3.21.214` reported `PROVIDER_REJECTED` with advice to
+start a new chat. Standalone client probes passed because they did not request
+that include option. Removing the unsupported option in the canonical external
+projection made a fresh desktop-created session return its synthetic marker.
+A second session ran a shell command and returned its output, completing two
+model requests. The subscription regression preserves the original request
+bytes, and another external provider's include contract remains unchanged.
+Live acceptance used the candidate projection with the installed runtime;
+signed release acceptance is separate.
+
 ## Windows shutdown race, Router 1.3.21 candidate
 
 Owner-reported non-elevated Windows 11 checks on Router `1.3.20.212` failed

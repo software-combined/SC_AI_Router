@@ -12,7 +12,7 @@ encoding and the turn-size fit.
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import (agent_handoffs, claude_compat, context_recovery, external_history, history_items,
+from . import (agent_handoffs, claude_compat, context_recovery, external_history, history_items, provider_defs,
                subscription_history, tool_runs)
 from .capabilities import check_row_effort
 from .errors import PreparationError
@@ -122,8 +122,14 @@ def check_effort(payload, p):
 
 def drop_native_fields(payload, p):
     # ChatGPT access-program enrolment is not an external-provider option.
-    return {key: value for key, value in payload.items()
-            if key not in ('service_tier', 'access_programs')}
+    payload = {key: value for key, value in payload.items()
+               if key not in ('service_tier', 'access_programs')}
+    # Codex requests encrypted output metadata that OpenRouter's include enum rejects.
+    if (getattr(p.row, 'provider', None) == provider_defs.OPENROUTER.id
+            and isinstance(payload.get('include'), list)):
+        payload['include'] = [value for value in payload['include']
+                              if value != 'output.encrypted_content']
+    return payload
 
 
 def upstream_model(payload, p):
