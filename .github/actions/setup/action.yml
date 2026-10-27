@@ -10,6 +10,16 @@ inputs:
       surface check on the 3.9 the installer supports; everything else
       stays on the router's 3.14.
     default: "3.14"
+  cache:
+    description: >
+      Dependency cache for setup-python, for example pip. Leave empty when the
+      job installs nothing.
+    default: ""
+  cache-dependency-path:
+    description: >
+      Files that resolve the cached downloads. Required when cache is set, so a
+      dependency change misses the cache instead of serving stale wheels.
+    default: ""
 
 runs:
   using: composite
@@ -17,3 +27,5 @@ runs:
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: ${{ inputs.python-version }}
+        cache: ${{ inputs.cache }}
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}

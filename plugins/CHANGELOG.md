@@ -1,5 +1,14 @@
 # Changelog
 
+## scg-optimise-ci 0.1.7 (2026-10-27)
+
+- Cache downloads and toolchains rather than test outcomes, leaving result
+  reuse to the existing equivalence rule. Prefer the platform's own cache
+  switch, key it on the files that resolve the downloads, and verify one cold
+  and one warm run of the same revision.
+  A cache that changes resolved versions, hides a failed install or lets a
+  required check skip is a defect.
+
 ## scg-subagents 0.6.4 (2026-10-27)
 
 - Distinguish Codex native tools from the exec-only `ALL_TOOLS` catalogue.
