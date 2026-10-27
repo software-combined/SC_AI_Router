@@ -14,6 +14,8 @@
   update log. A deferred menu install reports busy instead of reporting completion.
 - Keep model verification usable without Git. Preserve source and capability
   fingerprints when the optional repository revision is unavailable.
+- Require Windows core and native process, dialog and key-permission checks
+  from a standard user account during main release acceptance.
 
 ## 1.3.21
 

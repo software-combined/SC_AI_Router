@@ -115,6 +115,8 @@ INSTALLER_PATHS = (
     'tools/check_installer_python39.py',
     'tools/ci_scope.py',
     'tools/verify_runtime_pins.py',
+    'tools/run_windows_standard.ps1',
+    'tools/windows_standard.py',
 ) + surface_paths()
 
 INSTALLER_TESTS = (
