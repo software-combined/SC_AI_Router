@@ -99,7 +99,8 @@ _TASK_TAIL = (
 _ROUTER_XML = (_TASK_HEAD + _LOGON_TRIGGER + _repeat_trigger('PT1M') + _TASK_MID
                + '<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>'
                + _TASK_TAIL)
-_UPDATE_XML = (_TASK_HEAD + _repeat_trigger('PT4H') + _TASK_MID
+_UPDATE_XML = (_TASK_HEAD + _LOGON_TRIGGER + _repeat_trigger('PT4H') + _TASK_MID
+               + '<StartWhenAvailable>true</StartWhenAvailable>'
                + '<ExecutionTimeLimit>PT30M</ExecutionTimeLimit>'
                + _TASK_TAIL)
 _EXPRESS_XML = _UPDATE_XML.replace('PT4H', 'PT1M')
@@ -120,6 +121,8 @@ def _pythonw(python):
 
 
 def _render(template, python, home, script, log, user=''):
+    if not user:
+        raise SystemExit('cannot scope the logon trigger: installing user unknown')
     # ntpath, not pathlib: the XML must render the same Windows path on a
     # POSIX host (tests, release tooling) as on the machine that registers it.
     args = _arguments(home, script, log)
@@ -134,17 +137,15 @@ def _arguments(home, script, log):
 
 def render_router_xml(python, home, user):
     """Router task XML; `user` is the installing account's SID."""
-    if not user:
-        raise SystemExit('cannot scope the logon trigger: installing user unknown')
     return _render(_ROUTER_XML, python, home, 'router_launch.py', ROUTER_LOG, user)
 
 
-def render_update_xml(python, home):
-    return _render(_UPDATE_XML, python, home, 'update_launch.py', UPDATE_LOG)
+def render_update_xml(python, home, user):
+    return _render(_UPDATE_XML, python, home, 'update_launch.py', UPDATE_LOG, user)
 
 
-def render_express_xml(python, home):
-    return _render(_EXPRESS_XML, python, home, 'express_launch.py', UPDATE_LOG)
+def render_express_xml(python, home, user):
+    return _render(_EXPRESS_XML, python, home, 'express_launch.py', UPDATE_LOG, user)
 
 
 def _tail(text):
@@ -262,9 +263,9 @@ class Backend:
         legacy = self._legacy(home)
         self._svc.install_task_launcher(home, release_dir)
         definitions = {ROUTER_TASK: render_router_xml(python, home, self._identity()),
-                       UPDATE_TASK: render_update_xml(python, home)}
+                       UPDATE_TASK: render_update_xml(python, home, self._identity())}
         if (Path(home) / 'express_launch.py').is_file():
-            definitions[EXPRESS_TASK] = render_express_xml(python, home)
+            definitions[EXPRESS_TASK] = render_express_xml(python, home, self._identity())
         # New definitions stay disabled until every registration has succeeded.
         for name, xml in definitions.items():
             old = legacy.get(name)
@@ -361,7 +362,7 @@ class Backend:
 
     def rebind_runtime(self, python, home):
         return _tasks.rebind(self._task_state, home, _pythonw(str(python)),
-                             (ROUTER_TASK, UPDATE_TASK, EXPRESS_TASK))
+                             (ROUTER_TASK, UPDATE_TASK, EXPRESS_TASK), self._identity())
 
     def runtime_matches(self, python, home):
         return _tasks.runtime_matches(self._task_state, home, _pythonw(str(python)),

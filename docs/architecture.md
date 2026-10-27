@@ -50,7 +50,8 @@ Linux reloads and reads back the effective stable updater command before
 pruning. Loaded jobs and a running legacy updater retain their release files.
 `runtime_rebind` uses verified retained resource metadata after `setup-current`
 advances. The Windows task adapter snapshots all three owned definitions,
-changes only the executable and verifies its exact path, enabled and pending states.
+updates executable bindings and update catch-up/sign-in policy, then verifies
+the expected path and policy while preserving enabled and pending states.
 Its JSON subprocess contract uses explicit UTF-8 output and decoding for Unicode paths and saved XML.
 A failed readback restores attempted definitions. Both runtimes remain retained.
 The outer maintenance cadence checks owned task paths without the installation lock.
@@ -816,6 +817,9 @@ failed build prints one line and never fails an install.
 
 `desktop_control.py` owns the redacted desktop status and fixed action IDs.
 It calls the existing client switchers, setup, support and update owners.
+Menu and graphical setup use `install_delivery.run_logged` for content-free
+launch and child-exit records in `update.log`. `native_payload.succeeded` rejects
+deferred zero exits consistently; child exit is separate from verified installation.
 `desktop_service.py` uses the platform service lifecycle for bounded restart.
 `desktop_model.py` gives native shells and the fallback window identical actions.
 `desktop_menu.py` runs one shell per installation and graphical session.
@@ -849,6 +853,9 @@ The platform backends own a separate minute Express job alongside the regular
 four-hour job. Both use `update_launch.py` (also installed as
 `express_launch.py`) and `updater.py`; an update-parent lock serializes
 them while the child installer retains its own installation lock.
+Windows update tasks also run for their installing user's sign-in and catch
+missed timed runs. Runtime reconciliation migrates these settings transactionally
+with task actions, while preserving enabled state, pending state and other settings.
 
 ## Transitional owners (do not entrench)
 

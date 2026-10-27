@@ -2,6 +2,7 @@
 import json
 import ntpath
 import subprocess
+import xml.etree.ElementTree as ET
 
 _SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
@@ -112,6 +113,18 @@ try {
           enabled = [bool]$task.Enabled
           pending = $task.Definition.Data -eq $pendingMarker
           executable = [string]$task.Definition.Actions.Item(1).Path}
+        $reply.catchup = [bool]$task.Definition.Settings.StartWhenAvailable
+        $reply.signin = $false
+        foreach ($trigger in $task.Definition.Triggers) {
+            if ($trigger.Type -eq 9 -and $trigger.Enabled -and $trigger.UserId) {
+                $user = [string]$trigger.UserId
+                if ($user -notmatch '^S-1-') {
+                    $user = ([Security.Principal.NTAccount]::new($user)).Translate(
+                        [Security.Principal.SecurityIdentifier]).Value
+                }
+                if ($user -eq $r.sid) { $reply.signin = $true }
+            }
+        }
         if ($r.operation -eq 'snapshot') { $reply.xml = $task.Definition.XmlText }
         $reply | ConvertTo-Json -Depth 4 -Compress
     }
@@ -166,12 +179,38 @@ def runtime_matches(call, home, executable, names):
     """Inspect owned actions without taking snapshots or registering tasks."""
     for name in names:
         current = call(name, home)
-        if current is None or current['executable'] != executable:
+        if (current is None or current['executable'] != executable
+                or name != names[0] and not update_policy_ready(current)):
             return False
     return True
 
 
-def rebind(call, home, executable, names):
+def update_policy_ready(row):
+    return row.get('catchup') is True and row.get('signin') is True
+
+
+def update_policy_xml(xml, sid, executable):
+    """Add owned update policy while retaining existing settings, arguments and task data."""
+    root = ET.fromstring(xml)
+    prefix = '{http://schemas.microsoft.com/windows/2004/02/mit/task}'
+    triggers, settings = root.find(prefix + 'Triggers'), root.find(prefix + 'Settings')
+    if triggers is None or settings is None or not sid:
+        raise ValueError('invalid update task definition')
+    logon = next((item for item in triggers.findall(prefix + 'LogonTrigger')
+                  if item.findtext(prefix + 'UserId') == sid), None)
+    if logon is None:
+        logon = ET.SubElement(triggers, prefix + 'LogonTrigger')
+        ET.SubElement(logon, prefix + 'UserId').text = sid
+    for parent, name in ((logon, 'Enabled'), (settings, 'StartWhenAvailable')):
+        child = parent.find(prefix + name)
+        if child is None:
+            child = ET.SubElement(parent, prefix + name)
+        child.text = 'true'
+    root.find(prefix + 'Actions/' + prefix + 'Exec/' + prefix + 'Command').text = executable
+    return ET.tostring(root, encoding='unicode')
+
+
+def rebind(call, home, executable, names, sid):
     """Snapshot all definitions before mutation; restore every attempted change on failure."""
     previous = {name: call(name, home, 'snapshot') for name in names}
     if any(row is None for row in previous.values()):
@@ -179,11 +218,17 @@ def rebind(call, home, executable, names):
     changed = []
     try:
         for name, before in previous.items():
-            if before['executable'] == executable:
+            policy = name != names[0] and not update_policy_ready(before)
+            if before['executable'] == executable and not policy:
                 continue
             changed.append(name)
-            call(name, home, 'rebind', executable=executable)
-            if not _matches(call(name, home), before, executable):
+            if policy:
+                call(name, home, 'restore', xml=update_policy_xml(before['xml'], sid, executable))
+            else:
+                call(name, home, 'rebind', executable=executable)
+            current = call(name, home)
+            if (not _matches(current, before, executable)
+                    or name != names[0] and not update_policy_ready(current)):
                 raise SystemExit('Windows task runtime readback failed')
     except BaseException:
         failed = []

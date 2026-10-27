@@ -18,9 +18,14 @@ Windows task logs record launch, completion and safe failure facts, including mi
 If no Python launch event exists, check Task Scheduler History and the task's last-result number.
 The launcher cannot record attempts Windows refuses before Python starts.
 `logs/update.log` records `installed <version>; health verified` after each verified installation.
+Menu and graphical setup also record when an install starts, exits or fails.
+These events contain safe status fields; they do not copy installer output or settings.
 Attachment failures have separate maintenance events. Unchanged checks and rollbacks do not claim an installation.
 
 Windows updates verify the executable paths of all three owned scheduled tasks.
+Both Windows update tasks run at the installing user's sign-in and catch missed timed checks.
+Disabled schedules stay disabled. Windows normally delays catch-up runs by ten minutes;
+see [Microsoft's scheduling behavior](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-startwhenavailable).
 Failed verification restores prior definitions and retries on the next maintenance pass.
 Both runtime folders remain available. Do not remove old setup folders during recovery.
 

@@ -42,7 +42,8 @@ USER = 'S-1-5-21-1-2-3-1001'
 
 def _query(status):
     return dict(kind='present', state=status, enabled=status != 1, pending=False,
-                instances=['instance'] if status == 4 else [], executable=backend._pythonw(PY))
+                instances=['instance'] if status == 4 else [], executable=backend._pythonw(PY),
+                catchup=True, signin=True)
 
 
 QUERY_READY = _query(3)
@@ -151,12 +152,12 @@ class RouterXmlTests(unittest.TestCase):
     def test_every_repeating_trigger_carries_a_start_boundary(self):
         # Task Scheduler refuses a repetition without one at registration.
         for xml in (backend.render_router_xml(PY, 'C:\\home', USER),
-                    backend.render_update_xml(PY, 'C:\\home')):
+                    backend.render_update_xml(PY, 'C:\\home', USER)):
             self.assertEqual(xml.count('<Repetition>'), xml.count('<StartBoundary>'))
 
     def test_both_tasks_run_console_free_through_the_task_launcher(self):
         router = backend.render_router_xml(PY, 'C:\\home', USER)
-        update = backend.render_update_xml(PY, 'C:\\home')
+        update = backend.render_update_xml(PY, 'C:\\home', USER)
         for xml, log, script in ((router, 'launchd.log', 'router_launch.py'),
                                  (update, 'update.log', 'update_launch.py')):
             self.assertIn('<Command>C:\\Python314\\pythonw.exe</Command>', xml)

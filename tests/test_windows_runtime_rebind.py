@@ -21,8 +21,8 @@ class Scheduler:
         self.rows, self.calls, self.bad_readback = {}, [], None
         for index, name in enumerate(NAMES):
             xml = (backend.render_router_xml(OLD, home, USER) if index == 0 else
-                   backend.render_update_xml(OLD, home) if index == 1 else
-                   backend.render_express_xml(OLD, home))
+                   backend.render_update_xml(OLD, home, USER) if index == 1 else
+                   backend.render_express_xml(OLD, home, USER))
             doc = ET.fromstring(xml)
             ET.SubElement(doc, '{%s}Data' % NS['t']).text = 'retained annotation'
             xml = ET.tostring(doc, encoding='unicode')
@@ -47,6 +47,9 @@ class Scheduler:
                 row['xml'] = ET.tostring(doc, encoding='unicode')
             row['executable'] = ET.fromstring(row['xml']).find('t:Actions/t:Exec/t:Command', NS).text
         answer = dict(row, kind='present')
+        definition = ET.fromstring(row['xml'])
+        answer['catchup'] = definition.findtext('t:Settings/t:StartWhenAvailable', namespaces=NS) == 'true'
+        answer['signin'] = definition.findtext('t:Triggers/t:LogonTrigger/t:UserId', namespaces=NS) == USER
         if operation == 'query' and self.bad_readback == name and row['executable'] == NEW:
             answer['executable'], self.bad_readback = OLD, None
         return SimpleNamespace(returncode=0, stdout=json.dumps(answer), stderr='')
