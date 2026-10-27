@@ -50,6 +50,13 @@ SOFTWARE.
 MIT, with the original copyright and full permission notice preserved in
 [its licence](plugins/development/scg-ponytail/skills/ponytail/LICENSE).
 
+## Brand fonts
+
+The sign-in confirmation bundles the Hub's Inter 4.001 and Space Grotesk 2.000
+font subsets. Both retain the SIL Open Font License 1.1. The copyright notices
+and full licences ship with [Inter](packaging/assets/inter-OFL.txt) and
+[Space Grotesk](packaging/assets/space-grotesk-OFL.txt).
+
 ## Client wire formats
 
 The router speaks the wire formats of Codex, Claude Code and OpenRouter.

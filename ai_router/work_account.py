@@ -28,9 +28,9 @@ def configuration():
     """Public deployment settings ship inside the verified Router release."""
     try:
         config = json.loads(Path(__file__).with_name('work-account.json').read_text())
-        for name in ('tenant_id', 'client_id'):
-            if str(uuid.UUID(config[name])) != config[name]:
-                raise ValueError()
+        if (config['tenant_id'] != 'organizations'
+                or str(uuid.UUID(config['client_id'])) != config['client_id']):
+            raise ValueError()
         scope_id, scope = config['scope'].removeprefix('api://').split('/')
         uuid.UUID(scope_id)
         if (not config['scope'].startswith('api://') or scope != 'Router.Provision'
@@ -46,7 +46,8 @@ def provision(config=None, authorize=None, post=None):
     config = configuration() if config is None else config
     oauth = _load('download_oauth')
     try:
-        session = (authorize or oauth.authorize)(config)
+        authorization = {**config, 'scope': config['scope'] + ' openid profile'}
+        session = (authorize or oauth.authorize)(authorization)
         body = (post or oauth.post)(config['provision_url'], b'{"confirm":true}',
             {'Authorization': 'Bearer ' + session['access_token'],
              'Content-Type': 'application/json'})

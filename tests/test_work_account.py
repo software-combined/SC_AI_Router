@@ -24,11 +24,22 @@ class ProvisionTests(unittest.TestCase):
         config = work_account.configuration()
         self.assertTrue(config['scope'].endswith('/Router.Provision'))
         self.assertEqual(work_account.provision(authorize=authorize, post=post), KEY)
+        self.assertEqual(authorize.call_args.args[0],
+                         {**config, 'scope': config['scope'] + ' openid profile'})
+        self.assertEqual(config['tenant_id'], 'organizations')
         url, body, headers = post.call_args.args
         self.assertEqual(url, config['provision_url'])
         self.assertEqual(json.loads(body), {'confirm': True})
         self.assertEqual(headers['Authorization'], 'Bearer synthetic-access')
         self.assertNotIn('synthetic-refresh', str(post.call_args))
+
+    def test_sign_in_rejects_personal_account_and_arbitrary_authorities(self):
+        config = work_account.configuration()
+        for authority in ('common', 'consumers', 'example.invalid/collect'):
+            with self.subTest(authority), mock.patch('pathlib.Path.read_text',
+                    return_value=json.dumps({**config, 'tenant_id': authority})):
+                with self.assertRaises(work_account.SignInFailed):
+                    work_account.configuration()
 
     def test_wrong_budget_and_invalid_credential_responses_are_refused(self):
         for field, value in (('monthlyLimitUsd', 100), ('limitReset', 'daily'),

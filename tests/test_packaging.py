@@ -17,6 +17,9 @@ EXPLICIT_FILES = (
     'packaging/service.py', 'packaging/feed.py', 'packaging/runtime.lock',
     'packaging/platforms/windows_tasks.py',
     'packaging/assets/router-icon.png',
+    'packaging/assets/signin.html',
+    'packaging/assets/inter-400.woff2', 'packaging/assets/inter-OFL.txt',
+    'packaging/assets/space-grotesk-400.woff2', 'packaging/assets/space-grotesk-OFL.txt',
     'packaging/install.sh', 'packaging/install.ps1',
 )
 
