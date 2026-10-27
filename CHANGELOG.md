@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Give OpenRouter Codex mode hidden Luna helper aliases and route chat titles
+  and metadata to Luna. Preserve the chosen chat model and model access policy.
+- Run Windows update checks at sign-in and catch missed scheduled checks.
+  Migrate existing owned update tasks while preserving disabled schedules and pending state.
+- Record menu and setup installation launches, child exits and failures in the
+  update log. A deferred menu install reports busy instead of reporting completion.
+
 ## 1.3.21
 
 - Keep verified Windows Codex process handles through shutdown. Exiting app

@@ -49,7 +49,7 @@ are never copied between machines.
 `ai_router/clients/__init__.py`, `ai_router/clients/codex.py`,
 `ai_router/clients/registry.py`, `ai_router/clients/roster.py`,
 `ai_router/transport.py`, `ai_router/subscription_fallback.py`,
-`ai_router/codex_route.py`, `ai_router/routed_models.py`,
+`ai_router/codex_route.py`, `ai_router/codex_helpers.py`, `ai_router/routed_models.py`,
 `ai_router/usage_episodes.py`,
 `ai_router/subscription_history.py`, `ai_router/context_recovery.py`,
 `ai_router/provider_defs.py`, `ai_router/upstream.py`, `ai_router/ingress.py`,

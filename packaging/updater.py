@@ -501,6 +501,7 @@ def do_update(args, _fetch=None, _read_feed=None, _sleep=None, _announce=None):
     with _svc.install_lock(home, 'update.lock') as held:
         if not held:
             _reconcile.log(home, task, 'completed', outcome='deferred')
+            print('deferred: another update check is in progress')
             return 0
         try:
             result = _apply_update(args, home, sleep, _fetch, _read_feed, _announce)

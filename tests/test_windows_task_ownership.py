@@ -235,7 +235,7 @@ $null = $s.GetFolder('\').RegisterTaskDefinition($r.name, $d, 4, $r.sid, $null, 
             try:
                 renderers = (backend.render_router_xml, backend.render_update_xml, backend.render_express_xml)
                 for index, name in enumerate(names):
-                    args = (sys.executable, home, sid) if index == 0 else (sys.executable, home)
+                    args = (sys.executable, home, sid)
                     task(name, 'register', legacy=True, xml=renderers[index](*args))
                     if index != 2:
                         task(name, 'run', legacy=True)

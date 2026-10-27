@@ -23,6 +23,14 @@ def load(name):
     return module
 
 
+def succeeded(result):
+    """A deferred installer exits zero without completing the requested operation."""
+    output = getattr(result, 'stdout', '') or ''
+    if isinstance(output, bytes):
+        output = output.decode(errors='replace')
+    return result.returncode == 0 and not any(line.startswith('deferred:') for line in output.splitlines())
+
+
 def target():
     system = {'Darwin': 'darwin', 'Windows': 'windows', 'Linux': 'linux'}.get(
         platform.system())

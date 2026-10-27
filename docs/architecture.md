@@ -50,7 +50,8 @@ Linux reloads and reads back the effective stable updater command before
 pruning. Loaded jobs and a running legacy updater retain their release files.
 `runtime_rebind` uses verified retained resource metadata after `setup-current`
 advances. The Windows task adapter snapshots all three owned definitions,
-changes only the executable and verifies its exact path, enabled and pending states.
+updates executable bindings and update catch-up/sign-in policy, then verifies
+the expected path and policy while preserving enabled and pending states.
 Its JSON subprocess contract uses explicit UTF-8 output and decoding for Unicode paths and saved XML.
 A failed readback restores attempted definitions. Both runtimes remain retained.
 The outer maintenance cadence checks owned task paths without the installation lock.
@@ -419,12 +420,18 @@ anything is prepared or sent. Native service paths get the no-subscription
 answers; every other request gets one final `invalid_prompt` refusal, which
 `ingress.error` sends as a `response.failed` frame when the turn streams. The
 refusal names the twin row only when the portco allowlist, the key's
-availability snapshot and the Codex picker all admit it. Helper turns are
-refused too: the helper fallback moves a turn to its twin only after the
-subscription refuses it, and this route sends nothing to refuse.
+availability snapshot and the Codex picker all admit it. `codex_helpers.py`
+owns the bounded helper-source parser and bare Luna aliases. Before Responses
+adapter selection, known metadata helpers on the switched route or an install
+without a subscription resolve to the external Luna row. Normal model policy,
+availability and credential checks still apply; a denied Luna never falls back
+to Fable or the subscription. The normal subscription helper fallback stays opt-in.
 `routed_models.py` owns `routed-models.json`, the picker Switch Codex points
 Codex at: the rows no-subscription mode shows, under the mixed list's key and
-portco filters. `availability.sync_catalogue` rewrites it after the mixed list,
+portco filters, plus hidden bare Luna aliases only when Luna is admitted.
+Those aliases prevent the client from selecting its first chat model when its
+requested helper ID is missing. Readiness checks bind them to the real Luna row.
+`availability.sync_catalogue` rewrites it after the mixed list,
 never empty and never without a live snapshot, since Codex rejects an empty
 list and a stale one offers models the key cannot use. `codex_route.ready`
 answers whether Switch Codex may use it, reading "current" through
@@ -816,6 +823,9 @@ failed build prints one line and never fails an install.
 
 `desktop_control.py` owns the redacted desktop status and fixed action IDs.
 It calls the existing client switchers, setup, support and update owners.
+Menu and graphical setup use `install_delivery.run_logged` for content-free
+launch and child-exit records in `update.log`. `native_payload.succeeded` rejects
+deferred zero exits consistently; child exit is separate from verified installation.
 `desktop_service.py` uses the platform service lifecycle for bounded restart.
 `desktop_model.py` gives native shells and the fallback window identical actions.
 `desktop_menu.py` runs one shell per installation and graphical session.
@@ -849,6 +859,9 @@ The platform backends own a separate minute Express job alongside the regular
 four-hour job. Both use `update_launch.py` (also installed as
 `express_launch.py`) and `updater.py`; an update-parent lock serializes
 them while the child installer retains its own installation lock.
+Windows update tasks also run for their installing user's sign-in and catch
+missed timed runs. Runtime reconciliation migrates these settings transactionally
+with task actions, while preserving enabled state, pending state and other settings.
 
 ## Transitional owners (do not entrench)
 

@@ -120,11 +120,11 @@ class SwitchedRouteTests(unittest.TestCase):
         self._snapshot({'deepseek/deepseek-v4.1-flash-1017'})
         self.assertEqual(self._refusal(turn), generic)
 
-    def test_helper_turns_are_refused_even_with_the_twin_fallback_on(self):
-        # The helper fallback takes over only after an upstream refusal, and
-        # this route sends nothing: neither the subscription nor the twin.
+    def test_bare_luna_user_turns_are_refused_even_with_the_twin_fallback_on(self):
+        # The hidden client alias does not grant ordinary subscription turns
+        # an external route. Only a recognised metadata helper qualifies.
         message = self._refusal({'model': 'gpt-5.6-luna', 'input': []},
-                                {**ROUTED, **HELPER}, openai_helper_fallback=True)
+                                ROUTED, openai_helper_fallback=True)
         self.assertIn('Pick "OpenAI: GPT-6 Luna · OpenRouter"', message)
 
 

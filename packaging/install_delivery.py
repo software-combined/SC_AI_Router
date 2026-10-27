@@ -4,6 +4,7 @@ import json
 import shutil
 import subprocess
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -16,6 +17,37 @@ def _load(name):
 
 
 close_assistants = _load('repair_ui').close_assistants
+
+
+def run_logged(home, origin, task, launch):
+    """Record menu/setup launches without copying command output or exception text."""
+    def event(name, status=None, error=None):
+        try:
+            path = Path(home) / 'logs/update.log'
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _load('service').rotate_log(path)
+            row = dict(at=datetime.now(timezone.utc).isoformat(), origin=origin, task=task, event=name)
+            if status is not None:
+                row['status'] = status
+            if error:
+                row['error'] = error
+            with path.open('a', encoding='utf-8') as output:
+                output.write(json.dumps(row) + '\n')
+        except OSError:
+            _load('update_reconcile').log(home, 'install', 'evidence_failed', status=1)
+    event('started')
+    try:
+        result = launch()
+    except Exception as error:
+        event('failed', 1, 'timeout' if isinstance(error, subprocess.TimeoutExpired) else 'launch_failed')
+        raise
+    if _load('native_payload').succeeded(result):
+        event('exited', result.returncode)
+    elif result.returncode == 0:
+        event('deferred', result.returncode, 'deferred')
+    else:
+        event('failed', result.returncode, 'target_failed')
+    return result
 
 
 def normalize_pointer(home):
