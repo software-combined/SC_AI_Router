@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The OpenRouter picker now offers GPT-6.1 Terra. It passed the isolated Codex
+  and Claude Code route checks, so both clients can switch to it and keep
+  their thread history.
+
 - Keep new Codex chats working on OpenRouter when Codex requests encrypted
   output metadata. Omit its unsupported include option on that route.
 - Give OpenRouter Codex mode hidden Luna helper aliases and route chat titles
