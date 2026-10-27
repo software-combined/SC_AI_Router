@@ -6,6 +6,9 @@
   Reuse one personal OpenRouter key and US$50 monthly allowance across computers.
   Keep work credentials outside the public repository and release packages.
 
+- Show a centred confirmation with the SCG logo after Microsoft sign-in.
+  Tell people they can close the tab.
+
 ## 1.3.27
 
 - Keep Windows installation recovery records byte-exact across line endings.

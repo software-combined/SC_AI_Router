@@ -924,9 +924,10 @@ Prompts, tool data, credentials and raw error bodies are excluded.
 
 Work-account provisioning uses Microsoft sign-in and the Hub's dedicated
 `Router.Provision` permission. The backend selects the approved company workspace
-from verified directory membership and issues one personal key with a US$50 monthly
-limit. Reinstalls and additional computers receive that same key and allowance.
-Unknown or ambiguous company membership is refused. Existing manual keys require
+from the verified home tenant and issues one personal key with a US$50 monthly
+limit. A tenant is a company's Microsoft account directory. Reinstalls and additional
+computers receive that same key and allowance. Unknown or ambiguous company
+tenants are refused. Existing manual keys require
 IT migration before a new allowance can be issued.
 
 The public release contains only public sign-in settings. Management credentials
@@ -934,6 +935,10 @@ and encrypted personal keys stay in the Hub backend. OAuth tokens remain in memo
 the local setup route writes only the personal inference key through its existing
 protected writer. Downloads and updates remain public.
 
+Sign-in uses the dedicated Router API and does not require directory read access.
+Each company can connect a separate read-only directory app for automatic key
+revocation after an account is disabled or deleted. That connection requires one
+company administrator approval. Until connected, IT must revoke keys manually.
 Offboarding must disable the OpenRouter key as well as Entra access. Replacement
 keys need an explicit remaining-budget decision; automatic rotation is not enabled.
 The legacy `tools/provision_key.py` does not implement this managed contract and

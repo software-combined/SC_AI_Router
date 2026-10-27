@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import http.server
 import json
+from pathlib import Path
 import secrets
 import time
 import urllib.error
@@ -125,18 +126,32 @@ class _Callback(http.server.BaseHTTPRequestHandler):
             self.server.result = callback_code(target.query, self.server.state)
         except SignInRequired:
             self.server.result = False
-            self._reply(400, 'Sign-in did not finish. Return to SCG Router and try again.')
+            self._reply(400, 'Sign-in did not finish. You can close this tab and try again.')
             return
-        self._reply(200, 'Sign-in received. You can return to SCG Router.')
+        self._reply(200, "You're signed in. You can close this tab.")
 
     def _reply(self, status, message):
         body = message.encode('utf-8')
+        content_type = 'text/plain; charset=utf-8'
+        policy = "default-src 'none'; frame-ancestors 'none'"
+        if status == 200:
+            assets = Path(__file__).with_name('assets')
+            nonce = secrets.token_urlsafe(24)
+            page = (assets / 'signin.html').read_text(encoding='utf-8').replace('__NONCE__', nonce)
+            for marker, name in (('__LOGO__', 'router-icon.png'),
+                                 ('__INTER__', 'inter-400.woff2'),
+                                 ('__DISPLAY__', 'space-grotesk-400.woff2')):
+                page = page.replace(marker, base64.b64encode((assets / name).read_bytes()).decode('ascii'))
+            body = page.encode('utf-8')
+            content_type = 'text/html; charset=utf-8'
+            policy += ("; img-src data:; font-src data:; style-src 'nonce-" + nonce
+                       + "'; script-src 'nonce-" + nonce + "'; base-uri 'none'; form-action 'none'")
         self.send_response(status)
-        self.send_header('Content-Type', 'text/plain; charset=utf-8')
+        self.send_header('Content-Type', content_type)
         self.send_header('Content-Length', str(len(body)))
         self.send_header('Cache-Control', 'no-store')
         self.send_header('Referrer-Policy', 'no-referrer')
-        self.send_header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'")
+        self.send_header('Content-Security-Policy', policy)
         self.end_headers()
         self.wfile.write(body)
 
