@@ -15,6 +15,19 @@ from tests.test_native_setup import module, resources
 
 
 class DesktopControlsTests(unittest.TestCase):
+    def test_windows_menu_lock_ignores_launcher_environment(self):
+        menu = module('desktop_menu')
+        session = {'id': 1}
+        native = SimpleNamespace(Native=lambda: SimpleNamespace(session=lambda: session['id']))
+        with mock.patch.object(menu.sys, 'platform', 'win32'), \
+                mock.patch.object(menu, 'load', return_value=native), \
+                mock.patch.dict(os.environ, {'SESSIONNAME': 'Console'}):
+            first = menu.session_lock()
+            del os.environ['SESSIONNAME']
+            self.assertEqual(menu.session_lock(), first)
+            session['id'] = 2
+            self.assertNotEqual(menu.session_lock(), first)
+
     def test_linux_sessions_remain_distinct_when_they_share_a_user_bus(self):
         menu = module('desktop_menu')
         with mock.patch.object(menu.sys, 'platform', 'linux'), \

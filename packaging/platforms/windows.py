@@ -85,7 +85,8 @@ _TASK_MID = (
     '  <Settings>'
     '<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>'
     '<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>'
-    '<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>')
+    '<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>'
+    '<StartWhenAvailable>true</StartWhenAvailable>')
 
 _TASK_TAIL = (
     '</Settings>\n'
@@ -100,7 +101,6 @@ _ROUTER_XML = (_TASK_HEAD + _LOGON_TRIGGER + _repeat_trigger('PT1M') + _TASK_MID
                + '<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>'
                + _TASK_TAIL)
 _UPDATE_XML = (_TASK_HEAD + _LOGON_TRIGGER + _repeat_trigger('PT4H') + _TASK_MID
-               + '<StartWhenAvailable>true</StartWhenAvailable>'
                + '<ExecutionTimeLimit>PT30M</ExecutionTimeLimit>'
                + _TASK_TAIL)
 _EXPRESS_XML = _UPDATE_XML.replace('PT4H', 'PT1M')

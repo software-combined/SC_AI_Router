@@ -5,7 +5,11 @@
 - Give OpenRouter Codex mode hidden Luna helper aliases and route chat titles
   and metadata to Luna. Preserve the chosen chat model and model access policy.
 - Run Windows update checks at sign-in and catch missed scheduled checks.
-  Migrate existing owned update tasks while preserving disabled schedules and pending state.
+  Migrate all three owned tasks while preserving disabled schedules and pending state.
+- Keep one Windows tray menu per native session, even when Task Scheduler supplies
+  a different environment. Start the menu before offering a repair warning.
+- Report safe Windows task error codes and inspect only the owned task's instances.
+  Ignore confirmed completed instances; refuse unknown or unreadable task state.
 - Record menu and setup installation launches, child exits and failures in the
   update log. A deferred menu install reports busy instead of reporting completion.
 

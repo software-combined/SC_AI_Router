@@ -1,6 +1,7 @@
 """Reopening controls reveals the Mac menu without repeating an action window."""
 import io
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,6 +10,8 @@ from unittest import mock
 
 from tests.test_native_setup import module
 
+HELPER = 'scg-router-menu.exe' if os.name == 'nt' else 'scg-router-menu'
+
 
 class DesktopReopenTests(unittest.TestCase):
     def test_reopening_mac_requests_the_existing_menu_instead_of_a_second_window(self):
@@ -16,7 +19,7 @@ class DesktopReopenTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary, mock.patch.object(menu.sys, 'platform', 'darwin'):
             home = Path(temporary)
             (home / 'control').mkdir()
-            (home / 'control/scg-router-menu').touch()
+            (home / 'control' / HELPER).touch()
             (home / 'installer.json').write_text('{"version":"1.3.7"}')
             request = home / (menu.session_lock() + '.open')
             observed = []
@@ -46,7 +49,7 @@ class DesktopReopenTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary, mock.patch.object(menu.sys, 'platform', 'darwin'):
             home = Path(temporary)
             (home / 'control').mkdir()
-            (home / 'control/scg-router-menu').touch()
+            (home / 'control' / HELPER).touch()
             (home / 'installer.json').write_text('{"version":"1.3.7"}')
             request = home / (menu.session_lock() + '.open')
             request.touch()  # Preserve a request made before a resident controller hands off.
@@ -73,7 +76,7 @@ class DesktopReopenTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary, mock.patch.object(menu.sys, 'platform', 'darwin'):
             home = Path(temporary)
             (home / 'control').mkdir()
-            (home / 'control/scg-router-menu').touch()
+            (home / 'control' / HELPER).touch()
             (home / 'installer.json').write_text('{"version":"1.3.7"}')
             request = home / (menu.session_lock() + '.open')
             request.touch()
@@ -90,7 +93,7 @@ class DesktopReopenTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             (home / 'control').mkdir()
-            (home / 'control/scg-router-menu').touch()
+            (home / 'control' / HELPER).touch()
             (home / 'installer.json').write_text('{"version":"1.3.6.191"}')
             with mock.patch.object(menu.sys, 'platform', 'darwin'), \
                     mock.patch.object(menu, 'fallback') as fallback, \
@@ -105,7 +108,7 @@ class DesktopReopenTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             (home / 'control').mkdir()
-            (home / 'control/scg-router-menu').touch()
+            (home / 'control' / HELPER).touch()
             (home / 'installer.json').write_text('{"version":"1.3.7"}')
             with mock.patch.object(menu.sys, 'platform', 'darwin'), \
                     menu.load('service').install_lock(home, menu.session_lock()), \
@@ -123,7 +126,8 @@ class DesktopReopenTests(unittest.TestCase):
         control.snapshot.return_value = dict(status='Running', clients=[])
         dialog.choose.side_effect = ['router.restart', None]
         owners = dict(desktop_model=model, desktop_control=control, native_dialog=dialog,
-                      native_shortcuts=module('native_shortcuts'), service=module('service'))
+                      native_shortcuts=module('native_shortcuts'), service=module('service'),
+                      windows_native=module('windows_native'))
         with tempfile.TemporaryDirectory() as temporary, \
                 mock.patch.object(menu, 'load', side_effect=owners.__getitem__), \
                 mock.patch.object(menu, '_control', return_value={'outcome': 'done'}) as execute:
@@ -153,10 +157,14 @@ class DesktopReopenTests(unittest.TestCase):
 
     def test_only_one_fallback_window_opens_per_session_on_every_platform(self):
         menu = module('desktop_menu')
+        real_load = menu.load
+        native = SimpleNamespace(Native=lambda: SimpleNamespace(session=lambda: 1))
         for platform in ('darwin', 'win32', 'linux'):
             with self.subTest(platform=platform), tempfile.TemporaryDirectory() as temporary:
                 home = Path(temporary)
                 with mock.patch.object(menu.sys, 'platform', platform), \
+                        mock.patch.object(menu, 'load', side_effect=lambda name:
+                            native if name == 'windows_native' else real_load(name)), \
                         menu.load('service').install_lock(home, menu.session_lock() + '.window'), \
                         mock.patch.object(menu, '_control_window') as window:
                     self.assertEqual(menu.fallback(home, home), {'outcome': 'done'})

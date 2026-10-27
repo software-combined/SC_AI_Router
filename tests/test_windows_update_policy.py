@@ -19,9 +19,7 @@ def policy(xml):
 
 def legacy(home):
     scheduler = Scheduler(home)
-    for name, row in scheduler.rows.items():
-        if name == NAMES[0]:
-            continue
+    for row in scheduler.rows.values():
         root = ET.fromstring(row['xml'])
         triggers, settings = root.find('t:Triggers', NS), root.find('t:Settings', NS)
         for item in list(triggers):
@@ -35,15 +33,16 @@ def legacy(home):
 
 
 class WindowsUpdatePolicyTests(unittest.TestCase):
-    def test_install_registers_both_updaters_with_catchup_and_scoped_signin(self):
+    def test_install_registers_all_tasks_with_catchup_and_scoped_signin(self):
         with tempfile.TemporaryDirectory() as temporary:
             home, state = Path(temporary), {}
             obj = _backend(state)
             (home / 'express_launch.py').touch()
             with mock.patch.object(service, 'wait_version', return_value=True):
                 obj.install(PY, home, {}, ROOT, None)
-            for name in NAMES[1:]:
+            for name in NAMES:
                 self.assertEqual(policy(state['xml_' + name]), ('true', USER))
+                self.assertEqual(state['xml_' + name].count('StartWhenAvailable'), 2)
 
     def test_existing_definitions_gain_policy_and_preserve_disabled_and_pending(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -56,7 +55,7 @@ class WindowsUpdatePolicyTests(unittest.TestCase):
                 self.assertEqual((scheduler.rows[name]['enabled'], scheduler.rows[name]['pending']),
                                  (before[name]['enabled'], before[name]['pending']))
                 self.assertEqual(scheduler.rows[name]['executable'], NEW)
-            for name in NAMES[1:]:
+            for name in NAMES:
                 self.assertEqual(policy(scheduler.rows[name]['xml']), ('true', USER))
             self.assertFalse(obj.rebind_runtime(NEW, home))
 

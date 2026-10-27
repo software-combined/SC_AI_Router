@@ -1,6 +1,7 @@
 """Task Scheduler's structured API and mutation-time ownership gate. Python 3.9+."""
 import json
 import ntpath
+import re
 import subprocess
 import xml.etree.ElementTree as ET
 
@@ -9,6 +10,22 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 Set-StrictMode -Version Latest
 $pendingMarker = 'codex-router-installer:pending-activation'
+function Get-InstanceId($instance) {
+    try {
+        # A property getter can return empty without throwing in PowerShell.
+        $null = $instance.Refresh()
+        $id = [string]$instance.InstanceGuid
+        if ([string]::IsNullOrWhiteSpace($id)) {
+            $null = $instance.Refresh()  # Confirm exit after a property-read race; otherwise refuse.
+            throw 'unreadable task instance'
+        }
+        return $id
+    } catch {
+        # SCHED_E_TASK_NOT_RUNNING (0x8004130B) proves the instance is gone.
+        if ($_.Exception.GetBaseException().HResult -eq -2147216629) { return $null }
+        throw
+    }
+}
 function Test-Python($path) {
     try {
         $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($path)
@@ -93,9 +110,13 @@ try {
             'enable' { $task.Enabled = $true }
             'disable' { $task.Enabled = $false }
             'stop' {
-                $task.Stop(0)
-                foreach ($instance in $service.GetRunningTasks(1)) {
-                    if ($instance.Path -ieq $task.Path) { $instance.Stop() }
+                try { $task.Stop(0) } catch {
+                    if ($_.Exception.GetBaseException().HResult -ne -2147216629) { throw }
+                }
+                foreach ($instance in $task.GetInstances(0)) {
+                    try { $instance.Stop() } catch {
+                        if ($_.Exception.GetBaseException().HResult -ne -2147216629) { throw }
+                    }
                 }
             }
             'delete' { $folder.DeleteTask($r.name, 0); $task = $null }
@@ -106,8 +127,9 @@ try {
         @{kind = 'missing'} | ConvertTo-Json -Compress
     } else {
         # Include hidden instances and old invocations after their definition changes.
-        $instances = @(foreach ($instance in $service.GetRunningTasks(1)) {
-            if ($instance.Path -ieq $task.Path) { $instance.InstanceGuid }
+        $instances = @(foreach ($instance in $task.GetInstances(0)) {
+            $id = Get-InstanceId $instance
+            if ($id) { $id }
         })
         $reply = @{kind = 'present'; state = [int]$task.State; instances = $instances
           enabled = [bool]$task.Enabled
@@ -128,7 +150,12 @@ try {
         if ($r.operation -eq 'snapshot') { $reply.xml = $task.Definition.XmlText }
         $reply | ConvertTo-Json -Depth 4 -Compress
     }
-} catch { exit 1 }
+} catch {
+    $failure = $_.Exception.GetBaseException()
+    @{kind = 'error'; hresult = [int]$failure.HResult; type = $failure.GetType().Name} |
+        ConvertTo-Json -Compress
+    exit 1
+}
 """
 
 
@@ -140,11 +167,13 @@ def invoke(run, sid, name, arguments, operation='query', xml=None, *, pending=Tr
     """Names and paths travel as JSON data, never interpolated PowerShell."""
     request = dict(sid=sid, name=name, arguments=arguments, operation=operation,
                    xml=xml, pending=pending, executable=executable)
+    detail = ''
     try:
         result = run(['powershell', '-NoLogo', '-NoProfile', '-NonInteractive',
                       '-Command', _SCRIPT], input=json.dumps(request),
                      capture_output=True, text=True, encoding='utf-8', timeout=20)
         if result.returncode != 0:
+            detail = _failure(result.stdout)
             raise ValueError('Task Scheduler query or operation failed')
         doc = json.loads(result.stdout)
         if doc['kind'] in ('foreign', 'denied'):
@@ -167,7 +196,20 @@ def invoke(run, sid, name, arguments, operation='query', xml=None, *, pending=Tr
             raise ValueError('missing task definition')
         return doc
     except (OSError, subprocess.SubprocessError, ValueError, TypeError, KeyError):
-        raise SystemExit('cannot verify Windows task %s during %s' % (name, operation))
+        raise SystemExit('cannot verify Windows task %s during %s%s' % (name, operation, detail))
+
+
+def _failure(stdout):
+    """Numeric HRESULT and a class identifier only, never arbitrary child output."""
+    try:
+        doc = json.loads(stdout)
+        if (doc.get('kind') == 'error' and type(doc.get('hresult')) is int
+                and isinstance(doc.get('type'), str)
+                and re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,63}', doc['type'])):
+            return ' (0x%08X %s)' % (doc['hresult'] & 0xFFFFFFFF, doc['type'])
+    except (ValueError, TypeError, AttributeError):
+        pass
+    return ''
 
 
 def _matches(current, previous, executable):
@@ -180,7 +222,7 @@ def runtime_matches(call, home, executable, names):
     for name in names:
         current = call(name, home)
         if (current is None or current['executable'] != executable
-                or name != names[0] and not update_policy_ready(current)):
+                or not update_policy_ready(current)):
             return False
     return True
 
@@ -190,7 +232,7 @@ def update_policy_ready(row):
 
 
 def update_policy_xml(xml, sid, executable):
-    """Add owned update policy while retaining existing settings, arguments and task data."""
+    """Add shared task policy while retaining existing settings, arguments and task data."""
     root = ET.fromstring(xml)
     prefix = '{http://schemas.microsoft.com/windows/2004/02/mit/task}'
     triggers, settings = root.find(prefix + 'Triggers'), root.find(prefix + 'Settings')
@@ -218,7 +260,7 @@ def rebind(call, home, executable, names, sid):
     changed = []
     try:
         for name, before in previous.items():
-            policy = name != names[0] and not update_policy_ready(before)
+            policy = not update_policy_ready(before)
             if before['executable'] == executable and not policy:
                 continue
             changed.append(name)
@@ -228,7 +270,7 @@ def rebind(call, home, executable, names, sid):
                 call(name, home, 'rebind', executable=executable)
             current = call(name, home)
             if (not _matches(current, before, executable)
-                    or name != names[0] and not update_policy_ready(current)):
+                    or not update_policy_ready(current)):
                 raise SystemExit('Windows task runtime readback failed')
     except BaseException:
         failed = []

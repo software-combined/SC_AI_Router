@@ -3,6 +3,7 @@ import io
 import json
 import os
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -95,6 +96,47 @@ class DesktopRecoveryTests(unittest.TestCase):
                                   events.put({'action': 'menu.quit'})), \
                 mock.patch.object(self.menu, '_control', return_value=dict(status='Running', clients=[])):
             self.assertEqual(self.menu.run_menu(self.home, self.home), 0)
+
+    def test_startup_warning_waits_for_the_helper_and_first_menu_document(self):
+        (self.home / 'control').mkdir()
+        (self.home / 'control' / ('scg-router-menu.exe' if os.name == 'nt' else 'scg-router-menu')).touch()
+        (self.home / 'installer.json').write_text('{"version":"1.3.7"}')
+        shown, completed, sequence = threading.Event(), threading.Event(), []
+        class Input(io.StringIO):
+            def write(self, text):
+                sequence.append('menu')
+                shown.set()
+                return len(text)
+        shell = SimpleNamespace(stdin=Input(), stdout=io.StringIO(), poll=lambda: None,
+                                wait=lambda **_: 0)
+        def offer(_):
+            sequence.append('warning')
+            self.assertTrue(shown.is_set())
+            completed.set()
+        def events(_, queue):
+            completed.wait(3)
+            queue.put({'closed': True})
+        original = self.menu.load
+        with mock.patch.object(self.menu, 'load', side_effect=lambda name:
+                    SimpleNamespace(offer=offer) if name == 'update_warning' else original(name)), \
+                mock.patch.object(self.menu, '_events', side_effect=events), \
+                mock.patch.object(self.menu, '_control', return_value=dict(status='Running', clients=[])), \
+                mock.patch.object(self.menu.subprocess, 'Popen', return_value=shell):
+            self.assertEqual(self.menu.run_menu(self.home, self.home, autostart=True,
+                                                offer_warning=True), 74)
+        self.assertTrue(completed.is_set())
+        self.assertLess(sequence.index('menu'), sequence.index('warning'))
+
+    def test_existing_controller_never_starts_another_warning(self):
+        (self.home / 'control').mkdir()
+        (self.home / 'control' / ('scg-router-menu.exe' if os.name == 'nt' else 'scg-router-menu')).touch()
+        (self.home / 'installer.json').write_text('{"version":"1.3.7"}')
+        original, offer = self.menu.load, mock.Mock()
+        with self.menu.load('service').install_lock(self.home, self.menu.session_lock()), \
+                mock.patch.object(self.menu, 'load', side_effect=lambda name:
+                    SimpleNamespace(offer=offer) if name == 'update_warning' else original(name)):
+            self.assertEqual(self.menu.main(self.args + ['--autostart']), 0)
+        offer.assert_not_called()
 
 
 if __name__ == '__main__':

@@ -22,6 +22,14 @@ def _log(home, event, **facts):
         pass
 
 
+def _offer_warning(home):
+    try:
+        load('update_warning').offer(home)
+    except (Exception, SystemExit) as exc:
+        _log(home, 'warning_failed', error=type(exc).__name__)
+    return {}
+
+
 def _control(home, resources, action=None):
     command = [sys.executable, str(Path(__file__).with_name('desktop_control.py')),
                '--home', str(home), '--resources', str(resources)]
@@ -86,8 +94,11 @@ def session_lock():
     if sys.platform == 'linux':
         session = (os.environ.get('XDG_SESSION_ID') or os.environ.get('WAYLAND_DISPLAY')
                    or os.environ.get('DISPLAY') or os.environ.get('DBUS_SESSION_BUS_ADDRESS') or 'desktop')
+    elif sys.platform == 'win32':
+        # Explorer and Task Scheduler do not supply the same environment.
+        session = 'session-%d' % load('windows_native').Native().session()
     else:
-        session = os.environ.get('SESSIONNAME', 'console') if sys.platform == 'win32' else 'aqua'
+        session = 'aqua'
     return '.desktop-menu-' + hashlib.sha256(session.encode()).hexdigest()[:16] + '.lock'
 
 
@@ -100,7 +111,7 @@ def mac_reopen_available(resources):
         return False
 
 
-def run_menu(home, resources, *, autostart=False, after_update=False):
+def run_menu(home, resources, *, autostart=False, after_update=False, offer_warning=False):
     quiet = autostart or after_update
     control, model = load('desktop_control'), load('desktop_model')
     removed = Path(home) / load('native_shortcuts').REMOVED
@@ -210,6 +221,9 @@ def run_menu(home, resources, *, autostart=False, after_update=False):
                             break
                     except (OSError, ValueError):
                         pass
+                    if offer_warning and job is None and not busy:
+                        offer_warning, busy = False, 'Checking setup…'
+                        job = worker.submit(_offer_warning, home)
                     try:
                         event = events.get(timeout=0.5)
                     except queue.Empty:
@@ -277,14 +291,11 @@ def main(argv=None):
     if args.autostart and not args.after_update and not load('desktop_startup').enabled(args.home):
         return 0
     os.environ.update(load('native_setup').environment(args.resources))
-    if not args.after_update:
-        try:
-            load('update_warning').offer(args.home)
-        except (Exception, SystemExit):
-            pass
     try:
         for attempt in range(2):
-            rc = run_menu(args.home, args.resources, autostart=args.autostart, after_update=args.after_update)
+            rc = run_menu(args.home, args.resources, autostart=args.autostart,
+                          after_update=args.after_update,
+                          offer_warning=not args.after_update and attempt == 0)
             if rc != 74 or attempt:
                 break
             time.sleep(1)
