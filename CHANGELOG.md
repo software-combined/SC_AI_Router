@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Connect approved work accounts through Microsoft sign-in, without copying keys.
+  Reuse one personal OpenRouter key and US$50 monthly allowance across computers.
+  Keep work credentials outside the public repository and release packages.
+
 ## 1.3.27
 
 - Keep Windows installation recovery records byte-exact across line endings.

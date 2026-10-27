@@ -26,8 +26,9 @@ MESSAGES = {
 
 class SignInRequired(RuntimeError):
     """Only fixed messages and reason codes may reach UI or diagnostic logs."""
-    def __init__(self, code='signin_required'):
+    def __init__(self, code='signin_required', status=None):
         self.code = code if code in MESSAGES else 'signin_required'
+        self.status = status
         super().__init__(MESSAGES[self.code])
 
 
@@ -54,7 +55,7 @@ def post(url, data, headers):
         code = ('access_denied' if exc.code == 403 else 'signin_required'
                 if exc.code in (400, 401) else 'download_unavailable')
         exc.close()
-        raise SignInRequired(code) from None
+        raise SignInRequired(code, status=exc.code) from None
     except (OSError, ValueError):
         raise SignInRequired('download_unavailable') from None
 

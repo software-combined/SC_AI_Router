@@ -922,8 +922,24 @@ Prompts, tool data, credentials and raw error bodies are excluded.
 
 ## Per-user OpenRouter keys (IT issue and revoke)
 
-Owner decision 2026-09-09: IT issues one OpenRouter key per portco user;
-there is no self-service provisioning. The flow per user:
+Work-account provisioning uses Microsoft sign-in and the Hub's dedicated
+`Router.Provision` permission. The backend selects the approved company workspace
+from verified directory membership and issues one personal key with a US$50 monthly
+limit. Reinstalls and additional computers receive that same key and allowance.
+Unknown or ambiguous company membership is refused. Existing manual keys require
+IT migration before a new allowance can be issued.
+
+The public release contains only public sign-in settings. Management credentials
+and encrypted personal keys stay in the Hub backend. OAuth tokens remain in memory;
+the local setup route writes only the personal inference key through its existing
+protected writer. Downloads and updates remain public.
+
+Offboarding must disable the OpenRouter key as well as Entra access. Replacement
+keys need an explicit remaining-budget decision; automatic rotation is not enabled.
+The legacy `tools/provision_key.py` does not implement this managed contract and
+must not be used for work-account issuance.
+
+For a separately issued unmanaged key, the existing IT flow remains available:
 
 One key file per external provider (Plan 139): the installer and the setup
 window name the provider whose key they are collecting, and a second
