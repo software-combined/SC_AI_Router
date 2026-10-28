@@ -8,6 +8,7 @@ import re
 from copy import deepcopy
 from .capabilities import has_recursive_refs
 from .discovered import recall
+from .history_items import repair_custom_call_id
 from . import agent_handoffs, request_evidence, sse, tool_aliases, tool_merge, transport, turn_budget
 from .tool_history import SEARCH_NAME, tool_key
 from .tool_merge import tool_entries
@@ -233,7 +234,7 @@ class ToolEvents:
         if not isinstance(value, str):
             raise ValueError('Freeform tool input must be a string')
         item.update(type='custom_tool_call', input=value)
-        return item
+        return repair_custom_call_id(item)
 
     def event(self, event):
         request_evidence.response_event(self.notes, event)

@@ -22,6 +22,15 @@ def user_message_item(text):
             'content': [{'type': 'input_text', 'text': text}]}
 
 
+def repair_custom_call_id(item):
+    """Restore the custom item family after unwrapping a function-shaped call."""
+    ident = item.get('id') if isinstance(item, dict) else None
+    if (isinstance(item, dict) and item.get('type') == 'custom_tool_call'
+            and isinstance(ident, str) and ident.startswith('fc_')):
+        return {**item, 'id': 'ctc_' + ident[3:]}
+    return item
+
+
 CALL_TYPES = frozenset({'function_call', 'custom_tool_call', 'apply_patch_call',
                         'web_search_call', 'file_search_call', 'image_generation_call',
                         'code_interpreter_call', 'computer_call'})
