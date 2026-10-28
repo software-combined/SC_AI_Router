@@ -46,7 +46,7 @@ class TaskDiagnosticsTests(unittest.TestCase):
         for stderr, stage in ((None, 'startup'),
                 (b'SCG_TASK_STAGE=lookup\nPRIVATE\nSCG_TASK_STAGE=register\r\nSCG_TASK_STAGE=/private\n', 'register')):
             def run(command, **kwargs):
-                self.assertEqual(kwargs['timeout'], 20)
+                self.assertEqual(kwargs['timeout'], 60)
                 raise subprocess.TimeoutExpired('PRIVATE COMMAND', 20, stderr=stderr)
             with self.subTest(stage=stage), self.assertRaises(SystemExit) as refused:
                 backend._tasks.invoke(run, USER, 'Router', 'args', 'register')

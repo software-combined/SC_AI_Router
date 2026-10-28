@@ -77,7 +77,7 @@ class CleanupTests(unittest.TestCase):
                 cleanup(run, [NAME])
         self.assertIn('delete: hresult=-2147024891', errors.getvalue())
         self.assertEqual(json.loads(run.call_args.kwargs['input']), {'names': [NAME]})
-        self.assertEqual(run.call_args.kwargs['timeout'], 20)
+        self.assertEqual(run.call_args.kwargs['timeout'], 60)
 
     def test_residual_or_unreadable_tasks_and_handle_failure_cannot_pass_cleanup(self):
         for result in (dict(definitions=1), dict(instances=1), dict(definitions=-1),
