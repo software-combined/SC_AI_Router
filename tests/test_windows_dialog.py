@@ -62,6 +62,21 @@ class WindowsDialogTests(unittest.TestCase):
         self.assertEqual(popen.call_args.kwargs['creationflags'], 0x08000000)
         self.assertEqual(json.loads(child.stdin.write.call_args.args[0])['labels'], ['Cancel'])
 
+    def test_blocked_helper_falls_back_to_the_styled_script(self):
+        for code, marker, want in ((0, 'accept', True), (1, 'cancel', False)):
+            run = mock.Mock(side_effect=[OSError('blocked by endpoint protection'),
+                SimpleNamespace(returncode=code, stdout='SCG_ROUTER_DIALOG_RESULT=' + marker)])
+            self.assertIs(self.dialog.show('Switch Codex?', self.home, True, run), want)
+            self.assertEqual(run.call_args.args[0][0], 'powershell')
+            self.assertEqual(run.call_args.kwargs['creationflags'], 0x08000000)
+
+    def test_blocked_helper_falls_back_for_the_waiting_window(self):
+        responses = [OSError('blocked by endpoint protection'), mock.Mock()]
+        with mock.patch.object(self.dialog.subprocess, 'Popen', side_effect=responses) as popen:
+            self.dialog.progress(self.home, 'Waiting for SCG Router', 'Cancel')
+        self.assertEqual(popen.call_args.args[0][0], 'powershell')
+        self.assertEqual(popen.call_args.kwargs['creationflags'], 0x08000000)
+
     def test_pre_dialog_helpers_use_the_styled_quiet_fallback_for_wait_and_cancel(self):
         for name in ('installer.json', 'payload/latest.json'):
             path = self.source / name

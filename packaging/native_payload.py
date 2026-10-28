@@ -15,6 +15,11 @@ import uuid
 from pathlib import Path
 
 
+class OwnershipConflict(ValueError):
+    """A user-owned entry point belongs to another installation."""
+    ownership_conflict = True
+
+
 def load(name):
     spec = importlib.util.spec_from_file_location(
         'router_native_' + name, Path(__file__).with_name(name + '.py'))

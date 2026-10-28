@@ -67,7 +67,7 @@ def _dialog(message, platform_name, confirm, run, tool_path=None, detailed=False
         argv = [tool_path or 'powershell', '-NoProfile', '-Command', _windows_dialog(message, confirm, labels)]
     else:
         argv = [tool_path or _dialogs.tool(platform_name) or 'zenity',
-                '--title', TITLE, '--window-icon', str(ICON),
+                '--title', TITLE, '--window-icon', str(ICON), '--width=460',
                 '--question' if confirm else '--info', '--text', str(message),
                 '--ok-label', labels[0] if confirm else labels[-1]]
         if confirm:

@@ -43,15 +43,18 @@ The menu shows **Updates will retry automatically**; these failures do not open 
 A verified successful feed check clears its earlier feed error, including an unchanged Express check.
 If retry status persists, run **Check for updates** and share the safe error code with IT.
 
-A repair warning can show matching running and latest versions.
+A repair warning can appear when the router runs the latest version.
+Read versions and the last check time in **Check setup** or the tray **Updates** menu.
 It means an installation is incomplete, a saved component failed, or an installer repeatedly failed.
 A successful version check does not verify those components or clear a pending installation repair.
 Missed checks alone do not require repair; the computer may have been asleep.
-The dialog names failed components; `logs/maintenance.jsonl` records their names and your choice.
+A shortcut or startup entry from another installation on macOS or Linux is recorded once,
+not as a daily repair.
+The warning names failed parts; `logs/maintenance.jsonl` records their names and your choice.
 **Later** delays the next displayed warning for 24 hours. It keeps the repair pending.
 If it returns sooner, the log distinguishes an unconfirmed dialog from a failed receipt write.
 Choose **Repair now** after finishing active work. If the warning returns, run **Check setup**.
-Share the reported component names with IT. Do not share keys or authentication files.
+Share the reported part names with IT. Do not share keys or authentication files.
 
 If Windows reports that Router could not check its stored key, retry shortly.
 This message does not mean the key is invalid. If it persists, open **SCG Router**

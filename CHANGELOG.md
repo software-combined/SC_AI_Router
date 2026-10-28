@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Name only the failed part in the repair warning, say that the router still
+  runs, and drop versions, channel and check time; find them in Check setup.
+- Record a macOS or Linux shortcut or startup entry from another installation
+  as a known block, so one conflict stops prompting a repair every day.
+- Keep Switch Codex confirmation and waiting windows working when endpoint
+  protection refuses the Windows menu helper.
+
 - Connect approved work accounts through Microsoft sign-in, without copying keys.
   Reuse one personal OpenRouter key and US$50 monthly allowance across computers.
   Keep work credentials outside the public repository and release packages.

@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from native_payload import load, metadata
+from native_payload import OwnershipConflict, load, metadata
 
 IDENTITY = 'com.softwarecombined.router.menu'
 
@@ -28,13 +28,13 @@ def _owned(path, home, kind):
     if not path.exists():
         return
     if path.is_symlink():
-        raise ValueError('Startup entry belongs to another application')
+        raise OwnershipConflict('Startup entry belongs to another application')
     if kind == 'darwin':
         matches = plistlib.loads(path.read_bytes()).get('SCGRouterHome') == str(home)
     else:
         matches = ('X-SCGRouterHome=' + str(home) + '\n') in path.read_text()
     if not matches:
-        raise ValueError('Startup entry belongs to another application')
+        raise OwnershipConflict('Startup entry belongs to another application')
 
 
 def windows_target(user_home=None):
