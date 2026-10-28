@@ -23,16 +23,20 @@ def command(home, mode, text, labels):
     if not metadata.get('menu_sha256') or not icon.is_file():
         raise OSError('The switch window is unavailable')
     if tuple(map(int, metadata['version'].split('.')[:3])) < (1, 3, 17):
-        return ['powershell', '-NoProfile', '-NonInteractive', '-Command',
-                script(text, len(labels) > 1, labels)], ''
+        return _powershell(text, len(labels) > 1, labels), ''
     request = json.dumps(dict(text=text, labels=list(labels)), ensure_ascii=False) + '\n'
     return [str(helper), mode, str(icon)], request
 
 
 def show(text, home, confirm, run=subprocess.run, *, labels=('Continue', 'Cancel')):
     args, request = command(home, '--dialog', text, labels if confirm else labels[-1:])
-    result = run(args, input=request, capture_output=True, text=True, encoding='utf-8',
-                 timeout=120, creationflags=0x08000000)
+    try:
+        result = run(args, input=request, capture_output=True, text=True, encoding='utf-8',
+                     timeout=120, creationflags=0x08000000)
+    except OSError:
+        # Endpoint protection can refuse the helper; the styled script keeps the action available.
+        result = run(_powershell(text, confirm, labels), capture_output=True, text=True,
+                     encoding='utf-8', timeout=120, creationflags=0x08000000)
     markers = [line for line in (result.stdout or '').splitlines()
                if line.startswith('SCG_ROUTER_DIALOG_RESULT=')]
     if result.returncode == 0 and markers == ['SCG_ROUTER_DIALOG_RESULT=accept']:
@@ -44,8 +48,13 @@ def show(text, home, confirm, run=subprocess.run, *, labels=('Continue', 'Cancel
 
 def progress(home, text, button):
     args, request = command(home, '--progress', text, (button,))
-    child = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL, text=True, encoding='utf-8', creationflags=0x08000000)
+    try:
+        child = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, text=True, encoding='utf-8', creationflags=0x08000000)
+    except OSError:
+        return subprocess.Popen(_powershell(text, False, (button,)), stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, encoding='utf-8',
+            creationflags=0x08000000)
     try:
         child.stdin.write(request)
         child.stdin.flush()
@@ -58,6 +67,12 @@ def progress(home, text, button):
 
 def _ps(value):
     return "'" + str(value).replace("'", "''") + "'"
+
+
+def _powershell(text, confirm, labels):
+    """The styled script form, for old packages or a helper that cannot start."""
+    return ['powershell', '-NoProfile', '-NonInteractive', '-Command',
+            script(text, confirm, labels)]
 
 
 def script(message, confirm, labels=('Continue', 'Cancel')):

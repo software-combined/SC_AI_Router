@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from native_payload import load, metadata
+from native_payload import OwnershipConflict, load, metadata
 
 BUNDLE_ID = 'com.softwarecombined.router.setup'
 # Written after a successful removal. A running menu exits when it appears, and
@@ -57,7 +57,7 @@ def _linux(home, resources, python, atomic):
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / (BUNDLE_ID + '.desktop')
     if target.exists() and ('X-SCGRouterHome=' + str(home)) not in target.read_text():
-        raise ValueError('SCG Router shortcut belongs to another installation')
+        raise OwnershipConflict('SCG Router shortcut belongs to another installation')
     icon = resources / 'router/packaging/assets/router-icon.png'
     text = ('[Desktop Entry]\nType=Application\nName=SCG Router\n'
             'Comment=Set up, check or repair SCG Router\nTerminal=false\n'

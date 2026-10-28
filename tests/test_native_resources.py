@@ -73,6 +73,21 @@ class NativeResourcesTests(unittest.TestCase):
             self.assertEqual(json.loads((home / 'desktop-delivery.json').read_text()), {'status': 'failed'})
             self.assertEqual((home / 'current').read_text(), latest['version'])
 
+    def test_ownership_conflict_blocks_without_a_repair_prompt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            owner, home, latest, data = self.fixture(Path(temporary))
+            (home / 'mixed-router-state.json').write_text('{}')
+            original, feed = owner.load, 'https://dist.softwarecombined.com/stable/latest.json'
+            conflict = original('native_payload').OwnershipConflict('owned elsewhere')
+            broken = SimpleNamespace(install=mock.Mock(side_effect=conflict))
+            with mock.patch.object(owner, 'load', side_effect=lambda name:
+                    broken if name == 'native_shortcuts' else original(name)):
+                self.assertFalse(owner.deliver(home, latest, feed, lambda url: data))
+            self.assertEqual(json.loads((home / 'desktop-delivery.json').read_text()),
+                             {'status': 'blocked'})
+            self.assertEqual(json.loads((home / 'mixed-router-state.json').read_text())
+                             ['component_repairs']['controls'], 'unknown')
+
     def test_wrong_bundle_is_refused_before_download(self):
         with tempfile.TemporaryDirectory() as temporary:
             owner, home, latest, data = self.fixture(Path(temporary))
