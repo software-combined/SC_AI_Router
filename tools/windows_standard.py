@@ -69,7 +69,7 @@ def run(expected_sid, report):
                 'tests.test_windows_native_lifecycle', 'tests.test_windows_acl_native',
                 'tests.test_windows_task_cohort', 'tests.test_windows_shortcut_recovery']))):
         started = time.monotonic()
-        result = unittest.TextTestRunner(verbosity=1).run(suite())
+        result = unittest.TextTestRunner(verbosity=1, durations=15).run(suite())
         outcomes.append(dict(suite=name, tests=result.testsRun, skipped=len(result.skipped),
                              success=result.wasSuccessful(), elapsed_s=time.monotonic() - started))
     status = 0 if all(row['success'] for row in outcomes) else 1

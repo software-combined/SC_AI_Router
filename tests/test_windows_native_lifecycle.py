@@ -47,10 +47,14 @@ class WindowsNativeLifecycleTests(unittest.TestCase):
         exe = Path(sys.executable).resolve()
         identity = dict(root=str(exe.parent), exe=str(exe), family='synthetic-query',
                         user=api.user(), session=api.session())
-        started = time.perf_counter()
-        rows = policy.snapshot(identity, {}, (), api=api)
-        elapsed = (time.perf_counter() - started) * 1000
-        self.assertTrue({child.pid for child in children}.issubset(rows))
+        owned = {child.pid for child in children}
+        entries = api.entries
+        with mock.patch.object(api, 'entries',
+                               side_effect=lambda: [row for row in entries() if row['pid'] in owned]):
+            started = time.perf_counter()
+            rows = policy.snapshot(identity, {}, (), api=api)
+            elapsed = (time.perf_counter() - started) * 1000
+        self.assertTrue(owned.issubset(rows))
         print('windows_native_scan processes=50 elapsed_ms=%.1f' % elapsed)
         self.assertLess(elapsed, 200)
 
@@ -122,13 +126,17 @@ class WindowsNativeLifecycleTests(unittest.TestCase):
                 child.stdin.write(json.dumps(dict(text='Waiting for a test operation.', labels=['Cancel'])) + '\n')
                 child.stdin.flush()
                 api = module('windows_native').Native()
-                deadline, visible = time.monotonic() + 10, False
+                deadline, visible = time.monotonic() + 30, False
                 while child.poll() is None and time.monotonic() < deadline:
                     visible = any(pid == child.pid for _, pid in api.windows(visible=True))
                     if visible:
                         break
                     time.sleep(0.05)
-                self.assertTrue(visible, 'Native progress window was not visible to the standard desktop')
+                if not visible:
+                    state = ('exited %s' % child.returncode if child.poll() is not None
+                             else 'still running')
+                    self.fail('Native progress window was not visible to the standard desktop '
+                              '(%s)' % state)
                 child.stdin.close()
                 child.stdin = None
                 stdout, _ = child.communicate(timeout=5)

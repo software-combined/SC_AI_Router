@@ -8,9 +8,12 @@ from unittest import mock
 
 from ai_router import agents, setup
 from tests.test_setup import NOW, _key_ok, _state
+from tests.setup_fixtures import offline_availability
 
 
 class SetupStarterTests(unittest.TestCase):
+    setUp = offline_availability
+
     def test_post_rejects_unknown_starter_choice(self):
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
