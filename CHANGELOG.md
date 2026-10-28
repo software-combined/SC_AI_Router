@@ -15,8 +15,6 @@
 - Use `https://hub.softwarecombined.com/install` as the staff install address.
   Let Hub read the public stable release metadata without credentials.
 
-## 1.3.27
-
 - Keep Windows installation recovery records byte-exact across line endings.
 
 - Refuse Windows Codex switching before closing the app when required Router

@@ -19,7 +19,7 @@ class DownloadPageTests(unittest.TestCase):
 class DownloadPagePublicationTests(unittest.TestCase):
     def test_hub_can_read_only_the_public_release_metadata_without_credentials(self):
         text = (ROOT / 'infra/feed.yaml').read_text()
-        self.assertTrue('  RouterMetadataHeaders:' in text, 'Hub metadata CORS policy is missing')
+        self.assertIn('  RouterMetadataHeaders:', text, 'Hub metadata CORS policy is missing')
         policy = text.split('  RouterMetadataHeaders:', 1)[1].split('\n  FeedDns:', 1)[0]
         self.assertIn('AccessControlAllowCredentials: false', policy)
         self.assertIn('AccessControlAllowMethods: {Items: [GET, HEAD]}', policy)

@@ -68,7 +68,7 @@ the Hub owns company entitlement, workspace selection and personal-key budgets.
 `key_prompt` submits the result to the existing local setup writer. Work keys,
 OAuth tokens and management credentials never become release configuration.
 The Microsoft callback shows a self-contained Hub-style confirmation with bundled
-brand fonts and logo. Its page clears the consumed code from the browser address.
+brand fonts and logo, and clears the consumed code from the browser address.
 `feed` downloads public software without credentials. Legacy `download_auth`,
 `download_oauth` and `download_session` helpers are retained for compatibility,
 but the installer and updater no longer require them. `control_models` checks

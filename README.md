@@ -48,12 +48,11 @@ see [setup options](docs/setup.md).
 
 1. Open [Install SCG Router](https://hub.softwarecombined.com/install)
    and choose your computer. You do not need a download sign-in or GitHub account.
-2. Open the installer and choose the assistant you use. Choose **Sign in with
-   Microsoft** for an approved work account. Work sign-in selects your company
+2. Open the installer and choose the assistant you use. Choose **Sign in with my
+   work account** for an approved work account. Work sign-in selects your company
    and connects your personal OpenRouter key with a US$50 monthly limit.
-   Other computers reuse
-   that allowance. You can also choose **Use my own key** in the setup window.
-   Never paste a key into a chat or support ticket.
+   Other computers reuse that allowance. You can also choose **Use my own key**
+   in the setup window. Never paste a key into a chat or support ticket.
    Use the Windows installer on Microsoft Windows 11 x64. You do not need
    to install Python. Contact IT if your device blocks the installer.
 3. Quit and reopen your assistant, select a model labelled `· OpenRouter`,

@@ -267,8 +267,8 @@ def finish(home, run=subprocess.run, native=None, fetch=None, *,
 
 def run_install(args, install, *, run, fetch):
     """A refused attachment cannot suppress independent maintenance delivery."""
-    delivery, rc = dict(fetch=fetch, dry_run=args.dry_run,
-                        automatic=os.environ.pop('ROUTER_AUTOMATIC_UPDATE', None) == '1'), None
+    automatic = os.environ.pop('ROUTER_AUTOMATIC_UPDATE', None) == '1'
+    delivery, rc = dict(fetch=fetch, dry_run=args.dry_run, automatic=automatic), None
     try:
         rc = install(delivery)
         return rc

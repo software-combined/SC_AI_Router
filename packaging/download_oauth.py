@@ -128,9 +128,9 @@ class _Callback(http.server.BaseHTTPRequestHandler):
             self.server.result = False
             self._reply(400, 'Sign-in did not finish. You can close this tab and try again.')
             return
-        self._reply(200, "You're signed in. You can close this tab.")
+        self._reply(200)
 
-    def _reply(self, status, message):
+    def _reply(self, status, message=''):
         body = message.encode('utf-8')
         content_type = 'text/plain; charset=utf-8'
         policy = "default-src 'none'; frame-ancestors 'none'"
@@ -144,8 +144,8 @@ class _Callback(http.server.BaseHTTPRequestHandler):
                 page = page.replace(marker, base64.b64encode((assets / name).read_bytes()).decode('ascii'))
             body = page.encode('utf-8')
             content_type = 'text/html; charset=utf-8'
-            policy += ("; img-src data:; font-src data:; style-src 'nonce-" + nonce
-                       + "'; script-src 'nonce-" + nonce + "'; base-uri 'none'; form-action 'none'")
+            policy += (f"; img-src data:; font-src data:; style-src 'nonce-{nonce}'; "
+                       f"script-src 'nonce-{nonce}'; base-uri 'none'; form-action 'none'")
         self.send_response(status)
         self.send_header('Content-Type', content_type)
         self.send_header('Content-Length', str(len(body)))
