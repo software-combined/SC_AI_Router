@@ -12,9 +12,12 @@ from unittest import mock
 from ai_router.credentials import Credentials
 from tests.test_setup import _key_ok, _state
 from tests.harness import start_server as _start_server
+from tests.setup_fixtures import offline_availability
 
 
 class SetupHandlerTests(unittest.TestCase):
+    setUp = offline_availability
+
     def _server(self, home, **over):
         state = {'port': 0, 'token': 'test-token', 'openai_models': [],
                  'setup': {'nonce': 'n' * 16, 'expires': 9_999_999_999}}
