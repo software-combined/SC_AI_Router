@@ -1,0 +1,67 @@
+{
+ "contract": {
+  "unknown_top_level": [],
+  "violations": {},
+  "warnings": {}
+ },
+ "wire": {
+  "input": [
+   {
+    "id": "at_synthetic",
+    "role": "developer",
+    "tools": [],
+    "type": "additional_tools"
+   },
+   {
+    "arguments": "{}",
+    "call_id": "call_function",
+    "id": "fc_function",
+    "name": "echo",
+    "type": "function_call"
+   },
+   {
+    "call_id": "call_function",
+    "id": "fco_function",
+    "output": "synthetic marker",
+    "type": "function_call_output"
+   },
+   {
+    "call_id": "call_legacy",
+    "id": "ctc_tmp_legacy",
+    "input": "synthetic patch",
+    "name": "apply_patch",
+    "status": "completed",
+    "type": "custom_tool_call"
+   },
+   {
+    "call_id": "call_legacy",
+    "id": "ctco_legacy",
+    "output": "synthetic result",
+    "type": "custom_tool_call_output"
+   },
+   {
+    "content": "<model_switch>",
+    "id": "msg_switch",
+    "role": "developer",
+    "type": "message"
+   },
+   {
+    "call_id": "call_native",
+    "id": "ctc_native",
+    "input": "synthetic patch",
+    "name": "apply_patch",
+    "status": "completed",
+    "type": "custom_tool_call"
+   },
+   {
+    "call_id": "call_native",
+    "id": "ctco_native",
+    "output": "synthetic result",
+    "type": "custom_tool_call_output"
+   }
+  ],
+  "model": "gpt-6.1-sol",
+  "store": false,
+  "stream": true
+ }
+}
