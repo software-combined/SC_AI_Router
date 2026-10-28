@@ -1,5 +1,52 @@
 # Compatibility
 
+## Custom-tool model switching, 28 October 2026 AEDT
+
+Clients remain Codex desktop `26.1021.31345` (build `21828`), bundled CLI
+`0.164.0-alpha.11.1`, and Claude Code `2.1.309`. The four unchanged client/route
+checks from Router 1.3.20 remain applicable; this change adds the affected
+Codex custom-tool path below.
+
+The external response adapter restored `custom_tool_call` while retaining a
+function item's `fc_` ID. A synthetic subscription request reproduced HTTP 400
+`invalid_value` at `input[0].id`: custom calls require a `ctc` prefix. Changing
+only that prefix, or omitting the optional item ID, completed on `gpt-6.1-sol`.
+Ordinary function IDs, output IDs, message IDs and call IDs passed unchanged.
+
+`tools/probe_custom_tool_switch.py` drives the actual client against the
+candidate. Offline, the client executes one dynamic echo and one freeform
+patch, switches to exact Sol and back, and recalls both results. Its native
+request also injects a legacy malformed custom item to prove outgoing repair.
+All six scripted upstream attempts passed; no paid calls were involved.
+
+The final `--live` run completed six actual upstream sends: four on
+`deepseek/deepseek-v4.1-flash-1017`, one on `gpt-6.1-sol`, then one back on
+DeepSeek. The temporary file changed from `alpha` to `beta` exactly once, and
+both models recalled the echo marker and file result. Requested and reported
+model IDs and Low effort matched on all six responses. Two successful invocations
+reported 4,113 and 3,895 total tokens; the latter also used a fresh per-run listener
+token. These are provider reports, not independent model attestation.
+
+The probe exposes only its two tools and synthetic messages; ambient agent
+instructions are withheld. It caps actual sends, including router retries, at
+ten, prepared input at 32 KiB, and output at 1,024 tokens per send. Its total
+deadline is 180 seconds. A 16,000-token reported-usage stop can be crossed by
+one bounded in-flight request; missing usage or rejection stops further sends.
+Live startup disables notifications, shell snapshots, local automations and
+client updates. Its OS sandbox permits network access only to the temporary
+listener and refuses startup if the sandbox cannot apply. The successful live
+runs above predate that isolation correction and prove the synthetic sequence
+only. The isolated run stopped during client startup with zero upstream sends;
+isolated live acceptance remains unverified on this client. The offline actual
+client sequence and the production repair regressions still pass.
+
+An earlier live invocation reached its ten-send cap during native client
+retries and ended on a rate limit. The buffering probe had omitted response
+headers; preserving all upstream headers made the final sequence pass.
+Input-size guards rejected earlier bootstrap attempts before inference.
+The unit suite pins the send, input, usage and header-preservation boundaries.
+Release publication and installed-runtime acceptance remain separate gates.
+
 ## Picker rows for 1.3.26, 27 October 2026 AEDT
 
 Clients: Codex desktop bundled CLI `0.164.0-alpha.11.1` and Claude Code

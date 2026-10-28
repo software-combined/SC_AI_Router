@@ -69,6 +69,14 @@
 - Verify and restore owned Windows shortcuts and the Apps entry during installation recovery.
   Preserve explicit sign-in choices and launch the sign-in menu without a console.
 
+## 1.3.30
+
+- Keep custom-tool results usable when switching from an external model back to
+  the ChatGPT subscription. Repair older saved tool item IDs in outgoing requests
+  without changing saved history or call/result links.
+- Retain the safe item-ID field location when a provider rejects a request,
+  without recording its value or request content.
+
 ## 1.3.21
 
 - Keep verified Windows Codex process handles through shutdown. Exiting app

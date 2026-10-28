@@ -81,7 +81,7 @@ def _bounded_endpoint(value):
 _PARAM_SHAPE = re.compile(
     r'(?:input|tools)(?:\[[0-9]{1,6}\])?'
     r'(?:\.(?:content|summary|type|parameters|items|required|enum|name|arguments)'
-    r'(?:\[[0-9]{1,6}\])?){0,4}|model|reasoning\.effort')
+    r'(?:\[[0-9]{1,6}\])?){0,4}|input\[[0-9]{1,6}\]\.id|model|reasoning\.effort')
 
 
 def rejection_parameter(body):
