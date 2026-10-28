@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Give a slow Windows Task Scheduler more time to answer a task operation
+  before setup reports a failure.
+
 - Name only the failed part in the repair warning, say that the router still
   runs, and drop versions, channel and check time; find them in Check setup.
 - Record a macOS or Linux shortcut or startup entry from another installation

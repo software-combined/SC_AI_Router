@@ -158,7 +158,7 @@ def cleanup(run, names, children=()):
                     for name in names):
                 raise ValueError('non-fixture task name')
             result = run(['powershell', '-NoProfile', '-NonInteractive', '-Command', _CLEANUP],
-                         input=json.dumps({'names': names}), text=True, capture_output=True, timeout=20)
+                         input=json.dumps({'names': names}), text=True, capture_output=True, timeout=60)
             if result.returncode:
                 errors.append('scheduler: returncode=%d' % result.returncode)
             doc = json.loads(result.stdout)
