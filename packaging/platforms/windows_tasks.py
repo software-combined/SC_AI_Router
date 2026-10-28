@@ -202,7 +202,7 @@ def invoke(run, sid, name, arguments, operation='query', xml=None, *, pending=Tr
     try:
         result = run(['powershell', '-NoLogo', '-NoProfile', '-NonInteractive',
                       '-Command', _SCRIPT], input=json.dumps(request),
-                     capture_output=True, text=True, encoding='utf-8', timeout=20)
+                     capture_output=True, text=True, encoding='utf-8', timeout=60)  # first run is slow
         if result.returncode != 0:
             detail = _failure(result.stdout)
             raise ValueError('Task Scheduler query or operation failed')
