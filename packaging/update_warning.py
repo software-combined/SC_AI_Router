@@ -16,7 +16,7 @@ from native_payload import load
 
 RECEIPT = 'update-warning.json'
 INTERVAL = 24 * 60 * 60
-COMPONENT_LABELS = dict(controller='Automatic updates', updater_launcher='Automatic updates',
+COMPONENT_LABELS = dict(controller='Updates', updater_launcher='Updates',
     scheduler='Scheduled checks', assistants='Assistant connections',
     controls='Router controls', controls_launchers='Router controls')
 
@@ -25,25 +25,26 @@ def snapshot(home):
     return load('diagnostics')._status_document(home)
 
 
+def _join(labels):
+    """Join labels into a sentence list; only the first keeps its capital."""
+    if len(labels) < 2:
+        return ''.join(labels)
+    return ', '.join([labels[0]] + [name.lower() for name in labels[1:-1]]) + \
+        ' and ' + labels[-1].lower()
+
+
 def message(doc):
-    labels = {'codex': 'Codex', 'claude': 'Claude Code', 'claude-desktop': 'Claude desktop'}
-    names = ', '.join(labels[key] for key in labels if key in doc.get('clients', {}))
+    """Two lines: what failed, then what still works and the one safety rule."""
     facts, status = doc['update'], load('update_status')
     failed = status.components(facts)
-    reasons = dict.fromkeys(COMPONENT_LABELS[key] + ' need repair.'
-        for key in COMPONENT_LABELS if failed.get(key) == 'failed')
-    reason = ' '.join(reasons) or (
-        'The last setup or repair did not finish.' if facts.get('installation_repair_required') else
-        'Router missed its scheduled checks.' if facts.get('missed_scheduled_checks') else
-        'The last update check could not finish.')
-    return ('Router updates for %s need attention.\n%s\n\nRunning version: %s\n'
-            'Latest known version for %s: %s\nLast successful check: %s\n\n'
-            'Finish active work before choosing Repair now. You can choose Later '
-            'and open SCG Router when you are ready.' % (names or 'your assistants', reason,
-            doc.get('running_version') or 'Unknown',
-            'beta' if doc.get('channel') == 'beta' else 'stable',
-            facts.get('latest_known_version') or 'Unknown',
-            status.display_time(facts.get('last_successful_check_at'))))
+    labels = list(dict.fromkeys(COMPONENT_LABELS[key]
+        for key in COMPONENT_LABELS if failed.get(key) == 'failed'))
+    reason = (_join(labels) + ' need repair.') if labels else (
+        'An update or repair did not finish.' if facts.get('installation_repair_required') else
+        'SCG Router has not checked for updates recently.' if facts.get('missed_scheduled_checks') else
+        'SCG Router could not finish its update check.')
+    healthy = 'SCG Router is still running. ' if doc.get('routing_healthy') is True else ''
+    return '%s\n%sFinish active work before you repair.' % (reason, healthy)
 
 
 def repair(home, run=subprocess.run):

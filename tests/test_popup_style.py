@@ -45,6 +45,14 @@ def _offer():
     return module
 
 
+def _warning():
+    spec = importlib.util.spec_from_file_location(
+        'router_warning_copy', _ROOT / 'packaging' / 'update_warning.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _popup_text():
     """Every user-visible string the dialog producers can show."""
     notice = _notice()
@@ -58,10 +66,7 @@ def _popup_text():
     text += [' '.join(offer.command(kind, '/icon.png')) for kind in offer.MESSAGES]
     text += [label for _key, label in dialog.ASSISTANTS]
     text += [label for _key, label in dialog.SURFACES]
-    spec = importlib.util.spec_from_file_location(
-        'router_warning_text', _ROOT / 'packaging' / 'update_warning.py')
-    warning = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(warning)
+    warning = _warning()
     text.append(warning.message(dict(clients={'codex': {}, 'claude': {}}, update={})))
     for platform_name, tool_path in (('darwin', '/usr/bin/osascript'),
                                      ('linux', '/usr/bin/zenity'),
@@ -233,6 +238,29 @@ class PopupStyleTests(unittest.TestCase):
                         '$r.Controls.Add($c)'):
             with self.subTest(control):
                 self.assertIn(control, script)
+
+
+class WarningCopyTests(unittest.TestCase):
+    def test_warning_names_failed_parts_and_keeps_only_the_safety_rule(self):
+        warning = _warning()
+        cases = (({'controls': 'failed'}, 'Router controls need repair.'),
+                 ({'controller': 'failed', 'scheduler': 'failed'},
+                  'Updates and scheduled checks need repair.'),
+                 ({key: 'failed' for key in warning.COMPONENT_LABELS},
+                  'Updates, scheduled checks, assistant connections and router controls need repair.'))
+        for repairs, first in cases:
+            with self.subTest(repairs=repairs):
+                doc = dict(routing_healthy=True, update=dict(component_repairs=repairs))
+                self.assertEqual(warning.message(doc), first + '\nSCG Router is still running. '
+                                 'Finish active work before you repair.')
+
+    def test_warning_omits_health_and_support_metadata(self):
+        warning = _warning()
+        doc = dict(running_version='1.2.6.174', channel='beta', routing_healthy=False,
+                   update=dict(installation_repair_required=True,
+                               latest_known_version='1.3.2.185'))
+        self.assertEqual(warning.message(doc), 'An update or repair did not finish.\n'
+                         'Finish active work before you repair.')
 
 
 if __name__ == '__main__':

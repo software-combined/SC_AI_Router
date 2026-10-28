@@ -80,10 +80,8 @@ class WarningDeliveryTests(unittest.TestCase):
         self.owner.repair.assert_called_once_with(self.home)
         self.assertEqual(self.state.read_bytes(), self.before)
         text = self.dialog.confirm_result.call_args.args[0]
-        self.assertIn('Codex', text)
-        self.assertNotIn('Claude', text)
-        self.assertIn('1.2.6.174', text)
-        self.assertIn('1.3.2.185', text)
+        self.assertEqual(text, 'SCG Router could not finish its update check.\n'
+                         'Finish active work before you repair.')
 
     def test_later_uses_the_daily_limit_without_clearing_pending_state(self):
         self.dialog.confirm_result.return_value = False

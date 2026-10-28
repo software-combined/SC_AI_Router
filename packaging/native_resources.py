@@ -208,6 +208,13 @@ def deliver(home, latest, feed_url, fetch=None):
             _record(home, 'ready')
         return delivered
     except (Exception, SystemExit) as error:
+        if getattr(error, 'ownership_conflict', False):
+            # A user-owned entry is a known block, not a router failure.
+            load('atomic_write').replace_json(Path(home) / 'desktop-delivery.json',
+                                             dict(status='blocked'))
+            _record(home, 'unknown')
+            print('SCG Router menu delivery is blocked by an existing shortcut or startup entry.')
+            return False
         if sys.platform == 'win32' and isinstance(error, SystemExit) and error.code == 0:
             return False  # The unchanged or restored cohort remains usable; retry quietly.
         load('atomic_write').replace_json(Path(home) / 'desktop-delivery.json',
