@@ -12,6 +12,7 @@ import logging.handlers
 import os
 from datetime import datetime, timezone
 
+# Keep the installed logger identity for existing log readers of either client.
 LOG = logging.getLogger('codex_router')
 
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Use one `ai_router` runtime package for both Codex and Claude. Remove the
+  unused source import alias while preserving older-release startup and
+  installed service, task and log identities.
+
 - Give a slow Windows Task Scheduler more time to answer a task operation
   before setup reports a failure.
 

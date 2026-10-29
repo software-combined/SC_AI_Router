@@ -17,7 +17,7 @@ try:
 except (OSError, ValueError):
     raise SystemExit('router pointer file missing: reinstall the router')
 release = home / 'releases' / name
-# Transition window: releases before the ai_router rename ship codex_router.
+# Older retained releases contain codex_router; keep updates and rollback bootable.
 for pkg in ('ai_router', 'codex_router'):
     if (release / pkg).is_dir():
         module = pkg

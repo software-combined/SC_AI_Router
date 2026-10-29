@@ -4,6 +4,22 @@ Single-page map of where new work goes. The dependency direction is inward:
 leaves know nothing about their consumers. Verified against current source;
 transitional owners name the plan that will move them.
 
+`ai_router` is the shared runtime package for Codex and Claude. Codex uses the
+Responses protocol adapter; Claude uses the Messages protocol adapter. Both
+share the service, model registry and transport. Client-specific modules own
+only their client's integration, not another router.
+
+The unused `codex_router` source import alias was removed after the 29 October
+2026 consumer check. Repository source, available source checkouts, installed
+scripts and indexed external code had no active imports of that package.
+Release bundles already contained only `ai_router`.
+
+The stable launcher still recognises actual older releases whose runtime is
+named `codex_router`, so updates and rollback do not depend on the removed
+source alias. Existing router-home paths, service and task identities, state
+filenames, the `codex_router` logger and Windows task ownership markers stay
+unchanged. These are installed compatibility identifiers, not runtime packages.
+
 Native packaging lives under `packaging/native/`; it wraps the canonical
 installer without adding inference rules. `native_payload` retains disposable
 downloads. `native_setup` owns the graphical flow and uses the existing client,
