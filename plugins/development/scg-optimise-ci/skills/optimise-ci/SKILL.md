@@ -78,6 +78,8 @@ Require every branch to pass before downstream work starts.
 Check runner capacity and contention before adding workers or jobs.
 Where the test framework supports isolated workers, compare worker counts within an existing runner.
 This can reduce job duration without duplicating runner setup.
+Choose parallel boundaries from observed durations and required account,
+profile or service isolation, rather than test counts alone.
 Preserve fixture groups, ordering requirements and duplicate test executions.
 Account for extra setup, artifact transfers and work performed before another check fails.
 Splitting jobs changes timeout and retry boundaries; verify that required work can still complete.
@@ -237,5 +239,6 @@ Keep the existing full-verification path; add recurring controls only when justi
 
 For measured examples and pitfalls, consult the Router's
 [job-graph benchmark](references/worked-example.md) or
-[runner-time benchmark](references/runner-time-benchmark.md) when relevant.
+[runner-time benchmark](references/runner-time-benchmark.md), or
+[Windows suite split](https://github.com/software-combined/SC_AI_Router/blob/main/docs/windows-ci-benchmark.md) when relevant.
 Their provider, commands and layouts are examples, not requirements for another repository.

@@ -1,6 +1,6 @@
 {
   "name": "scg-optimise-ci",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Measure and improve local testing and CI pipelines while preserving required verification and release gates.",
   "author": {"name": "Software Combined"},
   "skills": "./skills/",
