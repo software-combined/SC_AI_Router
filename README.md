@@ -17,9 +17,10 @@ Route signed-in coding clients and separately billed OpenRouter or AWS Bedrock m
   <a href="LICENSE"><img alt="Licence: Apache-2.0" src="https://img.shields.io/badge/licence-Apache--2.0-blue"></a>
 </p>
 
-SC AI Router runs on your computer and connects your coding assistants to the
-models you choose. For example, you can keep a chat open and switch between
-a subscription model and an approved model billed to your own OpenRouter key.
+SC AI Router runs one local service for both Codex and Claude. It appears as
+**SCG Router** in your computer's desktop controls. You can keep a chat open
+and switch between a subscription model and an approved model billed to your
+own OpenRouter key.
 
 | About the project | Details |
 |---|---|
