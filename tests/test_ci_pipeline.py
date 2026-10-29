@@ -35,6 +35,30 @@ class AcceptancePipelineTests(unittest.TestCase):
         self.assertIn("contains(needs.*.result, 'failure') || "
                       "contains(needs.*.result, 'cancelled')", pipeline['test'])
 
+    def test_windows_suites_use_separate_runners_and_both_reach_the_gate(self):
+        pipeline = jobs()
+        job = pipeline['windows-standard']
+        self.assertIn('suite: [core, native]', job)
+        self.assertIn('fail-fast: false', job)
+        self.assertIn('-Suite ${{ matrix.suite }}', job)
+        self.assertIn('runs-on: windows-latest', job)
+        self.assertIn('windows-standard', pipeline['test'])
+
+    def test_diagnostic_graph_preserves_checks_without_release_authority(self):
+        diagnostic = (CHECK.parent / 'windows-ci-benchmark.yml').read_text()
+        self.assertIn("branches: ['cyril/windows-ci-bench-*']", diagnostic)
+        self.assertIn('name: Diagnostic acceptance', diagnostic)
+        self.assertNotIn("&& 'Test'", diagnostic)
+        self.assertIn('python tools/plugin_verification.py --full --run --workers 2', diagnostic)
+        self.assertIn('echo "installer=true"', diagnostic)
+        for name, job in jobs().items():
+            self.assertIn('\n  ' + name + ':', diagnostic)
+            if name not in ('changes', 'windows-standard', 'unit-suite', 'test'):
+                # Unchanged native commands and full platform matrix remain present.
+                for line in job.splitlines():
+                    if line.lstrip().startswith(('run:', '- {target:', 'os:')):
+                        self.assertIn(line, diagnostic)
+
 
 if __name__ == '__main__':
     unittest.main()
