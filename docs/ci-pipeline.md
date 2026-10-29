@@ -10,6 +10,36 @@ platform matrices, permissions, timeouts and tag publication rules are unchanged
 Title and body edits cannot create a successful required `Test` check.
 No push to a branch publishes a router release; publication requires a tag.
 
+## Windows standard-user acceptance
+
+Core and native Windows suites use separate disposable runners and accounts.
+This avoids adding their durations while keeping profile and process state isolated.
+Both matrix entries reach the required `Test` gate. One failure does not cancel
+the other entry; failed and cancelled results cannot satisfy acceptance.
+
+`tools/run_windows_standard.ps1 -Python <interpreter> -Suite core` runs core
+discovery. `-Suite native` runs the existing four native contract modules.
+Omitting `-Suite` retains core followed by native. Every selected suite must
+report positive test counts and success; native contracts permit no skips.
+The launcher retains its standard-user identity checks and account cleanup.
+Its default child timeout remains 20 minutes; tests can request a shorter timeout.
+
+The split passed the bounded diagnostic comparison: two samples per layout
+recorded 31.5% lower median complete-pipeline time and 6.7% more aggregate job
+execution. Both paired candidates were faster, with matching Windows execution.
+First use the separate safety workflow for Windows launch/cleanup contracts,
+failure in each synthetic matrix entry, and cancellation of a waiting run.
+These short probes do not execute the full acceptance workload.
+The experiment uses identical source and tests for serial and split layouts,
+retains all other acceptance jobs, and cannot produce the required `Test` check.
+Run control, candidate, candidate, control, with at most four full runs.
+Stop after the first pair if correctness fails or no useful improvement appears.
+Accept only matching executed cases and outcomes, faster candidates in both pairs,
+and at least 20% lower median workflow elapsed. Report aggregate runner time
+separately; this experiment targets waiting time and makes no billing claim.
+The [Windows comparison record](windows-ci-benchmark.md) retains every sample
+and the acceptance decision. These measurements describe this four-run cohort.
+
 ## Why overlap these jobs
 
 The [baseline main acceptance run](https://github.com/software-combined/SC_AI_Router/actions/runs/39897410359)

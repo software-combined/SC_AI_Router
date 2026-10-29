@@ -1,5 +1,13 @@
 # Changelog
 
+## scg-optimise-ci 0.1.8 (2026-10-29)
+
+- Choose parallel boundaries from measured duration and required account,
+  profile or service isolation, rather than test counts alone.
+- Link the bounded Windows suite comparison: 31.5% lower median pipeline
+  elapsed with matching executed verification and 6.7% more aggregate runner
+  time. Two samples per layout describe that cohort, not typical savings.
+
 ## scg-optimise-ci 0.1.7 (2026-10-27)
 
 - Cache downloads and toolchains rather than test outcomes, leaving result

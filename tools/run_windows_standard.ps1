@@ -1,6 +1,30 @@
 # Disposable hosted-runner acceptance. Never use an existing staff account.
-param([Parameter(Mandatory=$true)][string]$Python)
+param(
+    [Parameter(Mandatory=$true)][string]$Python,
+    [ValidateSet('all', 'core', 'native')][string]$Suite = 'all',
+    [ValidateRange(1, 1200)][int]$TimeoutSeconds = 1200,
+    [string]$EvidencePath
+)
 $ErrorActionPreference = 'Stop'
+
+function Assert-StandardReport {
+    param([string]$Path, [string]$Suite, [string]$Sid, [int]$ExitCode)
+    if (-not (Test-Path -LiteralPath $Path)) { throw 'Standard-user completion report missing.' }
+    $result = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json -ErrorAction Stop
+    [string[]]$expected = if ($Suite -eq 'all') { @('core', 'native') } else { @($Suite) }
+    $rows = @($result.suites)
+    if ($result.sid -cne $Sid -or $result.elevated -isnot [bool] -or $result.elevated -or
+        $result.status -ne 0 -or $ExitCode -ne 0 -or $rows.Count -ne $expected.Count) {
+        throw 'Standard-user completion report does not match its process.'
+    }
+    for ($index = 0; $index -lt $expected.Count; $index++) {
+        $row = $rows[$index]
+        if ($row.suite -cne $expected[$index] -or $row.tests -le 0 -or
+            $row.success -isnot [bool] -or -not $row.success) { throw 'Standard-user suite failed.' }
+        if ($row.suite -eq 'native' -and $row.skipped -ne 0) { throw 'Native standard-user contracts were skipped.' }
+    }
+    return $result
+}
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_OS -ne 'Windows') {
     throw 'This tool requires a disposable Windows GitHub runner.'
 }
@@ -23,6 +47,8 @@ if (-not (Test-Path (Join-Path $gitBin 'bash.exe')) -or -not (Test-Path (Join-Pa
 $process = $null
 $started = $false
 $account = $null
+$report = $null
+$validated = $false
 $status = 1
 try {
     $account = New-LocalUser -Name $name -Password $password -AccountNeverExpires -PasswordNeverExpires
@@ -39,7 +65,7 @@ try {
     $report = Join-Path $temporary 'results.json'
     $start = [Diagnostics.ProcessStartInfo]::new()
     $start.FileName = $Python
-    $start.Arguments = '-I "' + (Join-Path $source 'tools/windows_standard.py') + '" --sid ' + $sid + ' --report "' + $report + '"'
+    $start.Arguments = '-I "' + (Join-Path $source 'tools/windows_standard.py') + '" --sid ' + $sid + ' --report "' + $report + '" --suite ' + $Suite
     $start.WorkingDirectory = $source
     $start.UserName = $name
     $start.Domain = $env:COMPUTERNAME
@@ -66,7 +92,7 @@ try {
     # Read both pipes concurrently; a full stderr pipe must not deadlock the suite.
     $stdout = $process.StandardOutput.ReadToEndAsync()
     $stderr = $process.StandardError.ReadToEndAsync()
-    if (-not $process.WaitForExit(1200000)) {
+    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
         $process.Kill()
         $process.WaitForExit()
         throw 'Standard-user suite timed out.'
@@ -76,29 +102,35 @@ try {
     }
     Write-Host ($stdout.GetAwaiter().GetResult())
     Write-Host ($stderr.GetAwaiter().GetResult())
-    if (-not (Test-Path -LiteralPath $report)) { throw 'Standard-user completion report missing.' }
-    $result = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
-    if ($result.sid -ne $sid -or $result.elevated -ne $false -or
-        $result.suites.Count -ne 2 -or $result.status -ne $process.ExitCode) {
-        throw 'Standard-user completion report does not match its process.'
-    }
-    foreach ($suite in $result.suites) {
-        if ($suite.tests -le 0 -or -not $suite.success) { throw 'Standard-user suite failed.' }
-        if ($suite.suite -eq 'native' -and $suite.skipped -ne 0) { throw 'Native standard-user contracts were skipped.' }
-    }
+    $result = Assert-StandardReport -Path $report -Suite $Suite -Sid $sid -ExitCode $process.ExitCode
+    $validated = $true
     $status = $process.ExitCode
 } finally {
     try {
-        if ($null -ne $process) {
-            try {
-                if ($started -and -not $process.HasExited) { $process.Kill(); $process.WaitForExit() }
-            } finally { $process.Dispose() }
+        try {
+            if ($EvidencePath) {
+                $evidence = @{identity_verified=$validated; selection=$Suite; suites=@()}
+                try {
+                    if ($report -and (Test-Path -LiteralPath $report)) {
+                        $recorded = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json -ErrorAction Stop
+                        $evidence.suites = $recorded.suites
+                        $evidence.status = $recorded.status
+                    }
+                } catch { $evidence.report_error = 'unreadable report' }
+                $evidence | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $EvidencePath -Encoding utf8
+            }
+        } finally {
+            if ($null -ne $process) {
+                try {
+                    if ($started -and -not $process.HasExited) { $process.Kill(); $process.WaitForExit() }
+                } finally { $process.Dispose() }
+            }
         }
     } finally {
         try {
             if ($null -ne $account) {
                 try {
-                # Reuse retained native handles for the new account's children; no PID-only kills.
+                    # Reuse retained native handles for the new account's children; no PID-only kills.
                     if ($started) {
                         & $Python -I (Join-Path $source 'tools/windows_standard.py') --sid $account.SID.Value --cleanup
                         if ($LASTEXITCODE -ne 0) { throw 'Standard-user process cleanup failed.' }

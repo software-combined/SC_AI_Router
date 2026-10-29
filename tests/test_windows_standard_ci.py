@@ -98,27 +98,80 @@ class StandardUserCleanupTests(unittest.TestCase):
 @unittest.skipUnless(os.name == 'nt' and os.environ.get('GITHUB_ACTIONS') == 'true'
                      and ctypes.windll.shell32.IsUserAnAdmin(), 'disposable administrator Windows CI only')
 class StandardUserLaunchFailureTests(unittest.TestCase):
+    def inventory(self):
+        command = ('@{users=@(Get-LocalUser | Where-Object Name -Like "scgci*" | '
+                   'ForEach-Object {$_.SID.Value});profiles=@(Get-CimInstance Win32_UserProfile | '
+                   'Where-Object LocalPath -Match "scgci" | ForEach-Object {$_.SID});'
+                   'directories=@(Get-ChildItem -Directory $env:RUNNER_TEMP -Filter "scgci*" | '
+                   'ForEach-Object {$_.Name})} | ConvertTo-Json -Compress')
+        result = subprocess.run([shutil.which('pwsh'), '-NoProfile', '-Command', command],
+                                capture_output=True, text=True, timeout=30, check=True)
+        return json.loads(result.stdout)
+
     def test_bad_executable_still_removes_new_account_profile_and_temporary_directory(self):
         shell = shutil.which('pwsh')
         self.assertIsNotNone(shell)
         script = Path(__file__).resolve().parents[1] / 'tools/run_windows_standard.ps1'
-        def inventory():
-            command = ('@{users=@(Get-LocalUser | Where-Object Name -Like "scgci*" | '
-                       'ForEach-Object {$_.SID.Value});profiles=@(Get-CimInstance Win32_UserProfile | '
-                       'Where-Object LocalPath -Match "scgci" | ForEach-Object {$_.SID});'
-                       'directories=@(Get-ChildItem -Directory $env:RUNNER_TEMP -Filter "scgci*" | '
-                       'ForEach-Object {$_.Name})} | ConvertTo-Json -Compress')
-            result = subprocess.run([shell, '-NoProfile', '-Command', command],
-                                    capture_output=True, text=True, timeout=30, check=True)
-            return json.loads(result.stdout)
-        before = inventory()
+        before = self.inventory()
         with tempfile.TemporaryDirectory() as temporary:
             invalid = Path(temporary) / 'invalid.exe'
             invalid.write_bytes(b'not a Windows executable')
             result = subprocess.run([shell, '-NoProfile', '-File', str(script), '-Python', str(invalid)],
                                     capture_output=True, text=True, timeout=90)
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(inventory(), before)
+        self.assertEqual(self.inventory(), before)
+
+    def test_selected_failures_and_timeout_clean_up_real_standard_user_children(self):
+        source = Path(__file__).resolve().parents[1]
+        before = self.inventory()
+        # Only the copied launcher uses this synthetic child; production has no injection switch.
+        for selection, mode in (('core', 'success'), ('core', 'failure'),
+                                ('native', 'failure'), ('native', 'timeout')):
+            with self.subTest(selection=selection, mode=mode), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                (root / 'tools').mkdir()
+                script = root / 'tools/run_windows_standard.ps1'
+                shutil.copyfile(source / 'tools/run_windows_standard.ps1', script)
+                (root / 'tools/windows_standard.py').write_text('''
+import argparse, ctypes, importlib.util, json, pathlib, subprocess, sys, time
+parser = argparse.ArgumentParser()
+parser.add_argument('--sid'); parser.add_argument('--report'); parser.add_argument('--suite')
+parser.add_argument('--cleanup', action='store_true')
+args = parser.parse_args()
+if args.cleanup:
+    sys.path.insert(0, ROOT)
+    spec = importlib.util.spec_from_file_location('real_standard', pathlib.Path(ROOT) / 'tools/windows_standard.py')
+    owner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(owner)
+    owner.cleanup(args.sid)
+    sys.exit(0)
+sid = subprocess.check_output(['powershell.exe', '-NoProfile', '-Command',
+    '[Security.Principal.WindowsIdentity]::GetCurrent().User.Value'], text=True).strip()
+assert sid == args.sid and not ctypes.windll.shell32.IsUserAnAdmin()
+assert args.suite == SELECTION
+if MODE == 'timeout':
+    code = 'import pathlib,sys,time\\nwhile True:\\n pathlib.Path(sys.argv[1]).write_text(str(time.monotonic())); time.sleep(0.1)'
+    subprocess.Popen([sys.executable, '-c', code, str(pathlib.Path(args.report).parent / 'heartbeat')])
+    time.sleep(60)
+success = MODE == 'success'
+status = 0 if success else 1
+pathlib.Path(args.report).write_text(json.dumps(dict(sid=sid, elevated=False, status=status,
+    suites=[dict(suite=args.suite, tests=1, skipped=0, success=success)])))
+sys.exit(status)
+'''.replace('ROOT', repr(str(source))).replace('SELECTION', repr(selection)).replace('MODE', repr(mode)))
+                result = subprocess.run([shutil.which('pwsh'), '-NoProfile', '-File', str(script),
+                                         '-Python', sys.executable, '-Suite', selection,
+                                         '-TimeoutSeconds', '5' if mode == 'timeout' else '30'],
+                                        capture_output=True, text=True, timeout=90)
+                if mode == 'success':
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    expected = 'timed out' if mode == 'timeout' else 'does not match its process'
+                    self.assertIn(expected, result.stdout + result.stderr)
+                    if mode == 'timeout':
+                        self.assertRegex(result.stdout, r'windows_standard_cleanup ended=[1-9]')
+                self.assertEqual(self.inventory(), before)
 
 
 if __name__ == '__main__':

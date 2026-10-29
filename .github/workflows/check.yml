@@ -108,9 +108,13 @@ jobs:
         run: python tools/check_installer_python39.py
 
   windows-standard:
-    name: Windows standard user
+    name: Windows standard user (${{ matrix.suite }})
     needs: changes
     if: needs.changes.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [core, native]
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -120,7 +124,7 @@ jobs:
       - uses: ./.github/actions/setup
       - name: Core and native contracts without administrator rights
         shell: pwsh
-        run: ./tools/run_windows_standard.ps1 -Python (Get-Command python).Source
+        run: ./tools/run_windows_standard.ps1 -Python (Get-Command python).Source -Suite ${{ matrix.suite }}
 
   unit-suite:
     name: Offline unit suite
