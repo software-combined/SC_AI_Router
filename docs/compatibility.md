@@ -1,5 +1,36 @@
 # Compatibility
 
+## Router 1.3.31 release checks, 29 October 2026 AEDT
+
+Clients: Codex desktop `26.1023.51421` (build `22530`), bundled CLI
+`0.165.0-alpha.1.2`, and Claude Code `2.1.309`.
+The checks used synthetic files and requested Low effort.
+
+| Client and route | Requested model | Counted work | Result |
+| --- | --- | --- | --- |
+| Codex / OpenRouter | `z-ai/glm-5.3-flash` | 4 upstream attempts | Tool round trip, image and compaction passed |
+| Codex / ChatGPT subscription | `gpt-6-luna` | 1 invocation, 1 tool call | Tool result and final marker passed |
+| Claude Code / OpenRouter | `z-ai/glm-5.3-flash` | 3 upstream attempts, 2 sequential reads | Tool results and final markers passed |
+| Claude Code / Claude subscription | `claude-sonnet-5-5` | 1 invocation, 1 read | Paired tool result and final marker passed |
+
+The isolated external router used the 1.3.31 source and enforced twelve total
+upstream attempts, 512 KiB input and 65,536 output tokens per request.
+Seven attempts ran across both clients. The ledger binds their results to the
+runtime fingerprint and client versions. Both protocols reported the requested
+model; Codex also reported Low effort. Claude did not expose served effort.
+
+Subscription checks used existing client sign-in without copying credentials.
+The Codex check used the desktop's bundled app server and one synthetic tool.
+The Claude check disabled custom instructions, hooks and connectors, confined
+its Read tool to a temporary directory, and capped the client budget at USD 0.20.
+Claude reported the requested model. Codex subscription served identity and
+effort, and subscription upstream attempt counts, remain unverified.
+Provider reports do not independently attest model weights or reasoning compute.
+
+Publication, an existing installation's automatic update, and Windows device
+acceptance remain separate checks. This record proves client compatibility
+before publication; it does not claim delivery to every existing installation.
+
 ## Custom-tool model switching, 28 October 2026 AEDT
 
 Clients remain Codex desktop `26.1021.31345` (build `21828`), bundled CLI
