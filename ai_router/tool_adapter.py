@@ -8,7 +8,7 @@ import re
 from copy import deepcopy
 from .capabilities import has_recursive_refs
 from .discovered import recall
-from .history_items import repair_custom_call_id
+from .history_items import repair_call_id
 from . import agent_handoffs, request_evidence, sse, tool_aliases, tool_merge, transport, turn_budget
 from .tool_history import SEARCH_NAME, tool_key
 from .tool_merge import tool_entries
@@ -221,7 +221,7 @@ class ToolEvents:
             if isinstance(query, str) and re.fullmatch(r'[\w]+(?:\.[\w]+)+', query):
                 args['query'] = query.replace('.', ' ')
             item.update(type='tool_search_call', execution='client', arguments=args)
-            return item
+            return repair_call_id(item)
         if kind in ('json_text', 'json_text_root'):
             value = '' if started else integer_json(json.loads(arguments)['arguments_json'])
             if not started:
@@ -234,7 +234,7 @@ class ToolEvents:
         if not isinstance(value, str):
             raise ValueError('Freeform tool input must be a string')
         item.update(type='custom_tool_call', input=value)
-        return repair_custom_call_id(item)
+        return repair_call_id(item)
 
     def event(self, event):
         request_evidence.response_event(self.notes, event)

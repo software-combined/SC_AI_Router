@@ -22,12 +22,14 @@ def user_message_item(text):
             'content': [{'type': 'input_text', 'text': text}]}
 
 
-def repair_custom_call_id(item):
-    """Restore the custom item family after unwrapping a function-shaped call."""
-    ident = item.get('id') if isinstance(item, dict) else None
-    if (isinstance(item, dict) and item.get('type') == 'custom_tool_call'
-            and isinstance(ident, str) and ident.startswith('fc_')):
-        return {**item, 'id': 'ctc_' + ident[3:]}
+def repair_call_id(item):
+    """Restore the native item family after unwrapping a function-shaped call."""
+    if not isinstance(item, dict):
+        return item
+    ident = item.get('id')
+    prefix = {'custom_tool_call': 'ctc_', 'tool_search_call': 'tsc_'}.get(item.get('type'))
+    if prefix and isinstance(ident, str) and ident.startswith('fc_'):
+        return {**item, 'id': prefix + ident[3:]}
     return item
 
 

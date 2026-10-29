@@ -9,13 +9,13 @@ ChatGPT backend cannot read it, refusing the turn with
 compaction blob belongs to the backend and goes out unchanged. Only the
 outbound projection changes; the client's history is never edited.
 
-Legacy custom calls also regain their custom item ID prefix before dispatch.
+Legacy custom and discovery calls regain their native item ID prefix before dispatch.
 The retry repair below only handles reasoning blobs and non-empty router-owned
 summaries. Native opaque compaction stays unchanged and is not retried.
 """
 from . import compaction as comp
 from .external_history import strip_reasoning_blobs
-from .history_items import repair_custom_call_id, user_message_item
+from .history_items import repair_call_id, user_message_item
 
 
 def _owned_summary(item):
@@ -24,7 +24,7 @@ def _owned_summary(item):
 
 
 def normalize(payload):
-    """Project reasoning, custom IDs and router compaction summaries for the wire.
+    """Project reasoning, native call IDs and router compaction summaries for the wire.
 
     Returns the original payload on a no-op, otherwise a shallow copy; the
     client's items are never edited.
@@ -35,7 +35,7 @@ def normalize(payload):
     result = []
     changed = False
     for item in items:
-        repaired = repair_custom_call_id(item)
+        repaired = repair_call_id(item)
         changed |= repaired is not item
         item = repaired
         if (isinstance(item, dict) and item.get('type') == 'reasoning'

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Keep discovered tools available when a Codex chat switches from an external
+  model to ChatGPT. Give discovery calls their native item IDs and repair older
+  saved calls before replay, without changing the saved chat or tool results.
+
 - Give a slow Windows Task Scheduler more time to answer a task operation
   before setup reports a failure.
 
