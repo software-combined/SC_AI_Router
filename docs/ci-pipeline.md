@@ -24,7 +24,9 @@ report positive test counts and success; native contracts permit no skips.
 The launcher retains its standard-user identity checks and account cleanup.
 Its default child timeout remains 20 minutes; tests can request a shorter timeout.
 
-The split is a candidate until the bounded diagnostic comparison passes.
+The split passed the bounded diagnostic comparison: two samples per layout
+recorded 31.5% lower median complete-pipeline time and 6.7% more aggregate job
+execution. Both paired candidates were faster, with matching Windows execution.
 First use the separate safety workflow for Windows launch/cleanup contracts,
 failure in each synthetic matrix entry, and cancellation of a waiting run.
 These short probes do not execute the full acceptance workload.
@@ -35,6 +37,8 @@ Stop after the first pair if correctness fails or no useful improvement appears.
 Accept only matching executed cases and outcomes, faster candidates in both pairs,
 and at least 20% lower median workflow elapsed. Report aggregate runner time
 separately; this experiment targets waiting time and makes no billing claim.
+The [Windows comparison record](windows-ci-benchmark.md) retains every sample
+and the acceptance decision. These measurements describe this four-run cohort.
 
 ## Why overlap these jobs
 

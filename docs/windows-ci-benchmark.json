@@ -1,0 +1,338 @@
+{
+  "repository": "software-combined/SC_AI_Router",
+  "date_aedt": "2026-10-29",
+  "source_commit": "54b4dabd9855e02ce9c05a70b2569cb944772413",
+  "source_tree": "80b830a4d9dc8629f6a535d3a782e644941db97f",
+  "status": "passed",
+  "criteria": {
+    "maximum_full_runs": 4,
+    "minimum_median_elapsed_reduction_percent": 20,
+    "each_pair_must_improve": true,
+    "matching_windows_case_outcomes": true,
+    "replacements_allowed": 0
+  },
+  "samples": [
+    {
+      "label": "control-1",
+      "run_id": 40794286782,
+      "url": "https://github.com/software-combined/SC_AI_Router/actions/runs/40794286782",
+      "source": "54b4dabd9855e02ce9c05a70b2569cb944772413",
+      "source_tree": "80b830a4d9dc8629f6a535d3a782e644941db97f",
+      "conclusion": "success",
+      "elapsed_s": 816,
+      "aggregate_s": 2381,
+      "actual_checkouts_verified": 16,
+      "phases": {
+        "core": {
+          "tests": 2660,
+          "skipped": 211,
+          "success": true,
+          "elapsed_s": 414.87156810000005,
+          "fingerprint": "a4a448516b8545776129a3f52ed290f18a2cd931ea9441ca72c9b261327e9527",
+          "inventory_fingerprint": "5946f9303507b4b0fbd5cc76cb6171606d372f7b1009907969d400fa7a8c0731",
+          "observed_cases": 2660,
+          "fixture_skipped": 0,
+          "unique_inventory_cases": 2649
+        },
+        "native": {
+          "tests": 17,
+          "skipped": 0,
+          "success": true,
+          "elapsed_s": 299.86210370000003,
+          "fingerprint": "ab9795d3e2676d97b82c62ea0c20b3865017a9ab7ff0b999615cebd8d5f043c4",
+          "inventory_fingerprint": "0a113b24070b8310fbe6f46b036c2364708effbc95e9ee93819abf99a8406eb9",
+          "observed_cases": 17,
+          "fixture_skipped": 0,
+          "unique_inventory_cases": 17
+        }
+      },
+      "job_durations_seconds": {
+        "Plugin schedulers (ubuntu-latest)": 16,
+        "Change scope": 5,
+        "Hook adapter portability (ubuntu-latest)": 13,
+        "Hook adapter portability (windows-latest)": 31,
+        "Offline unit suite": 345,
+        "Plugin schedulers (windows-latest)": 19,
+        "Windows standard user (all)": 766,
+        "Desktop menu (windows/x86_64)": 17,
+        "Installer (macOS)": 398,
+        "Installer (Windows)": 333,
+        "Installer (Python 3.9)": 13,
+        "Desktop menu (darwin/x86_64)": 80,
+        "Desktop menu (darwin/arm64)": 51,
+        "Desktop menu (linux/x86_64)": 136,
+        "Desktop menu (linux/arm64)": 120,
+        "Diagnostic acceptance": 38
+      },
+      "runner_image_variants": [
+        "macos-15 20260824.0482.1",
+        "macos-15-arm64 20260907.0337.1",
+        "macos-26-arm64 20261013.0424.1",
+        "ubuntu-24.04 20261025.353.1",
+        "ubuntu-24.04-arm 20261025.165.1",
+        "ubuntu-26.04 20261025.179.1",
+        "windows-2025-vs2026 20261021.278.1"
+      ],
+      "windows_environment": [
+        {
+          "python": "3.14.9 (tags/v3.14.9:ead82c0, Oct 21 2026, 06:26:14) [MSC v.1944 64 bit (AMD64)]",
+          "architecture": "AMD64",
+          "cpus": 4,
+          "openssl": "OpenSSL 3.5.9 29 Sep 2026"
+        }
+      ]
+    },
+    {
+      "label": "candidate-1",
+      "run_id": 40795816439,
+      "url": "https://github.com/software-combined/SC_AI_Router/actions/runs/40795816439",
+      "source": "54b4dabd9855e02ce9c05a70b2569cb944772413",
+      "source_tree": "80b830a4d9dc8629f6a535d3a782e644941db97f",
+      "conclusion": "success",
+      "elapsed_s": 669,
+      "aggregate_s": 2646,
+      "actual_checkouts_verified": 17,
+      "phases": {
+        "core": {
+          "tests": 2660,
+          "skipped": 211,
+          "success": true,
+          "elapsed_s": 419.40853889999994,
+          "fingerprint": "a4a448516b8545776129a3f52ed290f18a2cd931ea9441ca72c9b261327e9527",
+          "inventory_fingerprint": "5946f9303507b4b0fbd5cc76cb6171606d372f7b1009907969d400fa7a8c0731",
+          "observed_cases": 2660,
+          "fixture_skipped": 0,
+          "unique_inventory_cases": 2649
+        },
+        "native": {
+          "tests": 17,
+          "skipped": 0,
+          "success": true,
+          "elapsed_s": 573.3229169,
+          "fingerprint": "ab9795d3e2676d97b82c62ea0c20b3865017a9ab7ff0b999615cebd8d5f043c4",
+          "inventory_fingerprint": "0a113b24070b8310fbe6f46b036c2364708effbc95e9ee93819abf99a8406eb9",
+          "observed_cases": 17,
+          "fixture_skipped": 0,
+          "unique_inventory_cases": 17
+        }
+      },
+      "job_durations_seconds": {
+        "Hook adapter portability (windows-latest)": 24,
+        "Hook adapter portability (ubuntu-latest)": 14,
+        "Plugin schedulers (ubuntu-latest)": 17,
+        "Plugin schedulers (windows-latest)": 17,
+        "Change scope": 5,
+        "Offline unit suite": 347,
+        "Windows standard user (core)": 463,
+        "Installer (Windows)": 314,
+        "Windows standard user (native)": 625,
+        "Desktop menu (linux/arm64)": 118,
+        "Installer (Python 3.9)": 16,
+        "Desktop menu (linux/x86_64)": 123,
+        "Desktop menu (windows/x86_64)": 18,
+        "Installer (macOS)": 357,
+        "Desktop menu (darwin/x86_64)": 104,
+        "Desktop menu (darwin/arm64)": 51,
+        "Diagnostic acceptance": 33
+      },
+      "runner_image_variants": [
+        "macos-15 20260824.0482.1",
+        "macos-15-arm64 20260907.0337.1",
+        "macos-26-arm64 20261021.0445.8",
+        "ubuntu-24.04 20261025.353.1",
+        "ubuntu-24.04-arm 20261025.165.1",
+        "ubuntu-26.04 20261025.179.1",
+        "windows-2025-vs2026 20261021.278.1"
+      ],
+      "windows_environment": [
+        {
+          "python": "3.14.9 (tags/v3.14.9:ead82c0, Oct 21 2026, 06:26:14) [MSC v.1944 64 bit (AMD64)]",
+          "architecture": "AMD64",
+          "cpus": 4,
+          "openssl": "OpenSSL 3.5.9 29 Sep 2026"
+        }
+      ]
+    },
+    {
+      "label": "candidate-2",
+      "run_id": 40797047472,
+      "url": "https://github.com/software-combined/SC_AI_Router/actions/runs/40797047472",
+      "source": "54b4dabd9855e02ce9c05a70b2569cb944772413",
+      "source_tree": "80b830a4d9dc8629f6a535d3a782e644941db97f",
+      "conclusion": "success",
+      "elapsed_s": 658,
+      "aggregate_s": 2715,
+      "actual_checkouts_verified": 17,
+      "phases": {
+        "core": {
+          "tests": 2660,
+          "skipped": 211,
+          "success": true,
+          "elapsed_s": 438.02232559999993,
+          "fingerprint": "a4a448516b8545776129a3f52ed290f18a2cd931ea9441ca72c9b261327e9527",
+          "inventory_fingerprint": "5946f9303507b4b0fbd5cc76cb6171606d372f7b1009907969d400fa7a8c0731",
+          "observed_cases": 2660,
+          "fixture_skipped": 0,
+          "unique_inventory_cases": 2649
+        },
+        "native": {
+          "tests": 17,
+          "skipped": 0,
+          "success": true,
+          "elapsed_s": 566.502646,
+          "fingerprint": "ab9795d3e2676d97b82c62ea0c20b3865017a9ab7ff0b999615cebd8d5f043c4",
+          "inventory_fingerprint": "0a113b24070b8310fbe6f46b036c2364708effbc95e9ee93819abf99a8406eb9",
+          "observed_cases": 17,
+          "fixture_skipped": 0,
+          "unique_inventory_cases": 17
+        }
+      },
+      "job_durations_seconds": {
+        "Offline unit suite": 344,
+        "Plugin schedulers (windows-latest)": 21,
+        "Hook adapter portability (windows-latest)": 27,
+        "Change scope": 7,
+        "Plugin schedulers (ubuntu-latest)": 23,
+        "Hook adapter portability (ubuntu-latest)": 12,
+        "Desktop menu (linux/arm64)": 123,
+        "Desktop menu (darwin/x86_64)": 90,
+        "Desktop menu (darwin/arm64)": 56,
+        "Windows standard user (native)": 621,
+        "Desktop menu (linux/x86_64)": 103,
+        "Installer (macOS)": 350,
+        "Windows standard user (core)": 546,
+        "Installer (Python 3.9)": 16,
+        "Installer (Windows)": 334,
+        "Desktop menu (windows/x86_64)": 18,
+        "Diagnostic acceptance": 24
+      },
+      "runner_image_variants": [
+        "macos-15 20260824.0482.1",
+        "macos-15-arm64 20260907.0337.1",
+        "macos-26-arm64 20261021.0445.8",
+        "ubuntu-24.04 20261025.353.1",
+        "ubuntu-24.04-arm 20261025.165.1",
+        "ubuntu-26.04 20261012.163.1",
+        "ubuntu-26.04 20261025.179.1",
+        "windows-2025-vs2026 20261021.278.1"
+      ],
+      "windows_environment": [
+        {
+          "python": "3.14.9 (tags/v3.14.9:ead82c0, Oct 21 2026, 06:26:14) [MSC v.1944 64 bit (AMD64)]",
+          "architecture": "AMD64",
+          "cpus": 4,
+          "openssl": "OpenSSL 3.5.9 29 Sep 2026"
+        }
+      ]
+    },
+    {
+      "label": "control-2",
+      "run_id": 40798267153,
+      "url": "https://github.com/software-combined/SC_AI_Router/actions/runs/40798267153",
+      "source": "54b4dabd9855e02ce9c05a70b2569cb944772413",
+      "source_tree": "80b830a4d9dc8629f6a535d3a782e644941db97f",
+      "conclusion": "success",
+      "elapsed_s": 1120,
+      "aggregate_s": 2645,
+      "actual_checkouts_verified": 16,
+      "phases": {
+        "core": {
+          "tests": 2660,
+          "skipped": 211,
+          "success": true,
+          "elapsed_s": 452.9440177,
+          "fingerprint": "a4a448516b8545776129a3f52ed290f18a2cd931ea9441ca72c9b261327e9527",
+          "inventory_fingerprint": "5946f9303507b4b0fbd5cc76cb6171606d372f7b1009907969d400fa7a8c0731",
+          "observed_cases": 2660,
+          "fixture_skipped": 0,
+          "unique_inventory_cases": 2649
+        },
+        "native": {
+          "tests": 17,
+          "skipped": 0,
+          "success": true,
+          "elapsed_s": 564.8972495,
+          "fingerprint": "ab9795d3e2676d97b82c62ea0c20b3865017a9ab7ff0b999615cebd8d5f043c4",
+          "inventory_fingerprint": "0a113b24070b8310fbe6f46b036c2364708effbc95e9ee93819abf99a8406eb9",
+          "observed_cases": 17,
+          "fixture_skipped": 0,
+          "unique_inventory_cases": 17
+        }
+      },
+      "job_durations_seconds": {
+        "Plugin schedulers (windows-latest)": 22,
+        "Plugin schedulers (ubuntu-latest)": 13,
+        "Hook adapter portability (windows-latest)": 37,
+        "Offline unit suite": 368,
+        "Hook adapter portability (ubuntu-latest)": 13,
+        "Change scope": 7,
+        "Desktop menu (darwin/x86_64)": 103,
+        "Installer (Python 3.9)": 17,
+        "Windows standard user (all)": 1073,
+        "Desktop menu (windows/x86_64)": 18,
+        "Desktop menu (darwin/arm64)": 62,
+        "Installer (Windows)": 314,
+        "Desktop menu (linux/arm64)": 118,
+        "Desktop menu (linux/x86_64)": 86,
+        "Installer (macOS)": 362,
+        "Diagnostic acceptance": 32
+      },
+      "runner_image_variants": [
+        "macos-15 20260824.0482.1",
+        "macos-15-arm64 20260907.0337.1",
+        "macos-26-arm64 20261013.0424.1",
+        "ubuntu-24.04 20261025.353.1",
+        "ubuntu-24.04-arm 20261025.165.1",
+        "ubuntu-26.04 20261012.163.1",
+        "ubuntu-26.04 20261025.179.1",
+        "windows-2025-vs2026 20261021.278.1"
+      ],
+      "windows_environment": [
+        {
+          "python": "3.14.9 (tags/v3.14.9:ead82c0, Oct 21 2026, 06:26:14) [MSC v.1944 64 bit (AMD64)]",
+          "architecture": "AMD64",
+          "cpus": 4,
+          "openssl": "OpenSSL 3.5.9 29 Sep 2026"
+        }
+      ]
+    }
+  ],
+  "safety": [
+    {
+      "name": "Windows native launch/report/cleanup proof",
+      "run_id": 40793763268,
+      "tests": 11,
+      "skips": 0,
+      "conclusion": "success"
+    },
+    {
+      "name": "core failure",
+      "run_id": 40794151989,
+      "expected_conclusion": "failure",
+      "actual_conclusion": "failure"
+    },
+    {
+      "name": "native failure",
+      "run_id": 40794152536,
+      "expected_conclusion": "failure",
+      "actual_conclusion": "failure"
+    },
+    {
+      "name": "cancellation",
+      "run_id": 40794152702,
+      "expected_conclusion": "cancelled",
+      "actual_conclusion": "cancelled"
+    }
+  ],
+  "summary": {
+    "control_elapsed_median_s": 968,
+    "candidate_elapsed_median_s": 663.5,
+    "elapsed_reduction_percent": 31.45661157024794,
+    "control_aggregate_median_s": 2513,
+    "candidate_aggregate_median_s": 2680.5,
+    "aggregate_increase_percent": 6.665340230799832,
+    "both_pairs_faster": true,
+    "matching_windows_verification": true,
+    "actual_checkouts_verified": 66
+  }
+}
