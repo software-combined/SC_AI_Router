@@ -2,10 +2,6 @@
 
 ## Unreleased
 
-- Use one `ai_router` runtime package for both Codex and Claude. Remove the
-  unused source import alias while preserving older-release startup and
-  installed service, task and log identities.
-
 - Give a slow Windows Task Scheduler more time to answer a task operation
   before setup reports a failure.
 
@@ -72,6 +68,12 @@
   Retry quietly after verified restoration; retain recovery evidence when restoration fails.
 - Verify and restore owned Windows shortcuts and the Apps entry during installation recovery.
   Preserve explicit sign-in choices and launch the sign-in menu without a console.
+
+## 1.3.31
+
+- Use one `ai_router` runtime package for both Codex and Claude. Remove the
+  unused source import alias while preserving older-release startup and
+  installed service, task and log identities.
 
 ## 1.3.30
 

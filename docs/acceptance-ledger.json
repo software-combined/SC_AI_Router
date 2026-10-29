@@ -2973,5 +2973,126 @@
       "result": "pass"
     }
   ]
-}
+},
+  {
+    "kind": "model_routes_v1",
+    "observed_at": "2026-10-29T03:36:55.375028+00:00",
+    "model": "z-ai/glm-5.3-flash",
+    "provider": "openrouter",
+    "capability_fingerprint": "fe0f03f3b6c6a8c9bbda1646c12a2cc4822759f06f3965a3d7a5a2995f71a0f7",
+    "runtime_fingerprint": "4cab2299143d96dc92dd6411f1e6c427f3f9c8425b17be50d0b54a11fd03aa47",
+    "router_version": "1.3.31",
+    "router_revision": "841b1e2c33a789481e66cafa2a59413d4a835e0d",
+    "routes": [
+      {
+        "protocol": "responses",
+        "client": "codex",
+        "client_version": "0.165.0-alpha.1.2",
+        "requested_effort": "low",
+        "served_models": [
+          {
+            "value": "z-ai/glm-5.3-flash",
+            "source": "response.created.response.model"
+          },
+          {
+            "value": "z-ai/glm-5.3-flash",
+            "source": "response.in_progress.response.model"
+          },
+          {
+            "value": "z-ai/glm-5.3-flash",
+            "source": "response.completed.response.model"
+          },
+          {
+            "value": "z-ai/glm-5.3-flash",
+            "source": "response.created.response.model"
+          },
+          {
+            "value": "z-ai/glm-5.3-flash",
+            "source": "response.in_progress.response.model"
+          },
+          {
+            "value": "z-ai/glm-5.3-flash",
+            "source": "response.completed.response.model"
+          },
+          {
+            "value": "z-ai/glm-5.3-flash",
+            "source": "response.created.response.model"
+          },
+          {
+            "value": "z-ai/glm-5.3-flash",
+            "source": "response.in_progress.response.model"
+          },
+          {
+            "value": "z-ai/glm-5.3-flash",
+            "source": "response.completed.response.model"
+          }
+        ],
+        "served_efforts": [
+          {
+            "value": "low",
+            "source": "response.created.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.in_progress.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.completed.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.created.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.in_progress.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.completed.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.created.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.in_progress.response.reasoning.effort"
+          },
+          {
+            "value": "low",
+            "source": "response.completed.response.reasoning.effort"
+          }
+        ],
+        "calls": 4,
+        "conformance": "pass",
+        "result": "pass"
+      },
+      {
+        "protocol": "messages",
+        "client": "claude",
+        "client_version": "2.1.309",
+        "requested_effort": "low",
+        "served_models": [
+          {
+            "value": "z-ai/glm-5.3-flash",
+            "source": "message_start.message.model"
+          },
+          {
+            "value": "z-ai/glm-5.3-flash",
+            "source": "message_start.message.model"
+          },
+          {
+            "value": "z-ai/glm-5.3-flash",
+            "source": "message_start.message.model"
+          }
+        ],
+        "served_efforts": [],
+        "calls": 3,
+        "conformance": "pass",
+        "result": "pass"
+      }
+    ]
+  }
 ]
