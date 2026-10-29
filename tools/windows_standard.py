@@ -1,13 +1,42 @@
 """Run Windows core and native contracts under the disposable CI account."""
 import argparse
 import ctypes as C
+import hashlib
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import time
-import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from tools.ci_unittest import Program
+
+
+def run_suites(selection='all'):
+    commands = {
+        'core': ['discover', '--durations', '15', '-s', 'tests', '-t', '.'],
+        'native': ['--durations', '15', 'tests.test_windows_native_lifecycle', 'tests.test_windows_acl_native',
+                   'tests.test_windows_task_cohort', 'tests.test_windows_shortcut_recovery'],
+    }
+    names = ('core', 'native') if selection == 'all' else (selection,)
+    outcomes = []
+    for name in names:
+        started = time.monotonic()
+        recorded = Program(commands[name], None).report()
+        for row in recorded['cases'] + recorded['events']:
+            if row.get('kind') == 'subtest':
+                # Parameter displays can contain temporary paths; retain parent and callback outcome.
+                row['id'] = row['id'].split(' (', 1)[0]
+            if 'reason' in row:
+                row['reason_sha256'] = hashlib.sha256(row.pop('reason').encode()).hexdigest()
+        outcomes.append(dict(suite=name, tests=recorded['summary']['testsRun'],
+                             skipped=recorded['summary']['skipped'], success=recorded['complete'],
+                             elapsed_s=time.monotonic() - started,
+                             inventory=recorded['inventory'], cases=recorded['cases'],
+                             events=recorded['events'], fixture_skipped=recorded['fixture_skipped']))
+    return outcomes
 
 
 def profile():
@@ -41,10 +70,8 @@ def cleanup(expected_sid):
     print('windows_standard_cleanup ended=%d' % ended, flush=True)
 
 
-def run(expected_sid, report):
-    root = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(root))
-    os.chdir(root)
+def run(expected_sid, report, selection='all'):
+    os.chdir(ROOT)
     profile()
     from tests.test_native_setup import module
     api = module('windows_native').Native()
@@ -62,16 +89,7 @@ def run(expected_sid, report):
     os.environ['SCG_REQUIRE_STANDARD_USER'] = '1'
     os.environ.pop('SCG_RUN_INSTALLER_TESTS', None)
     print('windows_standard sid=%s elevated=false profile_loaded=true' % sid, flush=True)
-    outcomes = []
-    for name, suite in (
-            ('core', lambda: unittest.defaultTestLoader.discover('tests', top_level_dir='.')),
-            ('native', lambda: unittest.defaultTestLoader.loadTestsFromNames([
-                'tests.test_windows_native_lifecycle', 'tests.test_windows_acl_native',
-                'tests.test_windows_task_cohort', 'tests.test_windows_shortcut_recovery']))):
-        started = time.monotonic()
-        result = unittest.TextTestRunner(verbosity=1, durations=15).run(suite())
-        outcomes.append(dict(suite=name, tests=result.testsRun, skipped=len(result.skipped),
-                             success=result.wasSuccessful(), elapsed_s=time.monotonic() - started))
+    outcomes = run_suites(selection)
     status = 0 if all(row['success'] for row in outcomes) else 1
     Path(report).write_text(json.dumps(dict(sid=sid, elevated=False, status=status,
                                            suites=outcomes)), encoding='utf-8')
@@ -82,12 +100,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sid', required=True)
     parser.add_argument('--report')
+    parser.add_argument('--suite', choices=('all', 'core', 'native'), default='all')
     parser.add_argument('--cleanup', action='store_true')
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     if args.cleanup:
         cleanup(args.sid)
     else:
         if not args.report:
             parser.error('--report is required for the standard-user suite')
-        sys.exit(run(args.sid, args.report))
+        sys.exit(run(args.sid, args.report, args.suite))
