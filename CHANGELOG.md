@@ -69,6 +69,12 @@
 - Verify and restore owned Windows shortcuts and the Apps entry during installation recovery.
   Preserve explicit sign-in choices and launch the sign-in menu without a console.
 
+## 1.3.32
+
+- Keep discovered tools available when a Codex chat switches from an external
+  model to ChatGPT. Give discovery calls their native item IDs and repair older
+  saved calls before replay, without changing the saved chat or tool results.
+
 ## 1.3.31
 
 - Use one `ai_router` runtime package for both Codex and Claude. Remove the

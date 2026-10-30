@@ -286,8 +286,8 @@ OpenRouter.
 `history_items.py` owns the history vocabulary more than one outbound stage
 reads: the tool call and output families, the readable-text readers, the two
 encrypted predicates and the readable agent-message predicates. The two
-custom-call paths share its narrow `fc_` to `ctc_` item ID repair: response
-adaptation creates valid custom items, and subscription projection heals saved
+custom and discovery paths share its narrow `fc_` to `ctc_` or `tsc_` item ID repair:
+response adaptation creates valid native items, and subscription projection heals saved
 items without changing client history or the `call_id` linking each result.
 The two predicates disagree on an empty marker: `has_encryption_marked_agent_item`
 counts an `encrypted_content` marker whatever its value, while
