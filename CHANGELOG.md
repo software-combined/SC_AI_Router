@@ -2,10 +2,6 @@
 
 ## Unreleased
 
-- Keep discovered tools available when a Codex chat switches from an external
-  model to ChatGPT. Give discovery calls their native item IDs and repair older
-  saved calls before replay, without changing the saved chat or tool results.
-
 - Give a slow Windows Task Scheduler more time to answer a task operation
   before setup reports a failure.
 
@@ -72,6 +68,12 @@
   Retry quietly after verified restoration; retain recovery evidence when restoration fails.
 - Verify and restore owned Windows shortcuts and the Apps entry during installation recovery.
   Preserve explicit sign-in choices and launch the sign-in menu without a console.
+
+## 1.3.32
+
+- Keep discovered tools available when a Codex chat switches from an external
+  model to ChatGPT. Give discovery calls their native item IDs and repair older
+  saved calls before replay, without changing the saved chat or tool results.
 
 ## 1.3.31
 

@@ -1,5 +1,53 @@
 # Compatibility
 
+## Router 1.3.32 release checks, 30 October 2026 AEDT
+
+Clients: Codex desktop `26.1027.30824` (build `22943`), bundled CLI
+`0.166.0-alpha.5.1`, and Claude Code `2.1.309`.
+All checks used synthetic data and requested Low effort.
+
+One real Codex chat discovered and called a deferred synthetic tool on
+`moonshotai/kimi-k3.1-pro`, then switched to `gpt-6-luna` through ChatGPT
+subscription authentication. ChatGPT recalled the tool's result. Three Kimi
+requests and one ChatGPT request completed with HTTP 200. Each response reported
+the requested model and Low effort; reported usage totalled 10,372 tokens.
+The client stored the discovery call with its `tsc_` item ID. Subscription
+projection preserved the discovery output, call/result link and original input.
+
+The isolated candidate router capped the switch check at eight model sends,
+32 KiB prepared input and 4,096 output tokens per send, with a 240-second deadline.
+A 32,000-token usage stop permits one bounded in-flight request to finish.
+An ephemeral chat used the existing client sign-in without copying credentials.
+Command-line settings disabled connectors, plugins, hooks and unrelated tools.
+Codex 0.166 requires HTTPS workspace discovery even for a loopback provider.
+The process sandbox therefore allowed HTTPS and local DNS resolution alongside
+the isolated listener. All four observed model sends reached the capped router.
+
+The client upgrade also received the four required route checks:
+
+| Client and route | Requested model | Counted work | Result |
+| --- | --- | --- | --- |
+| Codex / OpenRouter | `z-ai/glm-5.3-flash` | 2 upstream attempts | Tool round trip passed |
+| Codex / ChatGPT subscription | `gpt-6-luna` | 1 invocation, 1 tool call | Tool result and final marker passed |
+| Claude Code / OpenRouter | `z-ai/glm-5.3-flash` | 2 sequential reads | Paired results and final markers passed |
+| Claude Code / Claude subscription | `claude-sonnet-5-5` | 1 invocation, 1 read | Tool result and final marker passed |
+
+Both Codex route checks used `tools/probe_codex_runtime.py`. The external
+checks used isolated candidate routers with twelve-attempt caps, 512 KiB input
+and at most 65,536 output tokens per attempt. Claude's external client also had
+a USD 0.25 budget and 2,048 output tokens per request. The native Claude check
+used restricted mode, only Read, no connectors, and a USD 0.20 budget.
+The separate Codex subscription smoke check used the installed 1.3.31 router;
+the affected discovery-switch path above used the 1.3.32 candidate.
+Claude reported each requested model. Separate subscription smoke checks did
+not expose served effort or complete upstream attempt counts.
+Provider reports do not independently attest model weights or reasoning compute.
+
+The installer-enabled offline suite ran 3,799 tests with 23 skips and no failures.
+Compilation, source limits and policy scans passed on the candidate.
+Publication, automatic installed updates and Windows-device acceptance remain
+separate gates; these checks do not establish delivery to every installation.
+
 ## Router 1.3.31 release checks, 29 October 2026 AEDT
 
 Clients: Codex desktop `26.1023.51421` (build `22530`), bundled CLI
