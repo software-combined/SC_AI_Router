@@ -102,7 +102,7 @@ class PartitionExperimentTests(unittest.TestCase):
             self.assertIn('name: Diagnostic acceptance (' + arm + ')', experiment[gate])
         self.assertIn('steps: &acceptance-steps', experiment['test'])
         self.assertIn('steps: *acceptance-steps', experiment['candidate-test'])
-        self.assertEqual(DIAGNOSTIC.read_text().count('if-no-files-found: error'), 4)
+        self.assertEqual(DIAGNOSTIC.read_text().count('if-no-files-found: error'), 8)
 
     @unittest.skipUnless(os.name == 'posix' and shutil.which('bash'), 'diagnostic gate runs on Ubuntu')
     def test_actual_gate_rejects_every_failed_cancelled_or_unexpected_skipped_prerequisite(self):

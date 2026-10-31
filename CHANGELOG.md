@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Avoid starting PowerShell to snapshot Windows shortcuts when all three paths
+  are absent. Existing shortcuts still receive native ownership checks.
+
 - Give a slow Windows Task Scheduler more time to answer a task operation
   before setup reports a failure.
 

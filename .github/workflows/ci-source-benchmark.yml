@@ -1,0 +1,24 @@
+# Actual complete before/after paths. Diagnostic checks cannot authorise a release.
+name: Whole CI source comparison
+
+on:
+  push:
+    branches: ['cyril/ci-source-bench-*']
+
+permissions:
+  contents: read
+
+jobs:
+  before:
+    name: Before
+    uses: ./.github/workflows/windows-ci-benchmark.yml
+    with:
+      source_ref: b815fe5262168f536f06f627714112a5bfbe6ab0
+      arm: before
+
+  after:
+    name: After
+    uses: ./.github/workflows/windows-ci-benchmark.yml
+    with:
+      source_ref: ${{ github.sha }}
+      arm: after

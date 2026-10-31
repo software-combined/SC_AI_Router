@@ -898,6 +898,10 @@ and named per-user Apps values. It checks ownership before recovery and reads ba
 the result. Binary shortcut writes use the shared compare-before-write helper.
 Recovery keeps a concurrent explicit startup choice and reconciles its shortcut.
 These owner APIs support installation recovery; they never capture client settings.
+When all three shortcut paths are absent, the snapshot records empty entries without
+starting PowerShell. Any existing entry still requires native ownership inspection.
+Symbolic links and filesystem inspection errors stop the operation. This avoids an
+unnecessary process; it does not resolve failures when PowerShell is required.
 `desktop_launch.py` follows retained setup resources, independently of inference rollback.
 Closing the shell never stops routing. Polling is silent and makes no model calls.
 `native_resources.py` consumes only this target's signed Resources descriptor.

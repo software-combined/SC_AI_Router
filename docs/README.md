@@ -13,6 +13,7 @@ models and billing. These pages go deeper.
 | [Verification pipeline](ci-pipeline.md) | Parallel main acceptance, required checks and timing evidence |
 | [Windows CI comparison](windows-ci-benchmark.md) | Frozen serial/split samples, execution equivalence and the acceptance decision |
 | [Whole CI partition experiment](ci-partition-experiment.md) | Full-pipeline comparison plan, safety gates and preset acceptance limits |
+| [Complete CI source comparison](ci-source-comparison.md) | Shortcut absence fix, complete before/after verification and conservative timing |
 | [Operations](operations.md) | Install, update, rollback, uninstall and the daily commands |
 | [Troubleshooting](troubleshooting.md) | Symptom-first remedies: updates, serving, keys, client quirks |
 | [Adding a model](adding-a-model.md) | Adding, probing and promoting a registry row |

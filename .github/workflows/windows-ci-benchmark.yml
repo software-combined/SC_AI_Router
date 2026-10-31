@@ -2,6 +2,14 @@
 name: Paired whole CI partition experiment
 
 on:
+  workflow_call:
+    inputs:
+      source_ref:
+        required: true
+        type: string
+      arm:
+        required: true
+        type: string
   push:
     branches: ['cyril/windows-ci-bench-*']
 
@@ -9,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: windows-experiment-${{ github.ref }}
+  group: windows-experiment-${{ github.ref }}-${{ inputs.arm }}
   cancel-in-progress: false
 
 jobs:
@@ -28,9 +36,12 @@ jobs:
           # The diff needs the base branch, so fetch full history.
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ inputs.source_ref || github.sha }}
       - name: Installer scope
         id: scope
-        run: echo "installer=true" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "Comparison checkout: $(git rev-parse HEAD) $(git rev-parse 'HEAD^{tree}')"
+          echo "installer=true" >> "$GITHUB_OUTPUT"
 
   installer-macos:
     name: Installer (macOS)
@@ -42,15 +53,52 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          ref: ${{ inputs.source_ref || github.sha }}
       - uses: ./.github/actions/setup
         with:
           python-version: '3.14.9'
+      - &source-shell
+        uses: ./.github/actions/diagnostic-powershell
+        id: source-shell
+        if: inputs.source_ref && runner.os == 'Windows'
+      - &source-shell-path
+        name: Select verified comparison shell
+        if: inputs.source_ref && runner.os == 'Windows'
+        shell: pwsh
+        env:
+          CI_PWSH: ${{ steps.source-shell.outputs.executable }}
+        run: Split-Path -Parent $env:CI_PWSH >> $env:GITHUB_PATH
+      - &source-shell-check
+        name: Verify executed comparison shell
+        if: inputs.source_ref && runner.os == 'Windows'
+        shell: pwsh
+        env:
+          CI_PWSH: ${{ steps.source-shell.outputs.executable }}
+        run: |
+          if ((Get-Process -Id $PID).Path -ine $env:CI_PWSH -or $PSVersionTable.PSVersion.ToString() -cne '7.6.9') {
+            throw 'Comparison step did not execute the verified shell.'
+          }
+          $digest = (Get-FileHash -Algorithm SHA256 $env:CI_PWSH).Hash
+          Write-Host "Executed comparison shell: version=7.6.9 sha256=$digest"
       - name: Resolved runner environment
         shell: bash
         run: python tools/ci_environment.py
       - name: Native installer tests
+        if: ${{ !inputs.source_ref }}
         shell: bash
         run: python -m unittest $(python tools/ci_scope.py --installer-tests)
+
+      - name: Recorded Native installer tests
+        if: inputs.source_ref
+        shell: bash
+        run: python tools/ci_unittest.py --workers 1 --report "${{ runner.temp }}/source-tests-0.json" -- $(python tools/ci_scope.py --installer-tests)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ always() && inputs.source_ref }}
+        with:
+          name: ${{ inputs.arm }}-source-installer-macos
+          path: ${{ runner.temp }}/source-tests-*.json
+          if-no-files-found: error
+          retention-days: 7
 
   installer-windows:
     name: Installer (Windows)
@@ -62,24 +110,56 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          ref: ${{ inputs.source_ref || github.sha }}
       - uses: ./.github/actions/setup
         with:
           python-version: '3.14.9'
+      - *source-shell
+      - *source-shell-path
+      - *source-shell-check
       - name: Resolved runner environment
         shell: bash
         run: python tools/ci_environment.py
       - name: Native installer tests
+        if: ${{ !inputs.source_ref }}
         shell: bash
         run: python -m unittest $(python tools/ci_scope.py --installer-tests)
+      - name: Recorded Native installer tests
+        if: inputs.source_ref
+        shell: bash
+        run: python tools/ci_unittest.py --workers 1 --report "${{ runner.temp }}/source-tests-0.json" -- $(python tools/ci_scope.py --installer-tests)
       - name: Native packaging contracts (PowerShell)
+        if: ${{ !inputs.source_ref }}
         shell: pwsh
         run: python -m unittest tests.test_native_stage tests.test_native_packages tests.test_native_setup tests.test_native_readiness tests.test_native_menu_build
+      - name: Recorded Native packaging contracts (PowerShell)
+        if: inputs.source_ref
+        shell: pwsh
+        run: python tools/ci_unittest.py --workers 1 --report "${{ runner.temp }}/source-tests-1.json" -- tests.test_native_stage tests.test_native_packages tests.test_native_setup tests.test_native_readiness tests.test_native_menu_build
       - name: Failed standard-user launch cleans up its account
+        if: ${{ !inputs.source_ref }}
         shell: pwsh
         run: python -m unittest tests.test_windows_standard_ci.StandardUserLaunchFailureTests
+      - name: Recorded Failed standard-user launch cleans up its account
+        if: inputs.source_ref
+        shell: pwsh
+        run: python tools/ci_unittest.py --workers 1 --report "${{ runner.temp }}/source-tests-2.json" -- tests.test_windows_standard_ci.StandardUserLaunchFailureTests
       - name: Native ACL contract (PowerShell)
+        if: ${{ !inputs.source_ref }}
         shell: pwsh
         run: python -m unittest tests.test_windows_acl_native
+
+      - name: Recorded Native ACL contract (PowerShell)
+        if: inputs.source_ref
+        shell: pwsh
+        run: python tools/ci_unittest.py --workers 1 --report "${{ runner.temp }}/source-tests-3.json" -- tests.test_windows_acl_native
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ always() && inputs.source_ref }}
+        with:
+          name: ${{ inputs.arm }}-source-installer-windows
+          path: ${{ runner.temp }}/source-tests-*.json
+          if-no-files-found: error
+          retention-days: 7
 
   installer-python39:
     name: Installer (Python 3.9)
@@ -93,9 +173,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          ref: ${{ inputs.source_ref || github.sha }}
       - uses: ./.github/actions/setup
         with:
           python-version: "3.9.25"
+      - *source-shell
+      - *source-shell-path
+      - *source-shell-check
       - name: Resolved runner environment
         shell: bash
         run: python tools/ci_environment.py
@@ -116,9 +200,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          ref: ${{ inputs.source_ref || github.sha }}
       - uses: ./.github/actions/setup
         with:
           python-version: '3.14.9'
+      - *source-shell
+      - *source-shell-path
+      - *source-shell-check
       - name: Resolved runner environment
         shell: bash
         run: python tools/ci_environment.py
@@ -129,7 +217,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: windows-${{ matrix.suite }}
+          name: ${{ inputs.arm && format('{0}-', inputs.arm) || '' }}windows-${{ matrix.suite }}
           path: ${{ runner.temp }}/windows-results.json
           if-no-files-found: error
           retention-days: 7
@@ -144,6 +232,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          ref: ${{ inputs.source_ref || github.sha }}
       - uses: ./.github/actions/setup
         with:
           python-version: '3.14.9'
@@ -164,7 +253,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: windows-native
+          name: ${{ inputs.arm && format('{0}-', inputs.arm) || '' }}windows-native
           path: ${{ runner.temp }}/windows-results.json
           if-no-files-found: error
           retention-days: 7
@@ -172,7 +261,7 @@ jobs:
   windows-native:
     name: Windows standard user (${{ matrix.suite }})
     needs: changes
-    if: needs.changes.result == 'success'
+    if: needs.changes.result == 'success' && !inputs.source_ref
     strategy:
       fail-fast: false
       matrix:
@@ -183,6 +272,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          ref: ${{ inputs.source_ref || github.sha }}
       - uses: ./.github/actions/setup
         with:
           python-version: '3.14.9'
@@ -203,7 +293,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: windows-${{ matrix.suite }}
+          name: ${{ inputs.arm && format('{0}-', inputs.arm) || '' }}windows-${{ matrix.suite }}
           path: ${{ runner.temp }}/windows-results.json
           if-no-files-found: error
           retention-days: 7
@@ -211,7 +301,7 @@ jobs:
   windows-native-aggregate:
     name: Candidate native aggregate
     needs: windows-native
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && !inputs.source_ref }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -232,9 +322,13 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ inputs.source_ref || github.sha }}
       - uses: ./.github/actions/setup
         with:
           python-version: '3.14.9'
+      - *source-shell
+      - *source-shell-path
+      - *source-shell-check
       - name: Resolved runner environment
         shell: bash
         run: python tools/ci_environment.py
@@ -246,7 +340,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: offline-results
+          name: ${{ inputs.arm && format('{0}-', inputs.arm) || '' }}offline-results
           path: ${{ runner.temp }}/unit-results.json
           if-no-files-found: error
           retention-days: 7
@@ -284,6 +378,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          ref: ${{ inputs.source_ref || github.sha }}
       - uses: ./.github/actions/setup
         with:
           python-version: '3.14.9'
@@ -294,6 +389,9 @@ jobs:
           cache-dependency-path: |
             .github/requirements-lint.txt
             .github/workflows/check.yml
+      - *source-shell
+      - *source-shell-path
+      - *source-shell-check
       - name: Resolved runner environment
         shell: bash
         run: python tools/ci_environment.py
@@ -359,7 +457,7 @@ jobs:
   candidate-test:
     name: Diagnostic acceptance (candidate)
     needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter, unit-suite, windows-standard, windows-native, windows-native-aggregate]
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && !inputs.source_ref }}
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env:
@@ -385,12 +483,16 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          ref: ${{ inputs.source_ref || github.sha }}
       - uses: ./.github/actions/setup
         with:
           python-version: '3.14.9'
       - name: Pinned Linux menu toolchain
         if: runner.os == 'Linux'
         run: rustup toolchain install 1.90.0 --profile minimal
+      - *source-shell
+      - *source-shell-path
+      - *source-shell-check
       - name: Resolved runner environment
         shell: bash
         run: python tools/ci_environment.py --desktop-target ${{ matrix.target }}
@@ -411,9 +513,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          ref: ${{ inputs.source_ref || github.sha }}
       - uses: ./.github/actions/setup
         with:
           python-version: '3.14.9'
+      - *source-shell
+      - *source-shell-path
+      - *source-shell-check
       - name: Resolved runner environment
         shell: bash
         run: python tools/ci_environment.py
@@ -425,15 +531,34 @@ jobs:
           echo "XDG_RUNTIME_DIR=/run/user/${scheduler_uid}" >> "$GITHUB_ENV"
           echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${scheduler_uid}/bus" >> "$GITHUB_ENV"
       - name: Native scheduler migration
+        if: ${{ !inputs.source_ref }}
         run: python -m unittest tests.test_scheduling_native -v
+        env:
+          SCG_TEST_NATIVE_SCHEDULER: '1'
+      - name: Recorded Native scheduler migration
+        if: inputs.source_ref
+        run: python tools/ci_unittest.py --workers 1 --report "${{ runner.temp }}/source-tests-0.json" -- tests.test_scheduling_native -v
         env:
           SCG_TEST_NATIVE_SCHEDULER: '1'
 
       - name: Native Router update recovery
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && !inputs.source_ref
         run: python -m unittest tests.test_router_scheduler_native -v
         env:
           SCG_TEST_NATIVE_ROUTER_SCHEDULER: '1'
+
+      - name: Recorded Native Router update recovery
+        if: runner.os == 'Linux' && inputs.source_ref
+        run: python tools/ci_unittest.py --workers 1 --report "${{ runner.temp }}/source-tests-1.json" -- tests.test_router_scheduler_native -v
+        env:
+          SCG_TEST_NATIVE_ROUTER_SCHEDULER: '1'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ always() && inputs.source_ref }}
+        with:
+          name: ${{ inputs.arm }}-source-plugin-schedulers-${{ matrix.os }}
+          path: ${{ runner.temp }}/source-tests-*.json
+          if-no-files-found: error
+          retention-days: 7
 
   hook-adapter:
     name: Hook adapter portability
@@ -452,14 +577,32 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          ref: ${{ inputs.source_ref || github.sha }}
       - uses: ./.github/actions/setup
         with:
           python-version: '3.14.9'
+      - *source-shell
+      - *source-shell-path
+      - *source-shell-check
       - name: Resolved runner environment
         shell: bash
         run: python tools/ci_environment.py
       - name: Hook adapter tests
+        if: ${{ !inputs.source_ref }}
         # The receipt gate, the interpreter selection and the shims run on
         # both platforms. Tests needing a POSIX scanner stub stay
         # POSIX-only; the portability module covers the scanner here.
         run: python -m unittest discover -s plugins/development/scg-review/support/git-hooks/tests -v
+      - name: Recorded Hook adapter tests
+        if: inputs.source_ref
+        # The receipt gate, the interpreter selection and the shims run on
+        # both platforms. Tests needing a POSIX scanner stub stay
+        # POSIX-only; the portability module covers the scanner here.
+        run: python tools/ci_unittest.py --workers 1 --report "${{ runner.temp }}/source-tests-0.json" -- discover -s plugins/development/scg-review/support/git-hooks/tests -v
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ always() && inputs.source_ref }}
+        with:
+          name: ${{ inputs.arm }}-source-hook-adapter-${{ matrix.os }}
+          path: ${{ runner.temp }}/source-tests-*.json
+          if-no-files-found: error
+          retention-days: 7
