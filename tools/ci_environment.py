@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import shutil
 import ssl
 import subprocess
 import sys
@@ -44,6 +45,9 @@ def main():
         for shell in ('powershell', 'pwsh'):
             shells[shell] = version([shell, '-NoProfile', '-NonInteractive', '-Command',
                                      '$PSVersionTable.PSVersion.ToString()'])
+    elif shutil.which('pwsh'):
+        shells['pwsh'] = version(['pwsh', '-NoProfile', '-NonInteractive', '-Command',
+                                 '$PSVersionTable.PSVersion.ToString()'])
     bundle = ssl.get_default_verify_paths().cafile
     bundle_hash = hashlib.sha256(Path(bundle).read_bytes()).hexdigest() if bundle else None
     context = ssl.create_default_context()

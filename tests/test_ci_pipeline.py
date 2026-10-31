@@ -54,7 +54,7 @@ class AcceptancePipelineTests(unittest.TestCase):
     def test_diagnostic_graph_preserves_checks_without_release_authority(self):
         diagnostic = (CHECK.parent / 'windows-ci-benchmark.yml').read_text()
         self.assertIn("branches: ['cyril/windows-ci-bench-*']", diagnostic)
-        self.assertIn('name: Diagnostic acceptance', diagnostic)
+        self.assertIn('name: Diagnostic acceptance (control)', diagnostic)
         self.assertNotIn("&& 'Test'", diagnostic)
         self.assertIn('python tools/plugin_verification.py --full --run --workers 2', diagnostic)
         self.assertIn('echo "installer=true"', diagnostic)
@@ -70,40 +70,42 @@ class AcceptancePipelineTests(unittest.TestCase):
 class PartitionExperimentTests(unittest.TestCase):
     def test_both_arms_keep_every_platform_and_the_current_control(self):
         experiment = jobs(DIAGNOSTIC)
-        self.assertEqual(experiment.keys(), jobs().keys() | {'windows-native', 'windows-native-aggregate'})
-        self.assertIn("fromJSON('[\"core\",\"native\"]') || fromJSON('[\"core\"]')",
-                      experiment['windows-standard'])
+        self.assertEqual(experiment.keys(), jobs().keys() | {
+            'windows-control-native', 'windows-native', 'windows-native-aggregate', 'candidate-test'})
+        self.assertIn('suite: [core]', experiment['windows-standard'])
+        self.assertIn('-Suite native -EvidencePath', experiment['windows-control-native'])
         self.assertIn('suite: [native-runtime, native-shortcuts]', experiment['windows-native'])
         self.assertIn('needs: windows-native', experiment['windows-native-aggregate'])
         self.assertIn('run: test "$RESULT" = success', experiment['windows-native-aggregate'])
-        prerequisites = re.search(r'^    needs: \[([^]]+)\]', experiment['test'], re.MULTILINE)
-        self.assertEqual({name.strip() for name in prerequisites[1].split(',')},
-                         experiment.keys() - {'test'})
-        self.assertIn('name: Diagnostic acceptance', experiment['test'])
-        self.assertEqual(DIAGNOSTIC.read_text().count('if-no-files-found: error'), 3)
+        common = jobs().keys() - {'test'}
+        for arm, gate, native in (('control', 'test', {'windows-control-native'}),
+                                  ('candidate', 'candidate-test', {'windows-native', 'windows-native-aggregate'})):
+            prerequisites = re.search(r'^    needs: \[([^]]+)\]', experiment[gate], re.MULTILINE)
+            self.assertEqual({name.strip() for name in prerequisites[1].split(',')}, common | native)
+            self.assertIn('ARM: ' + arm, experiment[gate])
+            self.assertIn('name: Diagnostic acceptance (' + arm + ')', experiment[gate])
+        self.assertIn('steps: &acceptance-steps', experiment['test'])
+        self.assertIn('steps: *acceptance-steps', experiment['candidate-test'])
+        self.assertEqual(DIAGNOSTIC.read_text().count('if-no-files-found: error'), 4)
 
     @unittest.skipUnless(os.name == 'posix' and shutil.which('bash'), 'diagnostic gate runs on Ubuntu')
     def test_actual_gate_rejects_every_failed_cancelled_or_unexpected_skipped_prerequisite(self):
         block = run_block('Required jobs', DIAGNOSTIC.read_text())
         for arm in ('control', 'candidate'):
-            results = {name: {'result': 'success'} for name in jobs(DIAGNOSTIC) if name != 'test'}
-            if arm == 'control':
-                for name in ('windows-native', 'windows-native-aggregate'):
-                    results[name]['result'] = 'skipped'
+            gate = 'test' if arm == 'control' else 'candidate-test'
+            required = re.search(r'^    needs: \[([^]]+)\]', jobs(DIAGNOSTIC)[gate], re.MULTILINE)
+            results = {name.strip(): {'result': 'success'} for name in required[1].split(',')}
             def run(values):
                 return subprocess.run(['bash', '-e', '-c', block],
                                       env=dict(os.environ, ARM=arm, NEEDS=json.dumps(values)),
                                       capture_output=True, text=True, timeout=10)
             self.assertEqual(run(results).returncode, 0)
             for name, row in results.items():
-                original = row['result']
                 for state in ('failure', 'cancelled', 'skipped'):
-                    if state == original:
-                        continue
                     with self.subTest(arm=arm, name=name, state=state):
                         row['result'] = state
                         self.assertNotEqual(run(results).returncode, 0)
-                row['result'] = original
+                row['result'] = 'success'
             for name in results:
                 with self.subTest(arm=arm, missing=name):
                     self.assertNotEqual(run({key: row for key, row in results.items()

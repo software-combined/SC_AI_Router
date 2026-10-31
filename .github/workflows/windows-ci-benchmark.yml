@@ -1,5 +1,5 @@
 # Frozen diagnostic copy of Check: synthetic runner fixtures only; no release authority.
-name: Whole CI partition experiment
+name: Paired whole CI partition experiment
 
 on:
   push:
@@ -109,7 +109,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: ${{ startsWith(github.ref_name, 'cyril/windows-ci-bench-control-') && fromJSON('["core","native"]') || fromJSON('["core"]') }}
+        suite: [core]
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -134,15 +134,42 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  windows-control-native:
+    name: Windows standard user (native)
+    needs: changes
+    if: needs.changes.result == 'success'
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python-version: '3.14.9'
+      - name: Resolved runner environment
+        shell: bash
+        run: python tools/ci_environment.py
+      - name: Native contracts without administrator rights
+        shell: pwsh
+        run: ./tools/run_windows_standard.ps1 -Python (Get-Command python).Source -Suite native -EvidencePath "$env:RUNNER_TEMP/windows-results.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: windows-native
+          path: ${{ runner.temp }}/windows-results.json
+          if-no-files-found: error
+          retention-days: 7
+
   windows-native:
     name: Windows standard user (${{ matrix.suite }})
     needs: changes
-    if: startsWith(github.ref_name, 'cyril/windows-ci-bench-candidate-') && needs.changes.result == 'success'
+    if: needs.changes.result == 'success'
     strategy:
       fail-fast: false
       matrix:
         suite: [native-runtime, native-shortcuts]
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -165,9 +192,9 @@ jobs:
           retention-days: 7
 
   windows-native-aggregate:
-    name: ${{ startsWith(github.ref_name, 'cyril/windows-ci-bench-candidate-') && 'Windows standard user (native)' || 'Skipped native aggregate' }}
+    name: Candidate native aggregate
     needs: windows-native
-    if: ${{ !cancelled() && startsWith(github.ref_name, 'cyril/windows-ci-bench-candidate-') }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -209,30 +236,31 @@ jobs:
 
   test:
     # A diagnostic branch must never emit the release gate's Test name.
-    name: Diagnostic acceptance
-    # Both arms require full scope. Only the control skips the new workers.
-    needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter, unit-suite, windows-standard, windows-native, windows-native-aggregate]
+    name: Diagnostic acceptance (control)
+    # Both paths reuse identical common results but retain separate static tails.
+    needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter, unit-suite, windows-standard, windows-control-native]
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
-    steps:
+    env:
+      ARM: control
+    steps: &acceptance-steps
       - name: Required jobs
         env:
           NEEDS: ${{ toJSON(needs) }}
-          ARM: ${{ startsWith(github.ref_name, 'cyril/windows-ci-bench-control-') && 'control' || 'candidate' }}
         run: |
           python3 - <<'PY'
           import json, os
           needs = json.loads(os.environ['NEEDS'])
           required = {'changes', 'installer-macos', 'installer-windows', 'installer-python39',
                       'desktop-menus', 'plugin-schedulers', 'hook-adapter', 'unit-suite',
-                      'windows-standard', 'windows-native', 'windows-native-aggregate'}
+                      'windows-standard'}
+          required |= {'control': {'windows-control-native'},
+                       'candidate': {'windows-native', 'windows-native-aggregate'}}[os.environ['ARM']]
           if set(needs) != required:
               raise SystemExit('required diagnostic job evidence is missing or unexpected')
-          skipped = {'control': {'windows-native', 'windows-native-aggregate'},
-                     'candidate': set()}[os.environ['ARM']]
           wrong = {name: row['result'] for name, row in needs.items()
-                   if row['result'] != ('skipped' if name in skipped else 'success')}
+                   if row['result'] != 'success'}
           if wrong:
               raise SystemExit('required diagnostic jobs did not succeed: ' + repr(wrong))
           PY
@@ -310,6 +338,16 @@ jobs:
         run: python tools/check_policy_scans.py
       - name: Final static environment
         run: python tools/ci_environment.py
+
+  candidate-test:
+    name: Diagnostic acceptance (candidate)
+    needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter, unit-suite, windows-standard, windows-native, windows-native-aggregate]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    env:
+      ARM: candidate
+    steps: *acceptance-steps
 
   desktop-menus:
     name: Desktop menu (${{ matrix.target }})

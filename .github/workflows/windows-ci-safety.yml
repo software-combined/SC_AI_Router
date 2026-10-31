@@ -23,6 +23,26 @@ jobs:
       - name: Real standard-user launch, reports, failures and cleanup
         run: python -m unittest tests.test_windows_standard_ci tests.test_windows_standard_suites -v
 
+  shared-fixture:
+    if: ${{ !endsWith(github.ref_name, '-proof') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Synthetic common result
+        env:
+          FAIL: ${{ endsWith(github.ref_name, '-fail-common') }}
+        run: test "$FAIL" != true
+
+  control-fixture:
+    if: ${{ !endsWith(github.ref_name, '-proof') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Synthetic control result
+        env:
+          FAIL: ${{ endsWith(github.ref_name, '-fail-native') }}
+        run: test "$FAIL" != true
+
   matrix-fixture:
     if: ${{ !endsWith(github.ref_name, '-proof') }}
     runs-on: ubuntu-latest
@@ -30,7 +50,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [core, native-runtime, native-shortcuts]
+        suite: [native-runtime, native-shortcuts]
     steps:
       - name: Synthetic result for each matrix entry
         env:
@@ -53,11 +73,22 @@ jobs:
 
   final-gate:
     name: Diagnostic final safety gate
-    needs: [matrix-fixture, safety-gate]
+    needs: [shared-fixture, matrix-fixture, safety-gate]
     if: ${{ !cancelled() && !endsWith(github.ref_name, '-proof') }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Reject incomplete native acceptance
-        if: needs.matrix-fixture.result != 'success' || needs.safety-gate.result != 'success'
+        if: needs.shared-fixture.result != 'success' || needs.matrix-fixture.result != 'success' || needs.safety-gate.result != 'success'
+        run: exit 1
+
+  control-gate:
+    name: Diagnostic control safety gate
+    needs: [shared-fixture, control-fixture]
+    if: ${{ !cancelled() && !endsWith(github.ref_name, '-proof') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Reject incomplete control acceptance
+        if: needs.shared-fixture.result != 'success' || needs.control-fixture.result != 'success'
         run: exit 1
