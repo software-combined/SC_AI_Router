@@ -1,7 +1,7 @@
 {
   "name": "scg-subagents",
-  "version": "0.7.0",
-  "description": "Subagent coordination, model selection, router-model workers, evidence refresh and the AI Agent Factory Method.",
+  "version": "0.8.0",
+  "description": "Subagent coordination, model selection, router-model workers and evidence refresh.",
   "author": {
     "name": "Software Combined"
   },
@@ -9,7 +9,7 @@
   "interface": {
     "displayName": "SCG Subagents",
     "shortDescription": "Choose the right model for each subagent.",
-    "longDescription": "Evidence-based model selection, parent and child tool guidance, router-model workers for clients without native router subagents, repeatable cost-quality evaluation, and the AI Agent Factory Method for agents that own a project outcome through verified cycles.",
+    "longDescription": "Evidence-based model selection, parent and child tool guidance, router-model workers for clients without native router subagents, and repeatable cost-quality evaluation.",
     "developerName": "Software Combined",
     "category": "Productivity",
     "capabilities": [],

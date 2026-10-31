@@ -39,7 +39,7 @@ ALLOWED_EMAILS = {"employee@example.invalid", "git@github.com", "test@example.in
 
 
 def public_files():
-    """Yield text sources from the eight plugin surfaces and public metadata."""
+    """Yield text sources from the plugin surfaces and public metadata."""
     for roots in PLUGIN_SURFACES.values():
         for root in roots:
             for path in (root.rglob("*") if root.is_dir() else (root,)):
@@ -49,8 +49,8 @@ def public_files():
 
 
 class PluginPublicContentTests(unittest.TestCase):
-    def test_all_eight_plugin_surfaces_are_covered(self):
-        self.assertEqual(len(PLUGIN_SURFACES), 8)
+    def test_all_nine_plugin_surfaces_are_covered(self):
+        self.assertEqual(len(PLUGIN_SURFACES), 9)
         for name, roots in PLUGIN_SURFACES.items():
             with self.subTest(surface=name):
                 self.assertTrue(any(path.exists() for path in roots))
