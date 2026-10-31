@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [core, native]
+        suite: [core, native-runtime, native-shortcuts]
     steps:
       - name: Synthetic result for each matrix entry
         env:
@@ -48,5 +48,16 @@ jobs:
     timeout-minutes: 2
     steps:
       - name: Reject failed or cancelled matrix entries
-        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        if: needs.matrix-fixture.result != 'success'
+        run: exit 1
+
+  final-gate:
+    name: Diagnostic final safety gate
+    needs: [matrix-fixture, safety-gate]
+    if: ${{ !cancelled() && !endsWith(github.ref_name, '-proof') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Reject incomplete native acceptance
+        if: needs.matrix-fixture.result != 'success' || needs.safety-gate.result != 'success'
         run: exit 1

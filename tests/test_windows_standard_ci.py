@@ -126,7 +126,7 @@ class StandardUserLaunchFailureTests(unittest.TestCase):
         before = self.inventory()
         # Only the copied launcher uses this synthetic child; production has no injection switch.
         for selection, mode in (('core', 'success'), ('core', 'failure'),
-                                ('native', 'failure'), ('native', 'timeout')):
+                                ('native-runtime', 'failure'), ('native-shortcuts', 'timeout')):
             with self.subTest(selection=selection, mode=mode), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 (root / 'tools').mkdir()

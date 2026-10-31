@@ -586,6 +586,8 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    `windows_standard.py` selects core/native standard-user CI suites and reuses
    the unittest result recorder. Its PowerShell launcher owns account isolation,
    exact report validation and cleanup; each matrix entry has its own runner.
+   `ci_environment.py` records non-secret runner inputs for diagnostic comparisons;
+   it does not certify test completion or release acceptance.
    `packaging/` holds the modules an installed host executes. A new
    host-run script belongs in `packaging/`, even if nothing in `ai_router/`
    imports it. `packaging/release.py` includes only its named installed operator

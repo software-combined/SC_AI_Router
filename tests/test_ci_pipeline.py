@@ -1,13 +1,20 @@
 """Main acceptance overlaps independent checks without weakening its gate."""
+import json
+import os
 import re
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
+from tests.test_workflows import run_block
+
 CHECK = Path(__file__).resolve().parents[1] / '.github/workflows/check.yml'
+DIAGNOSTIC = CHECK.parent / 'windows-ci-benchmark.yml'
 
 
-def jobs():
-    text = CHECK.read_text().split('\njobs:\n', 1)[1]
+def jobs(path=CHECK):
+    text = path.read_text().split('\njobs:\n', 1)[1]
     return dict(re.findall(r'^  ([\w-]+):\n(.*?)(?=^  [\w-]+:\n|\Z)',
                            text, re.MULTILINE | re.DOTALL))
 
@@ -58,6 +65,49 @@ class AcceptancePipelineTests(unittest.TestCase):
                 for line in job.splitlines():
                     if line.lstrip().startswith(('run:', '- {target:', 'os:')):
                         self.assertIn(line, diagnostic)
+
+
+class PartitionExperimentTests(unittest.TestCase):
+    def test_both_arms_keep_every_platform_and_the_current_control(self):
+        experiment = jobs(DIAGNOSTIC)
+        self.assertEqual(experiment.keys(), jobs().keys() | {'windows-native', 'windows-native-aggregate'})
+        self.assertIn("fromJSON('[\"core\",\"native\"]') || fromJSON('[\"core\"]')",
+                      experiment['windows-standard'])
+        self.assertIn('suite: [native-runtime, native-shortcuts]', experiment['windows-native'])
+        self.assertIn('needs: windows-native', experiment['windows-native-aggregate'])
+        self.assertIn('run: test "$RESULT" = success', experiment['windows-native-aggregate'])
+        prerequisites = re.search(r'^    needs: \[([^]]+)\]', experiment['test'], re.MULTILINE)
+        self.assertEqual({name.strip() for name in prerequisites[1].split(',')},
+                         experiment.keys() - {'test'})
+        self.assertIn('name: Diagnostic acceptance', experiment['test'])
+        self.assertEqual(DIAGNOSTIC.read_text().count('if-no-files-found: error'), 3)
+
+    @unittest.skipUnless(os.name == 'posix' and shutil.which('bash'), 'diagnostic gate runs on Ubuntu')
+    def test_actual_gate_rejects_every_failed_cancelled_or_unexpected_skipped_prerequisite(self):
+        block = run_block('Required jobs', DIAGNOSTIC.read_text())
+        for arm in ('control', 'candidate'):
+            results = {name: {'result': 'success'} for name in jobs(DIAGNOSTIC) if name != 'test'}
+            if arm == 'control':
+                for name in ('windows-native', 'windows-native-aggregate'):
+                    results[name]['result'] = 'skipped'
+            def run(values):
+                return subprocess.run(['bash', '-e', '-c', block],
+                                      env=dict(os.environ, ARM=arm, NEEDS=json.dumps(values)),
+                                      capture_output=True, text=True, timeout=10)
+            self.assertEqual(run(results).returncode, 0)
+            for name, row in results.items():
+                original = row['result']
+                for state in ('failure', 'cancelled', 'skipped'):
+                    if state == original:
+                        continue
+                    with self.subTest(arm=arm, name=name, state=state):
+                        row['result'] = state
+                        self.assertNotEqual(run(results).returncode, 0)
+                row['result'] = original
+            for name in results:
+                with self.subTest(arm=arm, missing=name):
+                    self.assertNotEqual(run({key: row for key, row in results.items()
+                                             if key != name}).returncode, 0)
 
 
 if __name__ == '__main__':

@@ -13,12 +13,18 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from tools.ci_unittest import Program
 
+NATIVE_MODULES = (
+    'tests.test_windows_native_lifecycle', 'tests.test_windows_acl_native',
+    'tests.test_windows_task_cohort', 'tests.test_windows_shortcut_recovery',
+)
+
 
 def run_suites(selection='all'):
     commands = {
         'core': ['discover', '--durations', '15', '-s', 'tests', '-t', '.'],
-        'native': ['--durations', '15', 'tests.test_windows_native_lifecycle', 'tests.test_windows_acl_native',
-                   'tests.test_windows_task_cohort', 'tests.test_windows_shortcut_recovery'],
+        'native': ['--durations', '15', *NATIVE_MODULES],
+        'native-runtime': ['--durations', '15', *NATIVE_MODULES[:-1]],
+        'native-shortcuts': ['--durations', '15', *NATIVE_MODULES[-1:]],
     }
     names = ('core', 'native') if selection == 'all' else (selection,)
     outcomes = []
@@ -100,7 +106,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sid', required=True)
     parser.add_argument('--report')
-    parser.add_argument('--suite', choices=('all', 'core', 'native'), default='all')
+    parser.add_argument('--suite', choices=('all', 'core', 'native', 'native-runtime',
+                                           'native-shortcuts'), default='all')
     parser.add_argument('--cleanup', action='store_true')
     args = parser.parse_args()
     if args.cleanup:
