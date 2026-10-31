@@ -99,6 +99,15 @@ the parent must still return failure for an interrupted verification attempt.
 Use realistic workflow tests where useful, then verify the authorised remote path.
 Successful YAML parsing or a green aggregate label alone cannot prove complete verification.
 
+## If slow tests dominate
+
+Use existing case timings to inspect slow tests, including setup and cleanup.
+Repeated durations near a timeout can reveal retries against an unintended live service.
+Confirm the service interaction is outside what the test is meant to verify before replacing it.
+Keep the fake within the narrowest fixture scope and restore state after each test.
+Where practical, make unexpected live service calls fail immediately.
+Preserve assertions, healthy and failure cases, intentional timeout tests and real integration coverage.
+
 ## If reducing preparation or build work
 
 Run cheap integrity checks first when dependencies permit.
@@ -191,7 +200,7 @@ A cache that changes resolved versions, hides a failed install or lets a require
 
 Freeze each candidate during measurement. Keep setup environments outside scanned source directories.
 Compare equivalent workloads and disclose changed conditions, including added regression tests.
-Freeze application code, tests and verification inputs independently of the execution layout.
+For execution-layout comparisons, freeze application code, tests and verification inputs independently of that layout.
 A separate harness can vary orchestration while keeping inspected CI definitions identical.
 Record the harness revision and actual checkout; diagnostic runs must not satisfy release acceptance.
 Compare test identifiers, resolved suite selections, skips and platform matrices, not counts alone.
@@ -205,8 +214,9 @@ Set a finite sampling and replacement rule before execution. Interleave comparab
 Record every warm-up, failed attempt and rerun.
 Decide sample eligibility from declared input checks before comparing timing totals.
 Diagnose test failures before using an infrastructure replacement allowance.
-Keep assertions when correcting fixtures, apply the correction to both arms and restart the cohort.
-Start a new comparison cohort after correcting measured source or execution inputs.
+If an unrelated fixture defect invalidates a comparison, preserve assertions, correct both arms and restart the cohort.
+When the fixture change is the optimisation under test, retain a passing original control and require equivalent observed case outcomes.
+After an unplanned correction to measured source or execution inputs, start a new comparison cohort.
 Pin relevant runtime versions for the comparison when practical; moving selectors can resolve differently across runner images.
 Resolve relevant implicit runtime inputs, including those changed by setup tools.
 When they affect verification, pin them or compare effective content fingerprints.
@@ -238,7 +248,8 @@ Report the change, before/after measures, preserved gates, limitations and integ
 Keep the existing full-verification path; add recurring controls only when justified and authorised.
 
 For measured examples and pitfalls, consult the Router's
-[job-graph benchmark](references/worked-example.md) or
-[runner-time benchmark](references/runner-time-benchmark.md), or
-[Windows suite split](https://github.com/software-combined/SC_AI_Router/blob/main/docs/windows-ci-benchmark.md) when relevant.
+[job-graph benchmark](references/worked-example.md),
+[runner-time benchmark](references/runner-time-benchmark.md),
+[Windows suite split](https://github.com/software-combined/SC_AI_Router/blob/main/docs/windows-ci-benchmark.md), or
+[offline fixture comparison](references/offline-fixture-benchmark.md) when relevant.
 Their provider, commands and layouts are examples, not requirements for another repository.
