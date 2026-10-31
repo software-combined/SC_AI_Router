@@ -1,0 +1,9 @@
+{
+  "name": "scg-agent-factory",
+  "version": "0.1.0",
+  "description": "AI Agent Factory Method for one agent to own a measurable project outcome through verified cycles.",
+  "author": {
+    "name": "Software Combined"
+  },
+  "license": "Apache-2.0"
+}

@@ -1,5 +1,13 @@
 # Changelog
 
+## scg-agent-factory 0.1.0 and scg-subagents 0.8.0 (2026-10-31)
+
+- Promote the AI Agent Factory Method to its own top-level `scg-agent-factory`
+  plugin. Install it with `codex plugin add scg-agent-factory@scg-agent-plugins`
+  or `claude plugin install scg-agent-factory@scg-agent-plugins --scope user`.
+- Move the skill out of Subagents so each client discovers one copy. Subagents
+  remains a separate helper capability, used only when the factory delegates.
+
 ## scg-subagents 0.7.0 (2026-10-31)
 
 - Add `ai-agent-factory-method`. One agent owns a measurable project outcome
