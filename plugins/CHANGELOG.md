@@ -1,5 +1,19 @@
 # Changelog
 
+## scg-subagents 0.7.0 (2026-10-31)
+
+- Add `ai-agent-factory-method`. One agent owns a measurable project outcome
+  through observe, reproduce, decide, change, verify and recover cycles under
+  authority, limits and acceptance set by a human owner. It reuses the
+  project's backlog, checks, reviews and release path, and grants no
+  production, recurrence or paid-operation permission.
+- Resolve routine implementation choices within authority. Answer policy and
+  taste questions from recorded precedent as decided, returned or held for the
+  human owner. Retry only with a changed hypothesis, and stop at a finite
+  no-progress limit.
+- Test models on identical tasks before giving more autonomy or switching;
+  keep task contracts separate from provider adapters.
+
 ## scg-optimise-ci 0.1.9 (2026-10-31)
 
 - Diagnose repeated timeout waits in offline tests. Keep replacement fixtures
