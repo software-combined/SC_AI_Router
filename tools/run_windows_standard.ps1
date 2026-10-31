@@ -117,7 +117,9 @@ try {
                         $evidence.status = $recorded.status
                     }
                 } catch { $evidence.report_error = 'unreadable report' }
-                $evidence | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $EvidencePath -Encoding utf8
+                # Windows PowerShell's utf8 encoding adds a BOM; reports use plain UTF-8.
+                [IO.File]::WriteAllText($EvidencePath, ($evidence | ConvertTo-Json -Depth 30),
+                                      [Text.UTF8Encoding]::new($false))
             }
         } finally {
             if ($null -ne $process) {

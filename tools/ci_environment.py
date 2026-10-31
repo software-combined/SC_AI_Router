@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--windows-shell', choices=('powershell', 'pwsh'), default='pwsh')
     parser.add_argument('--desktop-target', choices=('darwin/arm64', 'darwin/x86_64',
                         'windows/x86_64', 'linux/arm64', 'linux/x86_64'))
     args = parser.parse_args()
@@ -42,7 +43,8 @@ def main():
         compilers['rust'] = version(['rustup', 'run', '1.90.0', 'rustc', '--version', '--verbose'])
     shells = {}
     if sys.platform == 'win32':
-        for shell in ('powershell', 'pwsh'):
+        names = ('powershell',) if args.windows_shell == 'powershell' else ('powershell', 'pwsh')
+        for shell in names:
             shells[shell] = version([shell, '-NoProfile', '-NonInteractive', '-Command',
                                      '$PSVersionTable.PSVersion.ToString()'])
     elif shutil.which('pwsh'):

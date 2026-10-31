@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -29,14 +30,15 @@ class SuiteSelectionTests(unittest.TestCase):
         owner = tool()
         def program(args, worker):
             self.assertIsNone(worker)
-            inventory = [case.id() for case in leaves(
-                unittest.defaultTestLoader.loadTestsFromNames(args[2:]))]
+            selected = list(leaves(unittest.defaultTestLoader.loadTestsFromNames(args[2:])))
+            inventory = [case.id() for case in selected]
             self.assertTrue(inventory)
             report = dict(complete=True, inventory=inventory, selected=inventory,
                           cases=[dict(id=name, outcome='passed') for name in inventory],
                           events=[], fixture_skipped=[],
                           summary=dict(testsRun=len(inventory), skipped=0))
-            return mock.Mock(report=lambda: report)
+            return mock.Mock(report=lambda: report, selected_cases=selected,
+                             result=SimpleNamespace(collectedDurations=[(str(case), .01) for case in selected]))
         with mock.patch.object(owner, 'Program', side_effect=program):
             original = owner.run_suites('native')[0]
             split = [owner.run_suites(name)[0]
@@ -56,7 +58,12 @@ class SuiteSelectionTests(unittest.TestCase):
             report = dict(complete=True, inventory=ids, selected=ids,
                           cases=[dict(id=name, outcome='passed') for name in ids], events=[],
                           fixture_skipped=[], summary=dict(testsRun=len(ids), skipped=0))
-            return mock.Mock(report=lambda: report)
+            selected = [mock.MagicMock() for _ in ids]
+            for case, identity in zip(selected, ids):
+                case.id.return_value = identity
+                case.__str__.return_value = identity
+            return mock.Mock(report=lambda: report, selected_cases=selected,
+                             result=SimpleNamespace(collectedDurations=[(str(case), .01) for case in selected]))
         with mock.patch.object(owner, 'Program', side_effect=program):
             combined = owner.run_suites()
             commands = list(calls)
@@ -70,6 +77,17 @@ class SuiteSelectionTests(unittest.TestCase):
         self.assertEqual(commands[1][-4:], [
             'tests.test_windows_native_lifecycle', 'tests.test_windows_acl_native',
             'tests.test_windows_task_cohort', 'tests.test_windows_shortcut_recovery'])
+
+    def test_native_timing_refuses_missing_or_mismatched_case_records(self):
+        owner = tool()
+        case = unittest.FunctionTestCase(lambda: None)
+        report = dict(complete=True, cases=[], events=[])
+        for records in ([], [('foreign case', .1)], [(str(case), -1)]):
+            with self.subTest(records=records), mock.patch.object(owner, 'Program', return_value=
+                    SimpleNamespace(report=lambda: report, selected_cases=[case],
+                                    result=SimpleNamespace(collectedDurations=records))):
+                with self.assertRaisesRegex(ValueError, 'timing'):
+                    owner.run_suites('native')
 
     def test_real_recording_preserves_duplicate_cases_skips_and_failures(self):
         owner = tool()

@@ -11,8 +11,14 @@ permissions:
 jobs:
   windows-contracts:
     if: endsWith(github.ref_name, '-proof')
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
     runs-on: windows-latest
     timeout-minutes: 10
+    env:
+      SCG_TEST_WINDOWS_SHELL: ${{ matrix.shell }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:

@@ -30,7 +30,17 @@ def run_suites(selection='all'):
     outcomes = []
     for name in names:
         started = time.monotonic()
-        recorded = Program(commands[name], None).report()
+        program = Program(commands[name], None)
+        recorded = program.report()
+        durations = []
+        if name.startswith('native'):
+            measured = program.result.collectedDurations
+            if len(measured) != len(program.selected_cases):
+                raise ValueError('Native case timing evidence is incomplete')
+            for case, (label, elapsed) in zip(program.selected_cases, measured):
+                if str(case) != label or elapsed < 0:
+                    raise ValueError('Native case timing identity is invalid')
+                durations.append(dict(id=case.id(), elapsed_s=elapsed))
         for row in recorded['cases'] + recorded['events']:
             if row.get('kind') == 'subtest':
                 # Parameter displays can contain temporary paths; retain parent and callback outcome.
@@ -40,6 +50,7 @@ def run_suites(selection='all'):
         outcomes.append(dict(suite=name, tests=recorded['summary']['testsRun'],
                              skipped=recorded['summary']['skipped'], success=recorded['complete'],
                              elapsed_s=time.monotonic() - started,
+                             case_durations=durations,
                              inventory=recorded['inventory'], cases=recorded['cases'],
                              events=recorded['events'], fixture_skipped=recorded['fixture_skipped']))
     return outcomes

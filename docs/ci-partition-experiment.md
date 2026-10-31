@@ -1,113 +1,125 @@
 # Whole CI partition experiment
 
-This experiment tests whether a different native test layout shortens a complete
-continuous integration (CI) acceptance path. Every platform and required check remains.
-No improvement is accepted yet. Production `check.yml` remains unchanged.
+This experiment compares two complete continuous integration (CI) acceptance paths.
+Every platform and required check remains. No improvement is accepted yet.
+Production `check.yml` remains unchanged.
 
-The first sequential comparison passed functional checks but failed environment
-eligibility. Three unchanged Windows roles received different PowerShell versions
-and certificate sets. That cohort is closed and its timing totals remain unopened.
-The paired design below is a new prospective comparison, not a replacement sample.
+Two earlier cohorts passed functional checks but failed their declared environment
+eligibility. The sequential cohort differed on three unchanged Windows roles.
+The first paired cohort differed on one native worker's PowerShell and certificates.
+Those cohorts are closed; their timing totals remain unopened. This new protocol
+uses a fixed shell and a conservative model, rather than replacement allocations.
 
-## Frozen comparison
+## Frozen workload and execution
 
-The shared baseline is development commit
+The application baseline is development commit
 `5e01f9f96a714045dc7fc36b24a58322e154155a`.
-Both arms include the diagnostic fixture correction and the same safety tests.
-One immutable source commit runs through `windows-ci-benchmark.yml`:
+One immutable instrumented source commit runs through `windows-ci-benchmark.yml`:
 
-- Common: every unchanged job, including the Windows `core` suite, executes once.
-- Control: the existing combined `native` standard-user job.
-- Candidate: isolated `native-runtime` and `native-shortcuts` jobs, with a native aggregate.
+- Common: every unchanged job, including Windows core, executes once.
+- Control: the original combined native selection on one disposable runner.
+- Candidate: native runtime and shortcut selections on separate disposable runners.
 - Each arm retains its own static checks and strict diagnostic acceptance gate.
 
-Both complete paths consume the exact same common execution results. This removes
-environment differences between unchanged roles without altering trust stores or
-pretending that a rolling operating-system label pins an image build.
+Both complete paths consume the exact same common results. Shared failures or
+missing results block both paths. Neither arm waits for the other arm's native
+workers or static tail. All Linux, macOS, Windows, installer, scheduler, hook,
+desktop and complete offline verification remains.
 
-The runtime group retains lifecycle, access-control and task-recovery tests.
-The shortcuts group retains shortcut-recovery tests. Their combined inventory
-must match the original native suite, including order and duplicate occurrences.
-Every native selection rejects skips. Each worker uses its own disposable runner
-and standard account, with the existing identity, report and cleanup checks.
+The runtime group retains lifecycle, access-control and task-recovery cases.
+The shortcut group retains shortcut recovery. Their union must match the original
+inventory, order, duplicate occurrences, outcomes and fixture skips. Native
+selections require positive counts and zero skips. Each worker retains its
+standard-account identity validation, process ownership and cleanup checks.
 
-All macOS, Linux and Windows jobs remain. Common work forces complete offline
-verification and installer scope. Static checks remain after each arm's prerequisites,
-so the native layout is the only execution change between the paths.
+Native launchers explicitly use Windows PowerShell 5.1, which their helpers also
+use. Record the actual version, not the unrelated installed PowerShell 7 version.
+Use `windows-2025` for native workers and `ubuntu-26.04` for static tails.
+These operating-system labels still receive rolling image builds.
 
-## Safety and authority
+Preserve each original `Program` invocation and fixture order. Retain every
+native case duration from Python 3.14's existing `collectedDurations`, including
+setup, teardown and case cleanup. Require matching case labels, order and counts.
+Imports, module/class fixtures, account work, reports and final cleanup remain
+inside the residual full-job duration; none is removed from accounting.
 
-Local contracts exercise the actual diagnostic gate against failed, cancelled,
-unexpectedly skipped and missing prerequisites. Remote safety runs exercise
-both native failure directions, control failure, shared failure and cancellation.
-Retain the passing real Windows launch, timeout and cleanup evidence for unchanged
-launcher code. Run the changed graph's safety checks before the timed comparison.
+## Safety and acceptance authority
 
-Diagnostic refs use the `cyril/windows-ci-bench-` prefix and emit
-`Diagnostic acceptance (control)` and `Diagnostic acceptance (candidate)`, never
-the required `Test` name. They have read-only
-repository permissions and no publication or deployment steps.
-Stable releases require a successful `check.yml` push to `main` at the exact
-tagged commit. A diagnostic branch run cannot supply that evidence.
+Local contracts execute both strict diagnostic gates with failed, cancelled,
+skipped and missing prerequisites. Remote probes retain shared failure, control
+failure, both candidate failure directions and cancellation checks. Validate the
+launcher with both Windows PowerShell 5.1 and PowerShell 7, including actual
+standard accounts, failed starts, timeout cleanup and plain UTF-8 reports.
+Complete those checks before timing the new cohort.
 
-## Predeclared decision
+Diagnostic refs use `cyril/windows-ci-bench-` and emit diagnostic acceptance names,
+never the required `Test` name. They have read-only repository permissions and
+cannot publish or deploy. Stable release acceptance still requires the unchanged
+release workflow's successful exact-commit `check.yml` push to `main`.
 
-Start with one paired workflow. Accept an observed improvement
-only when every check passes with equivalent execution evidence, and:
+## Prospective budget and input checks
 
-- Joined acceptance-path elapsed time falls by at least 90 seconds and 20%.
-- Aggregate allocated runner time rises by no more than 15%.
-- The elapsed limits also pass a conservative control-queue sensitivity check.
+Run one final paired workflow, with no replacement or further sampling allowance.
+Retain every earlier attempt. Stop for failed verification, missing evidence,
+incompatible required inputs, or failure of either performance criterion below.
 
-Allow one further paired workflow only when the conservative first reduction is 15–25%, or a
-native-worker dispatch difference of at least 30 seconds could change the decision.
-With two workflows, both candidate paths must finish sooner. Paired median savings and
-runner-time ratios must meet the same limits.
+Before opening timing totals, verify actual checkout commits and trees, complete
+job coverage, native case outcomes and duration-record identities. Separately
+executed native workers must match Python, OS release, architecture, CPU count,
+OpenSSL, C# compiler hash and the executed Windows PowerShell version. Both static
+tails must also match actual PowerShell, installed dependencies and certificate
+fingerprints. Retain toolchain and environment records for every common job.
 
-The limit is two paired workflows, with no replacement allowance.
-Stop for correctness failures, missing evidence, incompatible environments or
-a clear result below the threshold. Keep every attempt and do not relax the rule.
+Keep native certificate fingerprints and image builds visible. The selected
+native cases perform local process, ACL, task, shortcut, registry and GUI work.
+Their source has no explicit TLS path, but implicit operating-system certificate
+processing is not excluded. Do not claim certificate equivalence or disable its
+checks. The model below instead penalises all favourable native timing variation
+within the observed ranges. It does not bound unobserved variation.
 
-## Evidence
+## Actual measures and conservative model
 
-Record actual checkout commits and trees, Python versions, runner images,
-architectures, CPU counts, certificate fingerprints and cache conditions.
-For the three isolated native workers and the two static tails, compare exact
-Python builds, operating-system releases, architectures, CPU counts, OpenSSL,
-loaded certificate sets and applicable shell/compiler identities by job role.
-Record Ubuntu's `pwsh` version because both static tails execute its parser.
-Native workers use `windows-2025`; static tails use `ubuntu-26.04`.
-These explicit operating-system labels still receive rolling image builds.
-Capture Swift and pinned Rust versions, and the exact C# compiler binary hash.
-Record installed distribution versions after lint setup, including dependencies.
-Image identifiers alone may differ when these effective inputs match.
-Cache misses remain eligible when dependencies and required work are unchanged.
+Elapsed time starts at workflow creation and ends at each arm's final static job
+completion, including reports and cleanup. Per-arm allocation is common work plus
+that arm's complete native, aggregate and static job durations. Report runner
+classes separately. Report actual experiment elapsed and allocation separately,
+counting shared work once. Derived path totals are not independent production
+runs, CPU consumption or billing measures.
 
-Common roles need no between-arm environment exception: each result is the same
-execution. Check input and workload eligibility before reading timing totals.
+Let `C_R` and `C_S` be control runtime and shortcut case-duration sums. Let `P_R`
+and `P_S` be their candidate sums. Each native job's overhead `O` is its complete
+allocated duration minus its case-duration sum. Let `T_C` and `T_P` be complete
+static-tail job durations. Use seconds from workflow creation:
 
-Retain observed Windows and offline case outcomes, identities, duplicate
-multiplicities, skips and fixture skips. Retain every other platform's commands,
-matrix identities, results and cleanup through job completion.
+```text
+R_min = min(C_R, P_R)       R_max = max(C_R, P_R)
+S_min = min(C_S, P_S)       S_max = max(C_S, P_S)
+O_min = min(O_C, O_R, O_S)  O_max = max(O_C, O_R, O_S)
+T_min = min(T_C, T_P)       T_max = max(T_C, T_P)
 
-Each path starts at the workflow creation timestamp and ends when its static
-acceptance job completes, including reports and cleanup. Its allocated work is
-common job duration plus that arm's native, aggregate and static job durations.
-Report these derived per-arm totals by runner class, and the actual experiment's
-elapsed and aggregate totals separately. Shared work is counted once in the
-actual experiment. These are not two independent production runs or billing measures.
+control_reference =
+    max(common_end, changes_end + R_min + S_min + O_min) + T_min
 
-For the queue sensitivity check, give the control native job an immediate start
-after change scope. Give its static job an immediate start after common work and
-the control native job finish. Use observed job durations, including setup and
-cleanup; retain the candidate's actual finish. The same 90-second and 20-percent
-limits must hold against this earlier derived control finish.
+native_penalty = max(R_max + O_max - (P_R + O_R),
+                     S_max + O_max - (P_S + O_S))
+candidate_reference = actual_candidate_finish + native_penalty + T_max - T_P
 
-Record actual dispatch differences and cache conditions. Concurrent arms can
-affect hosted-pool scheduling. This conservative check limits a claim based on
-extra control waiting; it does not establish typical production queue behaviour.
-Inspect the new critical path before choosing another change. One paired workflow
-establishes an observation, not typical speed or improved reliability.
+control_allocation_reference = common_work + R_min + S_min + O_min + T_min
+candidate_allocation_reference =
+    common_work + R_max + S_max + 2*O_max + candidate_aggregate_work + T_max
+```
 
-Only a positive comparison permits promotion of the production graph and a
-new measured example in the CI optimisation skill.
+The reference gives the control the fastest observed components and overhead,
+with immediate dispatch after its dependencies. It gives the candidate the
+slowest observed components and overhead, retains its actual queues, and adds
+its full penalty even if common work masks some native delay. Static variation
+also favours the control. Record cache conditions and concurrent-arm contention.
+
+Accept only when actual endpoints and modelled references both show at least
+90 seconds and 20% less waiting, and both allocation comparisons rise by no more
+than 15%. This supports an observed paired-path result with sensitivity analysis.
+It establishes neither exact native environment equivalence nor typical production
+savings or reliability. Inspect the new critical path before another optimisation.
+
+Only a positive result permits production graph promotion and a measured skill
+example. The failed fixture-performance comparison remains failed and separate.

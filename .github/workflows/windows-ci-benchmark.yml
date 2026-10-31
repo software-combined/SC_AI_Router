@@ -148,10 +148,10 @@ jobs:
         with:
           python-version: '3.14.9'
       - name: Resolved runner environment
-        shell: bash
-        run: python tools/ci_environment.py
+        shell: powershell
+        run: python tools/ci_environment.py --windows-shell powershell
       - name: Native contracts without administrator rights
-        shell: pwsh
+        shell: powershell
         run: ./tools/run_windows_standard.ps1 -Python (Get-Command python).Source -Suite native -EvidencePath "$env:RUNNER_TEMP/windows-results.json"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
@@ -179,9 +179,10 @@ jobs:
         with:
           python-version: '3.14.9'
       - name: Resolved runner environment
-        run: python tools/ci_environment.py
+        shell: powershell
+        run: python tools/ci_environment.py --windows-shell powershell
       - name: Native contracts without administrator rights
-        shell: pwsh
+        shell: powershell
         run: ./tools/run_windows_standard.ps1 -Python (Get-Command python).Source -Suite ${{ matrix.suite }} -EvidencePath "$env:RUNNER_TEMP/windows-results.json"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()

@@ -27,18 +27,13 @@ Its default child timeout remains 20 minutes; tests can request a shorter timeou
 The split passed the bounded diagnostic comparison: two samples per layout
 recorded 31.5% lower median complete-pipeline time and 6.7% more aggregate job
 execution. Both paired candidates were faster, with matching Windows execution.
-First use the separate safety workflow for Windows launch/cleanup contracts,
-failure in each synthetic matrix entry, and cancellation of a waiting run.
-These short probes do not execute the full acceptance workload.
-The experiment uses identical source and tests for serial and split layouts,
-retains all other acceptance jobs, and cannot produce the required `Test` check.
-Run control, candidate, candidate, control, with at most four full runs.
-Stop after the first pair if correctness fails or no useful improvement appears.
-Accept only matching executed cases and outcomes, faster candidates in both pairs,
-and at least 20% lower median workflow elapsed. Report aggregate runner time
-separately; this experiment targets waiting time and makes no billing claim.
 The [Windows comparison record](windows-ci-benchmark.md) retains every sample
-and the acceptance decision. These measurements describe this four-run cohort.
+and the acceptance decision for that historical four-run cohort.
+
+Further native layout work follows the
+[whole-CI experiment](ci-partition-experiment.md), which defines the current
+shared-work comparison, launcher safety probes, input checks and conservative
+timing model. Diagnostic runs cannot produce the required `Test` check.
 
 ## Why overlap these jobs
 

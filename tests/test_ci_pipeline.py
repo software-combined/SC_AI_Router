@@ -68,6 +68,15 @@ class AcceptancePipelineTests(unittest.TestCase):
 
 
 class PartitionExperimentTests(unittest.TestCase):
+    def test_native_workers_record_only_the_legacy_shell_they_execute(self):
+        experiment = jobs(DIAGNOSTIC)
+        for name in ('windows-control-native', 'windows-native'):
+            with self.subTest(job=name):
+                block = experiment[name]
+                self.assertEqual(block.count('shell: powershell'), 2)
+                self.assertIn('python tools/ci_environment.py --windows-shell powershell', block)
+                self.assertNotIn('shell: pwsh', block)
+
     def test_both_arms_keep_every_platform_and_the_current_control(self):
         experiment = jobs(DIAGNOSTIC)
         self.assertEqual(experiment.keys(), jobs().keys() | {
