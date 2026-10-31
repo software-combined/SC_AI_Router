@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import unittest
+from unittest import mock
 
 from tests.test_ci_pipeline import CHECK, DIAGNOSTIC, jobs
 from tests.test_workflows import run_block
@@ -14,7 +15,7 @@ class SourceComparisonTests(unittest.TestCase):
     def test_two_sources_run_independently_without_release_authority(self):
         caller = CHECK.parent / 'ci-source-benchmark.yml'
         text = caller.read_text()
-        self.assertIn("branches: ['cyril/ci-finish-bench-*']", text)
+        self.assertIn("branches: ['cyril/ci-finish-ready-bench-*']", text)
         self.assertIn('contents: read', text)
         self.assertNotIn('secrets:', text)
         self.assertEqual(jobs(caller).keys(), {'before', 'after'})
@@ -84,6 +85,37 @@ class SourceComparisonTests(unittest.TestCase):
                       pipeline['windows-standard'])
         self.assertIn('fail-fast: false', pipeline['windows-standard'])
         self.assertIn('suite: [native-runtime, native-shortcuts]', pipeline['windows-native'])
+
+    def test_macos_readiness_is_shared_bounded_and_propagates_failures_before_metadata(self):
+        text = DIAGNOSTIC.read_text()
+        anchor = '      - &macos-swift-ready\n        name: '
+        self.assertEqual(text.count(anchor), 1)
+        self.assertEqual(text.count('      - *macos-swift-ready\n'), 1)
+        step = text.split(anchor, 1)[1].split('\n      - ', 1)[0]
+        self.assertIn("\n        if: runner.os == 'macOS'\n", step)
+        self.assertNotIn('inputs.', step, 'preparation must apply equally to both source paths')
+        pipeline = jobs(DIAGNOSTIC)
+        for name, reference in (('installer-macos', '&macos-swift-ready'),
+                                 ('desktop-menus', '*macos-swift-ready')):
+            self.assertLess(pipeline[name].index(reference),
+                            pipeline[name].index('name: Resolved runner environment'))
+        block = run_block('Prepare macOS Swift toolchain',
+                          text.replace(anchor, '      - name: ', 1)).splitlines()
+        self.assertEqual(block[0], "python - <<'PY'")
+        self.assertEqual(block[-1], 'PY')
+        body = compile('\n'.join(block[1:-1]), DIAGNOSTIC.name, 'exec')
+        command = ['xcrun', 'swiftc', '--version']
+        with mock.patch('subprocess.run') as run:
+            exec(body, {})
+            run.assert_called_once_with(command, check=True, timeout=60)
+        for failure in (subprocess.CalledProcessError(1, command),
+                        subprocess.TimeoutExpired(command, 60)):
+            with self.subTest(failure=type(failure).__name__), \
+                    mock.patch('subprocess.run', side_effect=failure) as run:
+                with self.assertRaises(type(failure)) as raised:
+                    exec(body, {})
+                self.assertIs(raised.exception, failure)
+                run.assert_called_once_with(command, check=True, timeout=60)
 
     @unittest.skipUnless(os.name == 'posix' and shutil.which('bash'), 'layout validation runs on Ubuntu')
     def test_invalid_or_incomplete_source_layout_fails_before_verification(self):

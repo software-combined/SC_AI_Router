@@ -96,6 +96,15 @@ jobs:
           }
           $digest = (Get-FileHash -Algorithm SHA256 $env:CI_PWSH).Hash
           Write-Host "Executed comparison shell: version=7.6.9 sha256=$digest"
+      - &macos-swift-ready
+        name: Prepare macOS Swift toolchain
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          subprocess.run(['xcrun', 'swiftc', '--version'], check=True, timeout=60)
+          PY
       - name: Resolved runner environment
         shell: bash
         run: python tools/ci_environment.py
@@ -509,6 +518,7 @@ jobs:
       - *source-shell
       - *source-shell-path
       - *source-shell-check
+      - *macos-swift-ready
       - name: Resolved runner environment
         shell: bash
         run: python tools/ci_environment.py --desktop-target ${{ matrix.target }}

@@ -21,15 +21,24 @@ both Windows roles. They do not prove the new layout is faster.
 Keep that valid below-threshold result. All earlier failed cohorts remain
 failed, with their totals unopened.
 
+The [first partitioned pair](https://github.com/software-combined/SC_AI_Router/actions/runs/41190256996)
+passed all 37 allocations and workload checks. It failed eligibility because
+the candidate native-runtime image and loaded certificates differed from control.
+Its [permitted replacement](https://github.com/software-combined/SC_AI_Router/actions/runs/41191265012)
+failed environment capture in `After / Desktop menu (darwin/x86_64)`.
+After cold Python setup, the Swift version command exceeded its 15-second limit;
+the compile step did not run. Both runs' comparison totals remain unopened.
+The instrumentation correction below starts a new source/controller cohort.
+
 ## Sources and required work
 
 The before source is `b815fe5262168f536f06f627714112a5bfbe6ab0`, tree
 `132aa998f6b407c2ea6246cad6ce93dd766628f3`. The after source is the reviewed
 commit that starts `ci-source-benchmark.yml`. Freeze both trees, the harness
-and the complete diff before dispatch. The new delta adds core selections,
-diagnostic layout routing, regression tests and related documentation.
-It retains the reviewed shortcut fix and its evidence. This CI-only delta
-does not change the Router version.
+and the complete diff before dispatch. The new delta adds bounded macOS
+preparation, its workflow contract and a separate cohort trigger.
+It retains the core selections, diagnostic layout routing and reviewed shortcut
+fix. This CI-only delta does not change the Router version.
 
 The caller invokes the same reusable diagnostic definition twice:
 
@@ -83,6 +92,13 @@ checks the executing step host's path, version and binary hash. Native helpers
 retain Windows PowerShell 5.1. Record actual source commits and trees, operating
 system, architecture, CPU count, compilers, dependencies, shells and certificates.
 
+Both source paths prepare Swift before recording the environment in every macOS
+role: the installer and both desktop targets. One shared step runs
+`xcrun swiftc --version` once, requires a successful exit and allows 60 seconds.
+The metadata observer keeps its 15-second limit. Build, test and account limits
+stay unchanged. Complete job and setup durations include this preparation in
+both paths. No Windows preparation or separate warm-up run is added.
+
 Before opening timing totals, require matching effective inputs for paired roles.
 The control core and both candidate core jobs must match their actual image,
 certificates, CPU count, architecture, Python, shells and dependencies.
@@ -93,7 +109,7 @@ whole-job model below; that model does not prove equal environments.
 Unchanged macOS roles may use the recorded three- or five-CPU runner profiles.
 Disclose that difference and retain the whole-job minimum/maximum penalties.
 
-The new trigger is `cyril/ci-finish-bench-*`, separate from prior cohort prefixes.
+The new trigger is `cyril/ci-finish-ready-bench-*`, separate from prior cohort prefixes.
 Both calls have read-only permissions and diagnostic acceptance names.
 They cannot emit the required `Test` check or authorise publication.
 Targeted `windows-ci-safety-shortcut-only-*-proof` refs run the isolated
@@ -146,7 +162,7 @@ and 20%, while both allocation increases remain at most 15%.
 
 ## Budget and correction
 
-Allocate one paired workflow, with one replacement permitted only for input
+For this new cohort, allocate one paired workflow, with one replacement only for input
 drift found before totals are opened and only when both paths otherwise pass.
 Keep identical sources and orchestration for that replacement. Retain every
 attempt. Do not add Windows warm-ups. A functional failure or disappointing

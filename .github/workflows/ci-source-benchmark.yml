@@ -3,7 +3,7 @@ name: Whole CI source and layout comparison
 
 on:
   push:
-    branches: ['cyril/ci-finish-bench-*']
+    branches: ['cyril/ci-finish-ready-bench-*']
 
 permissions:
   contents: read
