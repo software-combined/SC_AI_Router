@@ -1,5 +1,15 @@
 # Changelog
 
+## scg-agent-factory 0.2.0 (2026-10-31)
+
+- Define a persistent project orchestrator and multiple role owners, each
+  responsible for an area end to end. Reuse role chats and saved project state
+  across features and sessions; keep temporary helpers bounded.
+- Require `{Project name}-Orchestrator` for the main task/chat and
+  `{Project name}: {Role}` for other persistent roles. Verify actual renames.
+- Share project limits across role agents and helpers. Keep method advisers
+  separate from the project's required pre-commit review procedure and models.
+
 ## scg-agent-factory 0.1.0 and scg-subagents 0.8.0 (2026-10-31)
 
 - Promote the AI Agent Factory Method to its own top-level `scg-agent-factory`
