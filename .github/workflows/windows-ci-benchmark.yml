@@ -10,6 +10,9 @@ on:
       arm:
         required: true
         type: string
+      layout:
+        required: true
+        type: string
   push:
     branches: ['cyril/windows-ci-bench-*']
 
@@ -31,6 +34,19 @@ jobs:
     outputs:
       installer: ${{ steps.scope.outputs.installer }}
     steps:
+      - name: Validate comparison layout
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+          ARM: ${{ inputs.arm }}
+          LAYOUT: ${{ inputs.layout }}
+        run: |
+          python3 - <<'PY'
+          import os
+          source, arm, layout = (os.environ[key] for key in ('SOURCE_REF', 'ARM', 'LAYOUT'))
+          if source or arm or layout:
+              if not source or not arm or layout not in ('combined', 'partitioned'):
+                  raise SystemExit('source comparisons require a source, arm and valid layout')
+          PY
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           # The diff needs the base branch, so fetch full history.
@@ -193,7 +209,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [core]
+        suite: ${{ fromJSON(inputs.source_ref && inputs.layout == 'partitioned' && '["core-first","core-second"]' || '["core"]') }}
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -225,7 +241,7 @@ jobs:
   windows-control-native:
     name: Windows standard user (native)
     needs: changes
-    if: needs.changes.result == 'success'
+    if: needs.changes.result == 'success' && (!inputs.source_ref || inputs.layout == 'combined')
     runs-on: windows-2025
     timeout-minutes: 30
     steps:
@@ -261,7 +277,7 @@ jobs:
   windows-native:
     name: Windows standard user (${{ matrix.suite }})
     needs: changes
-    if: needs.changes.result == 'success' && !inputs.source_ref
+    if: needs.changes.result == 'success' && (!inputs.source_ref || inputs.layout == 'partitioned')
     strategy:
       fail-fast: false
       matrix:
@@ -301,7 +317,7 @@ jobs:
   windows-native-aggregate:
     name: Candidate native aggregate
     needs: windows-native
-    if: ${{ !cancelled() && !inputs.source_ref }}
+    if: ${{ !cancelled() && (!inputs.source_ref || inputs.layout == 'partitioned') }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -348,9 +364,9 @@ jobs:
   test:
     # A diagnostic branch must never emit the release gate's Test name.
     name: Diagnostic acceptance (control)
-    # Both paths reuse identical common results but retain separate static tails.
+    # Legacy experiments share common results. Source comparisons run independent paths.
     needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter, unit-suite, windows-standard, windows-control-native]
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && (!inputs.source_ref || inputs.layout == 'combined') }}
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env:
@@ -457,7 +473,7 @@ jobs:
   candidate-test:
     name: Diagnostic acceptance (candidate)
     needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter, unit-suite, windows-standard, windows-native, windows-native-aggregate]
-    if: ${{ !cancelled() && !inputs.source_ref }}
+    if: ${{ !cancelled() && (!inputs.source_ref || inputs.layout == 'partitioned') }}
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env:

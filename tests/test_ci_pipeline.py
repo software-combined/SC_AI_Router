@@ -88,7 +88,7 @@ class PartitionExperimentTests(unittest.TestCase):
         experiment = jobs(DIAGNOSTIC)
         self.assertEqual(experiment.keys(), jobs().keys() | {
             'windows-control-native', 'windows-native', 'windows-native-aggregate', 'candidate-test'})
-        self.assertIn('suite: [core]', experiment['windows-standard'])
+        self.assertIn("|| '[\"core\"]') }}", experiment['windows-standard'])
         self.assertIn('-Suite native -EvidencePath', experiment['windows-control-native'])
         self.assertIn('suite: [native-runtime, native-shortcuts]', experiment['windows-native'])
         self.assertIn('needs: windows-native', experiment['windows-native-aggregate'])

@@ -1,9 +1,9 @@
-# Actual complete before/after paths. Diagnostic checks cannot authorise a release.
-name: Whole CI source comparison
+# Complete source and layout comparison. Diagnostic checks cannot authorise a release.
+name: Whole CI source and layout comparison
 
 on:
   push:
-    branches: ['cyril/ci-source-bench-*']
+    branches: ['cyril/ci-finish-bench-*']
 
 permissions:
   contents: read
@@ -15,6 +15,7 @@ jobs:
     with:
       source_ref: b815fe5262168f536f06f627714112a5bfbe6ab0
       arm: before
+      layout: combined
 
   after:
     name: After
@@ -22,3 +23,4 @@ jobs:
     with:
       source_ref: ${{ github.sha }}
       arm: after
+      layout: partitioned

@@ -584,7 +584,9 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    checks; unknown scope retains full discovery. Windows handoff waits for its
    child and propagates failure instead of relying on process replacement.
    `windows_standard.py` selects core/native standard-user CI suites and reuses
-   the unittest result recorder. Its PowerShell launcher owns account isolation,
+   the unittest result recorder, including module-preserving core partitions.
+   Full discovery and selected occurrences stay separate in its reports.
+   Its PowerShell launcher owns account isolation,
    exact report validation and cleanup; each matrix entry has its own runner.
    `ci_environment.py` records non-secret runner inputs for diagnostic comparisons;
    it does not certify test completion or release acceptance.

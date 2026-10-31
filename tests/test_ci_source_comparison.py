@@ -1,15 +1,20 @@
 """Source comparisons run two complete independent diagnostic acceptance paths."""
+import json
+import os
 import re
+import shutil
+import subprocess
 import unittest
 
 from tests.test_ci_pipeline import CHECK, DIAGNOSTIC, jobs
+from tests.test_workflows import run_block
 
 
 class SourceComparisonTests(unittest.TestCase):
     def test_two_sources_run_independently_without_release_authority(self):
         caller = CHECK.parent / 'ci-source-benchmark.yml'
         text = caller.read_text()
-        self.assertIn("branches: ['cyril/ci-source-bench-*']", text)
+        self.assertIn("branches: ['cyril/ci-finish-bench-*']", text)
         self.assertIn('contents: read', text)
         self.assertNotIn('secrets:', text)
         self.assertEqual(jobs(caller).keys(), {'before', 'after'})
@@ -62,6 +67,51 @@ class SourceComparisonTests(unittest.TestCase):
                 if original:
                     self.assertIn('source-tests-*.json', block)
                     self.assertIn('always() && inputs.source_ref', block)
+
+    def test_source_layouts_select_complete_paths_and_leave_legacy_experiments_unchanged(self):
+        caller = jobs(CHECK.parent / 'ci-source-benchmark.yml')
+        self.assertIn('layout: combined', caller['before'])
+        self.assertIn('layout: partitioned', caller['after'])
+        pipeline = jobs(DIAGNOSTIC)
+        self.assertIn("layout:\n        required: true\n        type: string", DIAGNOSTIC.read_text())
+        for name, layout in (('windows-control-native', 'combined'), ('test', 'combined'),
+                              ('windows-native', 'partitioned'),
+                              ('windows-native-aggregate', 'partitioned'), ('candidate-test', 'partitioned')):
+            condition = re.search(r'^    if: (.+)$', pipeline[name], re.MULTILINE)[1]
+            self.assertIn("(!inputs.source_ref || inputs.layout == '" + layout + "')", condition)
+        self.assertIn("suite: ${{ fromJSON(inputs.source_ref && inputs.layout == 'partitioned' "
+                      "&& '[\"core-first\",\"core-second\"]' || '[\"core\"]') }}",
+                      pipeline['windows-standard'])
+        self.assertIn('fail-fast: false', pipeline['windows-standard'])
+        self.assertIn('suite: [native-runtime, native-shortcuts]', pipeline['windows-native'])
+
+    @unittest.skipUnless(os.name == 'posix' and shutil.which('bash'), 'layout validation runs on Ubuntu')
+    def test_invalid_or_incomplete_source_layout_fails_before_verification(self):
+        block = run_block('Validate comparison layout', DIAGNOSTIC.read_text())
+        for source, arm, layout, accepted in (
+                ('', '', '', True), ('revision', 'before', 'combined', True),
+                ('revision', 'after', 'partitioned', True), ('revision', 'after', 'unknown', False),
+                ('revision', 'after', '', False), ('', 'after', 'partitioned', False),
+                ('revision', '', 'combined', False), ('', '', 'partitioned', False)):
+            with self.subTest(source=source, arm=arm, layout=layout):
+                result = subprocess.run(['bash', '-e', '-c', block], capture_output=True, text=True,
+                                        env=dict(os.environ, SOURCE_REF=source, ARM=arm, LAYOUT=layout),
+                                        timeout=10)
+                self.assertEqual(result.returncode == 0, accepted, result.stdout + result.stderr)
+
+    @unittest.skipUnless(os.name == 'posix' and shutil.which('bash'), 'diagnostic gate runs on Ubuntu')
+    def test_each_final_gate_rejects_unexpected_dependency_evidence(self):
+        block = run_block('Required jobs', DIAGNOSTIC.read_text())
+        for arm, gate, foreign in (('control', 'test', 'windows-native'),
+                                    ('candidate', 'candidate-test', 'windows-control-native')):
+            required = re.search(r'^    needs: \[([^]]+)\]', jobs(DIAGNOSTIC)[gate], re.MULTILINE)[1]
+            results = {name.strip(): {'result': 'success'} for name in required.split(',')}
+            results[foreign] = {'result': 'success'}
+            with self.subTest(arm=arm):
+                result = subprocess.run(['bash', '-e', '-c', block], capture_output=True, text=True,
+                                        env=dict(os.environ, ARM=arm, NEEDS=json.dumps(results)), timeout=10)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('missing or unexpected', result.stderr)
 
 
 if __name__ == '__main__':

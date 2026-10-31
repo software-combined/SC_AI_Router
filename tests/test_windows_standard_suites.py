@@ -186,3 +186,20 @@ Assert-StandardReport -Path $Report -Suite $Suite -Sid 'synthetic-sid' -ExitCode
                                    ('native-shortcuts', 'native-runtime')):
             with self.subTest(expected=expected):
                 self.assertNotEqual(self.validate(self.report((reported,)), expected).returncode, 0)
+
+    def test_core_partition_reports_require_the_matching_name_and_completed_success(self):
+        for mode in ('core-first', 'core-second'):
+            with self.subTest(mode=mode):
+                report = self.report((mode,))
+                self.assertEqual(self.validate(report, mode).returncode, 0)
+                self.assertNotEqual(self.validate(None, mode).returncode, 0)
+                self.assertNotEqual(self.validate(report, mode, exit_code=1).returncode, 0)
+            for other in ('core', 'core-first', 'core-second', 'native', 'unknown'):
+                if other != mode:
+                    with self.subTest(mode=mode, reported=other):
+                        self.assertNotEqual(self.validate(self.report((other,)), mode).returncode, 0)
+            for key, value in (('success', False), ('success', 'true'), ('tests', 0)):
+                report = self.report((mode,))
+                report['suites'][0][key] = value
+                with self.subTest(mode=mode, key=key):
+                    self.assertNotEqual(self.validate(report, mode).returncode, 0)

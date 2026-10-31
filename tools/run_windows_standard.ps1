@@ -1,7 +1,7 @@
 # Disposable hosted-runner acceptance. Never use an existing staff account.
 param(
     [Parameter(Mandatory=$true)][string]$Python,
-    [ValidateSet('all', 'core', 'native', 'native-runtime', 'native-shortcuts')][string]$Suite = 'all',
+    [ValidateSet('all', 'core', 'core-first', 'core-second', 'native', 'native-runtime', 'native-shortcuts')][string]$Suite = 'all',
     [ValidateRange(1, 1200)][int]$TimeoutSeconds = 1200,
     [string]$EvidencePath
 )

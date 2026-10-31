@@ -30,7 +30,8 @@ def run_suites(selection='all'):
     outcomes = []
     for name in names:
         started = time.monotonic()
-        program = Program(commands[name], None)
+        worker = {'core-first': 0, 'core-second': 1}.get(name)
+        program = Program(commands['core' if worker is not None else name], worker)
         recorded = program.report()
         durations = []
         if name.startswith('native'):
@@ -51,7 +52,8 @@ def run_suites(selection='all'):
                              skipped=recorded['summary']['skipped'], success=recorded['complete'],
                              elapsed_s=time.monotonic() - started,
                              case_durations=durations,
-                             inventory=recorded['inventory'], cases=recorded['cases'],
+                             inventory=recorded['inventory'], selected=recorded['selected'],
+                             cases=recorded['cases'],
                              events=recorded['events'], fixture_skipped=recorded['fixture_skipped']))
     return outcomes
 
@@ -117,8 +119,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sid', required=True)
     parser.add_argument('--report')
-    parser.add_argument('--suite', choices=('all', 'core', 'native', 'native-runtime',
-                                           'native-shortcuts'), default='all')
+    parser.add_argument('--suite', choices=('all', 'core', 'core-first', 'core-second',
+                                           'native', 'native-runtime', 'native-shortcuts'), default='all')
     parser.add_argument('--cleanup', action='store_true')
     args = parser.parse_args()
     if args.cleanup:
