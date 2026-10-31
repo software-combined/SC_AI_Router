@@ -1,8 +1,9 @@
 # Whole CI partition experiment
 
-This experiment compares two complete continuous integration (CI) acceptance paths.
-Every platform and required check remains. No improvement is accepted yet.
-Production `check.yml` remains unchanged.
+This historical protocol compares two complete continuous integration (CI)
+acceptance paths with shared common results. It did not establish an accepted
+improvement. The later [independent source and layout comparison](ci-source-comparison.md)
+owns the current result and production promotion decision.
 
 Two earlier cohorts passed functional checks but failed their declared environment
 eligibility. The sequential cohort differed on three unchanged Windows roles.

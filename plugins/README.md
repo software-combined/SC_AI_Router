@@ -11,7 +11,7 @@ Start with the domain you need. Each domain links to its plugins and skills.
 | [Customer success](customer-success/README.md) | Account health, onboarding and renewals |
 | [Support](support/README.md) | Ticket triage and response drafts |
 | [Documentation](documentation/README.md) | Technical writing and READMEs |
-| [Agents](agents/README.md) | Model selection, delegation and router workers |
+| [Agents](agents/README.md) | Model selection, delegation, router workers and outcome-owning agents |
 | [Router management](../skills/manage-router/SKILL.md) | Set up, check, repair or remove SCG Router |
 
 Author plugins under `plugins/<domain>/<plugin-name>/`. Keep each plugin's

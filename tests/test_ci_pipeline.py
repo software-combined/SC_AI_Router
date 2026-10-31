@@ -42,10 +42,10 @@ class AcceptancePipelineTests(unittest.TestCase):
         self.assertIn("contains(needs.*.result, 'failure') || "
                       "contains(needs.*.result, 'cancelled')", pipeline['test'])
 
-    def test_windows_suites_use_separate_runners_and_both_reach_the_gate(self):
+    def test_windows_partitions_use_separate_runners_and_all_reach_the_gate(self):
         pipeline = jobs()
         job = pipeline['windows-standard']
-        self.assertIn('suite: [core, native]', job)
+        self.assertIn('suite: [core-first, core-second, native-runtime, native-shortcuts]', job)
         self.assertIn('fail-fast: false', job)
         self.assertIn('-Suite ${{ matrix.suite }}', job)
         self.assertIn('runs-on: windows-latest', job)

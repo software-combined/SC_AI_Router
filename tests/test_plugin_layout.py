@@ -11,6 +11,35 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PluginLayoutTests(unittest.TestCase):
+    def test_factory_migration_delivers_one_independent_skill_to_both_clients(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / 'marketplace'
+            relative = 'skills/ai-agent-factory-method/SKILL.md'
+            old = target / 'plugins/scg-subagents' / relative
+            old.parent.mkdir(parents=True)
+            old.write_text('previous bundled factory skill')
+            (target / skills.MARKER).write_text('router-owned fixture')
+            names = skills.write_marketplace(target, ROOT / 'plugins')
+            self.assertIn('scg-agent-factory', names)
+            self.assertIn('scg-subagents', names)
+            delivered = target / 'plugins/scg-agent-factory' / relative
+            source = ROOT / 'plugins/agents/scg-agent-factory' / relative
+            self.assertEqual(delivered.read_bytes(), source.read_bytes())
+            self.assertEqual(list((target / 'plugins').glob('*/' + relative)),
+                             [delivered])
+            bundled = set(release.plugin_files(ROOT))
+            self.assertIn(source.relative_to(ROOT).as_posix(), bundled)
+            self.assertNotIn('plugins/agents/scg-subagents/' + relative, bundled)
+            for manifest in ('.agents/plugins/marketplace.json',
+                             '.claude-plugin/marketplace.json'):
+                entries = json.loads((target / manifest).read_text())['plugins']
+                self.assertEqual([p['name'] for p in entries].count('scg-agent-factory'), 1)
+                entry = next(p for p in entries if p['name'] == 'scg-agent-factory')
+                path = entry['source']
+                if isinstance(path, dict):
+                    path = path['path']
+                self.assertEqual((target / path / relative).read_bytes(), source.read_bytes())
+
     def setUp(self):
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.plugins = self.root / 'plugins'

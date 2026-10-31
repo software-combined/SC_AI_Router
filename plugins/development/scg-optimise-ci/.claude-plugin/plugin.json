@@ -1,6 +1,6 @@
 {
   "name": "scg-optimise-ci",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Measure and improve local testing and CI pipelines while preserving required verification and release gates.",
   "author": {"name": "Software Combined"},
   "license": "Apache-2.0"

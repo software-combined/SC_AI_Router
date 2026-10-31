@@ -1,0 +1,9 @@
+{
+  "name": "scg-agent-factory",
+  "version": "0.2.0",
+  "description": "AI Agent Factory Method for persistent project agents, clear area ownership and temporary helpers.",
+  "author": {
+    "name": "Software Combined"
+  },
+  "license": "Apache-2.0"
+}

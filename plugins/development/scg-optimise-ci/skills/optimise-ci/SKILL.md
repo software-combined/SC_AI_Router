@@ -200,13 +200,19 @@ A cache that changes resolved versions, hides a failed install or lets a require
 
 Freeze each candidate during measurement. Keep setup environments outside scanned source directories.
 Compare equivalent workloads and disclose changed conditions, including added regression tests.
-For execution-layout comparisons, freeze application code, tests and verification inputs independently of that layout.
+State whether the comparison changes source, execution layout or both.
+For a source-only claim, compare original and changed source under the same orchestration.
+For a layout-only claim, freeze application code, tests and verification inputs independently of that layout.
+A bundled comparison supports only the combined change; component attribution needs separate controlled comparisons.
+Include added regression checks in every measured path that executes them.
 A separate harness can vary orchestration while keeping inspected CI definitions identical.
 Record the harness revision and actual checkout; diagnostic runs must not satisfy release acceptance.
 Compare test identifiers, resolved suite selections, skips and platform matrices, not counts alone.
 Distinguish discovery inventories from observed execution results and retain reported skips.
 Compare execution outcomes, duplicate identifiers and individual pass/skip identities when available.
 Distinguish fixture skips from cases that started. Retain their reasons and account for suppressed cases.
+Declare expected platform skips before execution and retain their reasons.
+Verify active execution of the same behaviour on a supported platform.
 Refuse unexplained missing cases or reports; an absent result is not a skip.
 Neither inventories nor summary counts establish line or branch coverage.
 
@@ -217,13 +223,19 @@ Diagnose test failures before using an infrastructure replacement allowance.
 If an unrelated fixture defect invalidates a comparison, preserve assertions, correct both arms and restart the cohort.
 When the fixture change is the optimisation under test, retain a passing original control and require equivalent observed case outcomes.
 After an unplanned correction to measured source or execution inputs, start a new comparison cohort.
+Stopping an invalid measurement does not abandon an authorised correctness fix.
+Further measurement still needs a finite, declared budget; a correction does not grant unlimited attempts.
 Pin relevant runtime versions for the comparison when practical; moving selectors can resolve differently across runner images.
 Resolve relevant implicit runtime inputs, including those changed by setup tools.
 When they affect verification, pin them or compare effective content fingerprints.
 Check actual toolchain and runner-image versions. Matching labels do not establish equal environments.
+For nested shells or account changes, record the effective tools and capabilities from the process and account that run verification.
+A parent shell's metadata does not prove a child's resolved tools or capabilities.
 Record logical CPU counts and architecture for each runner role.
 Disclose changed conditions or analyse separate cohorts. Keep instrumentation from warming only one candidate.
-Define elapsed time through the last relevant completion; dependency waiting is not pure queue time.
+Define elapsed time through the last relevant completion, including reports, cleanup and any final static gate.
+Dependency waiting is not pure queue time.
+Disclose resource contention between concurrently measured paths.
 For affected verification, compare a full control with representative selections on the same candidate and runner profile.
 Include a scope-union check when selection applies. Full-only verification needs no artificial selection experiment.
 Record added safety-test overhead, including shared checks on affected paths.
@@ -240,6 +252,12 @@ Explain tradeoffs: overlap can reduce waiting while adding setup and runner use.
 Report joined elapsed time separately from each concurrent branch's duration.
 Individual branches can take longer while the joined wait shrinks; their wall times do not measure CPU use.
 Label one successful pair as observed evidence, not typical savings or reliability proof.
+If using a conservative sensitivity model, declare its assumptions and acceptance rule before opening timing totals.
+Favour the control and penalise the candidate for unrelated observed variation, including setup, queues and final checks.
+Keep measured durations for the intended changed work and include all added verification.
+Report actual and modelled results separately.
+The model neither proves environment equivalence nor bounds unobserved variation.
+Required input checks and functional acceptance still apply.
 Use additional comparable samples when variability could change the decision; avoid rerunning solely for reassurance.
 Do not weaken assertions, timeouts or failure reporting to obtain a better number.
 
@@ -250,6 +268,7 @@ Keep the existing full-verification path; add recurring controls only when justi
 For measured examples and pitfalls, consult the Router's
 [job-graph benchmark](references/worked-example.md),
 [runner-time benchmark](references/runner-time-benchmark.md),
+[complete source and layout comparison](https://github.com/software-combined/SC_AI_Router/blob/main/docs/ci-source-comparison.md),
 [Windows suite split](https://github.com/software-combined/SC_AI_Router/blob/main/docs/windows-ci-benchmark.md), or
 [offline fixture comparison](references/offline-fixture-benchmark.md) when relevant.
 Their provider, commands and layouts are examples, not requirements for another repository.

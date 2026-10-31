@@ -1,5 +1,47 @@
 # Changelog
 
+## scg-agent-factory 0.2.0 (2026-10-31)
+
+- Define a persistent project orchestrator and multiple role owners, each
+  responsible for an area end to end. Reuse role chats and saved project state
+  across features and sessions; keep temporary helpers bounded.
+- Require `{Project name}-Orchestrator` for the main task/chat and
+  `{Project name}: {Role}` for other persistent roles. Verify actual renames.
+- Share project limits across role agents and helpers. Keep method advisers
+  separate from the project's required pre-commit review procedure and models.
+
+## scg-agent-factory 0.1.0 and scg-subagents 0.8.0 (2026-10-31)
+
+- Promote the AI Agent Factory Method to its own top-level `scg-agent-factory`
+  plugin. Install it with `codex plugin add scg-agent-factory@scg-agent-plugins`
+  or `claude plugin install scg-agent-factory@scg-agent-plugins --scope user`.
+- Move the skill out of Subagents so each client discovers one copy. Subagents
+  remains a separate helper capability, used only when the factory delegates.
+
+## scg-subagents 0.7.0 (2026-10-31)
+
+- Add `ai-agent-factory-method`. One agent owns a measurable project outcome
+  through observe, reproduce, decide, change, verify and recover cycles under
+  authority, limits and acceptance set by a human owner. It reuses the
+  project's backlog, checks, reviews and release path, and grants no
+  production, recurrence or paid-operation permission.
+- Resolve routine implementation choices within authority. Answer policy and
+  taste questions from recorded precedent as decided, returned or held for the
+  human owner. Retry only with a changed hypothesis, and stop at a finite
+  no-progress limit.
+- Test models on identical tasks before giving more autonomy or switching;
+  keep task contracts separate from provider adapters.
+
+## scg-optimise-ci 0.1.10 (2026-10-31)
+
+- Distinguish source-only, layout-only and bundled comparisons. Preserve added
+  regressions, declared platform skips and active verification on supported platforms.
+- Bind runtime evidence to the executing process and account. Measure complete
+  endpoints and report actual results separately from conservative sensitivity models.
+- Keep correctness repairs separate from invalid measurements and finite sampling budgets.
+- Link the complete Router source and layout comparison with its recorded results
+  and limitations; retain the earlier below-threshold and failed comparisons.
+
 ## scg-optimise-ci 0.1.9 (2026-10-31)
 
 - Diagnose repeated timeout waits in offline tests. Keep replacement fixtures
