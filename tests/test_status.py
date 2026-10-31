@@ -12,12 +12,19 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tests._platform import requires_posix_perms
 from tests.install_fixtures import _patch_attrs, install_mod
 
 
 class StatusTests(unittest.TestCase):
+    def setUp(self):
+        self.enterContext(mock.patch.object(
+            install_mod._svc.urllib.request, 'urlopen',
+            side_effect=AssertionError('unexpected HTTP in offline diagnostic test')))
+        _patch_attrs(self, health=lambda state, timeout=20: None)
+
     def _args(self, home):
         return install_mod.build_parser().parse_args(
             ['--status', '--json', '--home', str(home)])

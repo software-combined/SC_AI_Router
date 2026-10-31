@@ -1,10 +1,6 @@
-"""Plan 147: doctor, update state, rollback listing and the support bundle.
-
-The read-only verbs never write; the doctor names a Fix line per failing
-row and exits 1; --check-update makes no change while the scheduled
---update records recency and a closed-set error code; the support bundle
-carries no path, URL, key or free text.
-"""
+"""Read-only diagnostics; doctor names a fix per failed row and exits 1.
+Update checks never write; updates record recency and closed-set errors.
+Support bundles omit paths, URLs, keys and free text."""
 import contextlib
 import io
 import json
@@ -23,8 +19,13 @@ from tests.install_fixtures import _craft_bundle, _ok_run, _patch_attrs, install
 ROOT = Path(__file__).resolve().parents[1]
 FEED = 'file:///latest.json'
 
-
 class OperatorSurfaceTests(unittest.TestCase):
+    def setUp(self):
+        self.enterContext(mock.patch.object(
+            install_mod._svc.urllib.request, 'urlopen',
+            side_effect=AssertionError('unexpected HTTP in offline diagnostic test')))
+        _patch_attrs(self, health=lambda state, timeout=20: None)
+
     def _home(self, version='1.0.0', **state):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp, True)

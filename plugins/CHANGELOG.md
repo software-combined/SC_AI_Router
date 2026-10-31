@@ -1,5 +1,15 @@
 # Changelog
 
+## scg-optimise-ci 0.1.9 (2026-10-31)
+
+- Diagnose repeated timeout waits in offline tests. Keep replacement fixtures
+  narrow, restore their state and reject unintended live service calls.
+- Distinguish a fixture optimisation from an unrelated benchmark correction.
+  Preserve assertions, observed case outcomes and real integration coverage.
+- Add the bounded Router fixture comparison: 31 cases finished 101.537 seconds
+  sooner with matching observed outcomes. The complete comparison failed its
+  source-limit check, so no complete-verification or whole-CI saving is claimed.
+
 ## scg-optimise-ci 0.1.8 (2026-10-29)
 
 - Choose parallel boundaries from measured duration and required account,
