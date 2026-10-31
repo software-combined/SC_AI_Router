@@ -136,8 +136,11 @@ authority.
 
 Give each helper one deliverable, its inputs, write scope, checks and stop
 condition. The agent owner keeps the outcome and verifies helper results
-before integration. Use [optimal-subagents](../optimal-subagents/SKILL.md) to
-choose helper models, and read its tool guide before the first delegation.
+before integration. When using helpers, load `scg-subagents:optimal-subagents`
+from the active client's skill catalogue to choose models, then read its tool
+guide before the first delegation. The `scg-subagents` plugin supplies this
+helper capability; it is optional for work that one agent can complete alone.
+If it is unavailable, work locally or report the missing helper capability.
 
 Coordinate through shared state (the loop record, tracker, repository and
 check results) instead of announcing intended changes to every other agent.
@@ -189,4 +192,4 @@ messages to people, behind simple fixed gates outside the model.
 Report accepted outcomes, evidence, remaining limits and the next action.
 
 This skill ships with the SCG router, which delivers and refreshes it; see
-[automatic updates](../optimal-subagents/references/updates.md).
+[automatic updates](../../references/updates.md).

@@ -17,6 +17,18 @@
       "category": "Productivity"
     },
     {
+      "name": "scg-agent-factory",
+      "source": {
+        "source": "local",
+        "path": "./plugins/agents/scg-agent-factory"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
       "name": "scg-subagents",
       "source": {
         "source": "local",
