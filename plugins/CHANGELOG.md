@@ -32,6 +32,16 @@
 - Test models on identical tasks before giving more autonomy or switching;
   keep task contracts separate from provider adapters.
 
+## scg-optimise-ci 0.1.10 (2026-10-31)
+
+- Distinguish source-only, layout-only and bundled comparisons. Preserve added
+  regressions, declared platform skips and active verification on supported platforms.
+- Bind runtime evidence to the executing process and account. Measure complete
+  endpoints and report actual results separately from conservative sensitivity models.
+- Keep correctness repairs separate from invalid measurements and finite sampling budgets.
+- Link the complete Router source and layout comparison with its recorded results
+  and limitations; retain the earlier below-threshold and failed comparisons.
+
 ## scg-optimise-ci 0.1.9 (2026-10-31)
 
 - Diagnose repeated timeout waits in offline tests. Keep replacement fixtures

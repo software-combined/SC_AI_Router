@@ -1,7 +1,7 @@
 # Disposable hosted-runner acceptance. Never use an existing staff account.
 param(
     [Parameter(Mandatory=$true)][string]$Python,
-    [ValidateSet('all', 'core', 'native')][string]$Suite = 'all',
+    [ValidateSet('all', 'core', 'core-first', 'core-second', 'native', 'native-runtime', 'native-shortcuts')][string]$Suite = 'all',
     [ValidateRange(1, 1200)][int]$TimeoutSeconds = 1200,
     [string]$EvidencePath
 )
@@ -21,7 +21,7 @@ function Assert-StandardReport {
         $row = $rows[$index]
         if ($row.suite -cne $expected[$index] -or $row.tests -le 0 -or
             $row.success -isnot [bool] -or -not $row.success) { throw 'Standard-user suite failed.' }
-        if ($row.suite -eq 'native' -and $row.skipped -ne 0) { throw 'Native standard-user contracts were skipped.' }
+        if ($row.suite -like 'native*' -and $row.skipped -ne 0) { throw 'Native standard-user contracts were skipped.' }
     }
     return $result
 }
@@ -117,7 +117,9 @@ try {
                         $evidence.status = $recorded.status
                     }
                 } catch { $evidence.report_error = 'unreadable report' }
-                $evidence | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $EvidencePath -Encoding utf8
+                # Windows PowerShell's utf8 encoding adds a BOM; reports use plain UTF-8.
+                [IO.File]::WriteAllText($EvidencePath, ($evidence | ConvertTo-Json -Depth 30),
+                                      [Text.UTF8Encoding]::new($false))
             }
         } finally {
             if ($null -ne $process) {

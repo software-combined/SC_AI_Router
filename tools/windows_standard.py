@@ -13,18 +13,35 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from tools.ci_unittest import Program
 
+NATIVE_MODULES = (
+    'tests.test_windows_native_lifecycle', 'tests.test_windows_acl_native',
+    'tests.test_windows_task_cohort', 'tests.test_windows_shortcut_recovery',
+)
+
 
 def run_suites(selection='all'):
     commands = {
         'core': ['discover', '--durations', '15', '-s', 'tests', '-t', '.'],
-        'native': ['--durations', '15', 'tests.test_windows_native_lifecycle', 'tests.test_windows_acl_native',
-                   'tests.test_windows_task_cohort', 'tests.test_windows_shortcut_recovery'],
+        'native': ['--durations', '15', *NATIVE_MODULES],
+        'native-runtime': ['--durations', '15', *NATIVE_MODULES[:-1]],
+        'native-shortcuts': ['--durations', '15', *NATIVE_MODULES[-1:]],
     }
     names = ('core', 'native') if selection == 'all' else (selection,)
     outcomes = []
     for name in names:
         started = time.monotonic()
-        recorded = Program(commands[name], None).report()
+        worker = {'core-first': 0, 'core-second': 1}.get(name)
+        program = Program(commands['core' if worker is not None else name], worker)
+        recorded = program.report()
+        durations = []
+        if name.startswith('native'):
+            measured = program.result.collectedDurations
+            if len(measured) != len(program.selected_cases):
+                raise ValueError('Native case timing evidence is incomplete')
+            for case, (label, elapsed) in zip(program.selected_cases, measured):
+                if str(case) != label or elapsed < 0:
+                    raise ValueError('Native case timing identity is invalid')
+                durations.append(dict(id=case.id(), elapsed_s=elapsed))
         for row in recorded['cases'] + recorded['events']:
             if row.get('kind') == 'subtest':
                 # Parameter displays can contain temporary paths; retain parent and callback outcome.
@@ -34,7 +51,9 @@ def run_suites(selection='all'):
         outcomes.append(dict(suite=name, tests=recorded['summary']['testsRun'],
                              skipped=recorded['summary']['skipped'], success=recorded['complete'],
                              elapsed_s=time.monotonic() - started,
-                             inventory=recorded['inventory'], cases=recorded['cases'],
+                             case_durations=durations,
+                             inventory=recorded['inventory'], selected=recorded['selected'],
+                             cases=recorded['cases'],
                              events=recorded['events'], fixture_skipped=recorded['fixture_skipped']))
     return outcomes
 
@@ -100,7 +119,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sid', required=True)
     parser.add_argument('--report')
-    parser.add_argument('--suite', choices=('all', 'core', 'native'), default='all')
+    parser.add_argument('--suite', choices=('all', 'core', 'core-first', 'core-second',
+                                           'native', 'native-runtime', 'native-shortcuts'), default='all')
     parser.add_argument('--cleanup', action='store_true')
     args = parser.parse_args()
     if args.cleanup:
