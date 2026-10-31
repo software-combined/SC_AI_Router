@@ -98,19 +98,23 @@ class StandardUserCleanupTests(unittest.TestCase):
 @unittest.skipUnless(os.name == 'nt' and os.environ.get('GITHUB_ACTIONS') == 'true'
                      and ctypes.windll.shell32.IsUserAnAdmin(), 'disposable administrator Windows CI only')
 class StandardUserLaunchFailureTests(unittest.TestCase):
+    def shell(self):
+        shell = shutil.which(os.environ.get('SCG_TEST_WINDOWS_SHELL', 'pwsh'))
+        self.assertIsNotNone(shell)
+        return shell
+
     def inventory(self):
         command = ('@{users=@(Get-LocalUser | Where-Object Name -Like "scgci*" | '
                    'ForEach-Object {$_.SID.Value});profiles=@(Get-CimInstance Win32_UserProfile | '
                    'Where-Object LocalPath -Match "scgci" | ForEach-Object {$_.SID});'
                    'directories=@(Get-ChildItem -Directory $env:RUNNER_TEMP -Filter "scgci*" | '
                    'ForEach-Object {$_.Name})} | ConvertTo-Json -Compress')
-        result = subprocess.run([shutil.which('pwsh'), '-NoProfile', '-Command', command],
+        result = subprocess.run([self.shell(), '-NoProfile', '-Command', command],
                                 capture_output=True, text=True, timeout=30, check=True)
         return json.loads(result.stdout)
 
     def test_bad_executable_still_removes_new_account_profile_and_temporary_directory(self):
-        shell = shutil.which('pwsh')
-        self.assertIsNotNone(shell)
+        shell = self.shell()
         script = Path(__file__).resolve().parents[1] / 'tools/run_windows_standard.ps1'
         before = self.inventory()
         with tempfile.TemporaryDirectory() as temporary:
@@ -126,7 +130,7 @@ class StandardUserLaunchFailureTests(unittest.TestCase):
         before = self.inventory()
         # Only the copied launcher uses this synthetic child; production has no injection switch.
         for selection, mode in (('core', 'success'), ('core', 'failure'),
-                                ('native', 'failure'), ('native', 'timeout')):
+                                ('native-runtime', 'failure'), ('native-shortcuts', 'timeout')):
             with self.subTest(selection=selection, mode=mode), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 (root / 'tools').mkdir()
@@ -159,10 +163,16 @@ pathlib.Path(args.report).write_text(json.dumps(dict(sid=sid, elevated=False, st
     suites=[dict(suite=args.suite, tests=1, skipped=0, success=success)])))
 sys.exit(status)
 '''.replace('ROOT', repr(str(source))).replace('SELECTION', repr(selection)).replace('MODE', repr(mode)))
-                result = subprocess.run([shutil.which('pwsh'), '-NoProfile', '-File', str(script),
+                evidence = root / 'evidence.json'
+                result = subprocess.run([self.shell(), '-NoProfile', '-File', str(script),
                                          '-Python', sys.executable, '-Suite', selection,
+                                         '-EvidencePath', str(evidence),
                                          '-TimeoutSeconds', '5' if mode == 'timeout' else '30'],
                                         capture_output=True, text=True, timeout=90)
+                self.assertTrue(evidence.is_file(), result.stdout + result.stderr)
+                recorded = json.loads(evidence.read_text(encoding='utf-8'))
+                self.assertEqual(recorded['selection'], selection)
+                self.assertEqual(recorded['identity_verified'], mode == 'success')
                 if mode == 'success':
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 else:

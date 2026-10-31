@@ -9,8 +9,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest import mock
+
+from tools.ci_unittest import leaves
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -23,6 +26,27 @@ def tool():
 
 
 class SuiteSelectionTests(unittest.TestCase):
+    def test_native_partitions_preserve_real_inventory_order_and_multiplicity(self):
+        owner = tool()
+        def program(args, worker):
+            self.assertIsNone(worker)
+            selected = list(leaves(unittest.defaultTestLoader.loadTestsFromNames(args[2:])))
+            inventory = [case.id() for case in selected]
+            self.assertTrue(inventory)
+            report = dict(complete=True, inventory=inventory, selected=inventory,
+                          cases=[dict(id=name, outcome='passed') for name in inventory],
+                          events=[], fixture_skipped=[],
+                          summary=dict(testsRun=len(inventory), skipped=0))
+            return mock.Mock(report=lambda: report, selected_cases=selected,
+                             result=SimpleNamespace(collectedDurations=[(str(case), .01) for case in selected]))
+        with mock.patch.object(owner, 'Program', side_effect=program):
+            original = owner.run_suites('native')[0]
+            split = [owner.run_suites(name)[0]
+                     for name in ('native-runtime', 'native-shortcuts')]
+        for field in ('inventory', 'cases', 'events', 'fixture_skipped'):
+            self.assertEqual(original[field], [item for row in split for item in row[field]])
+        self.assertEqual(original['tests'], sum(row['tests'] for row in split))
+
     def test_default_and_split_preserve_commands_and_execution_outcomes(self):
         owner = tool()
         calls = []
@@ -34,7 +58,12 @@ class SuiteSelectionTests(unittest.TestCase):
             report = dict(complete=True, inventory=ids, selected=ids,
                           cases=[dict(id=name, outcome='passed') for name in ids], events=[],
                           fixture_skipped=[], summary=dict(testsRun=len(ids), skipped=0))
-            return mock.Mock(report=lambda: report)
+            selected = [mock.MagicMock() for _ in ids]
+            for case, identity in zip(selected, ids):
+                case.id.return_value = identity
+                case.__str__.return_value = identity
+            return mock.Mock(report=lambda: report, selected_cases=selected,
+                             result=SimpleNamespace(collectedDurations=[(str(case), .01) for case in selected]))
         with mock.patch.object(owner, 'Program', side_effect=program):
             combined = owner.run_suites()
             commands = list(calls)
@@ -48,6 +77,17 @@ class SuiteSelectionTests(unittest.TestCase):
         self.assertEqual(commands[1][-4:], [
             'tests.test_windows_native_lifecycle', 'tests.test_windows_acl_native',
             'tests.test_windows_task_cohort', 'tests.test_windows_shortcut_recovery'])
+
+    def test_native_timing_refuses_missing_or_mismatched_case_records(self):
+        owner = tool()
+        case = unittest.FunctionTestCase(lambda: None)
+        report = dict(complete=True, cases=[], events=[])
+        for records in ([], [('foreign case', .1)], [(str(case), -1)]):
+            with self.subTest(records=records), mock.patch.object(owner, 'Program', return_value=
+                    SimpleNamespace(report=lambda: report, selected_cases=[case],
+                                    result=SimpleNamespace(collectedDurations=records))):
+                with self.assertRaisesRegex(ValueError, 'timing'):
+                    owner.run_suites('native')
 
     def test_real_recording_preserves_duplicate_cases_skips_and_failures(self):
         owner = tool()
@@ -69,7 +109,7 @@ class SuiteSelectionTests(unittest.TestCase):
         self.assertEqual(len(report['events']), 2)
         self.assertEqual(collections.Counter(report['inventory']),
                          collections.Counter(row['id'] for row in report['cases']))
-        for mode in ('core', 'native'):
+        for mode in ('core', 'native', 'native-runtime', 'native-shortcuts'):
             with self.subTest(mode=mode), redirect_stderr(io.StringIO()), \
                     mock.patch.object(unittest.defaultTestLoader, 'discover',
                                       return_value=unittest.TestSuite([Cases('test_fail')])), \
@@ -114,7 +154,9 @@ Assert-StandardReport -Path $Report -Suite $Suite -Sid 'synthetic-sid' -ExitCode
                     suites=[dict(suite=name, tests=2, skipped=0, success=True) for name in names])
 
     def test_valid_all_core_and_native_reports(self):
-        for mode, names in (('all', ('core', 'native')), ('core', ('core',)), ('native', ('native',))):
+        for mode, names in (('all', ('core', 'native')), ('core', ('core',)),
+                            ('native', ('native',)), ('native-runtime', ('native-runtime',)),
+                            ('native-shortcuts', ('native-shortcuts',))):
             with self.subTest(mode=mode):
                 result = self.validate(self.report(names), mode)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -131,9 +173,33 @@ Assert-StandardReport -Path $Report -Suite $Suite -Sid 'synthetic-sid' -ExitCode
                 self.assertNotEqual(self.validate(report).returncode, 0)
 
     def test_failed_empty_skipped_native_and_nonzero_process_cannot_pass(self):
-        for key, value in (('success', False), ('success', 'true'), ('tests', 0), ('skipped', 1)):
-            report = self.report(('native',))
-            report['suites'][0][key] = value
-            with self.subTest(key=key, value=value):
-                self.assertNotEqual(self.validate(report, 'native').returncode, 0)
+        for mode in ('native', 'native-runtime', 'native-shortcuts'):
+            for key, value in (('success', False), ('success', 'true'), ('tests', 0), ('skipped', 1)):
+                report = self.report((mode,))
+                report['suites'][0][key] = value
+                with self.subTest(mode=mode, key=key, value=value):
+                    self.assertNotEqual(self.validate(report, mode).returncode, 0)
         self.assertNotEqual(self.validate(self.report(), exit_code=1).returncode, 0)
+
+    def test_native_partition_cannot_accept_the_other_partitions_report(self):
+        for expected, reported in (('native-runtime', 'native-shortcuts'),
+                                   ('native-shortcuts', 'native-runtime')):
+            with self.subTest(expected=expected):
+                self.assertNotEqual(self.validate(self.report((reported,)), expected).returncode, 0)
+
+    def test_core_partition_reports_require_the_matching_name_and_completed_success(self):
+        for mode in ('core-first', 'core-second'):
+            with self.subTest(mode=mode):
+                report = self.report((mode,))
+                self.assertEqual(self.validate(report, mode).returncode, 0)
+                self.assertNotEqual(self.validate(None, mode).returncode, 0)
+                self.assertNotEqual(self.validate(report, mode, exit_code=1).returncode, 0)
+            for other in ('core', 'core-first', 'core-second', 'native', 'unknown'):
+                if other != mode:
+                    with self.subTest(mode=mode, reported=other):
+                        self.assertNotEqual(self.validate(self.report((other,)), mode).returncode, 0)
+            for key, value in (('success', False), ('success', 'true'), ('tests', 0)):
+                report = self.report((mode,))
+                report['suites'][0][key] = value
+                with self.subTest(mode=mode, key=key):
+                    self.assertNotEqual(self.validate(report, mode).returncode, 0)

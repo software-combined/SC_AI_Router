@@ -1,5 +1,6 @@
 """Owned, per-user application shortcuts for the retained native setup."""
 import os
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -195,13 +196,23 @@ def _registry_snapshot(home):
 def _read_links(rows, run):
     import base64
     import json
-    if any(Path(row['path']).is_symlink() for row in rows):
-        raise ValueError('Unsafe SCG Router shortcut')
-    result = run(['powershell', '-NoProfile', '-NonInteractive', '-Command', _LINK_READ],
-                 input=json.dumps(rows), capture_output=True, text=True, encoding='utf-8',
-                 check=True, timeout=30,
-                 **({'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
-    links = json.loads(result.stdout)
+    absent = True
+    for row in rows:
+        try:
+            mode = Path(row['path']).lstat().st_mode
+        except FileNotFoundError:
+            continue
+        if stat.S_ISLNK(mode):
+            raise ValueError('Unsafe SCG Router shortcut')
+        absent = False
+    if absent:
+        links = {row['name']: None for row in rows}
+    else:
+        result = run(['powershell', '-NoProfile', '-NonInteractive', '-Command', _LINK_READ],
+                     input=json.dumps(rows), capture_output=True, text=True, encoding='utf-8',
+                     check=True, timeout=30,
+                     **({'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
+        links = json.loads(result.stdout)
     if not isinstance(links, dict) or set(links) != {'open', 'remove', 'startup'}:
         raise ValueError('Invalid SCG Router shortcut snapshot')
     for value in links.values():

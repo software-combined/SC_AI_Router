@@ -584,8 +584,12 @@ is in [runtime files](runtime-files.md#codex-usage-limit-record).
    checks; unknown scope retains full discovery. Windows handoff waits for its
    child and propagates failure instead of relying on process replacement.
    `windows_standard.py` selects core/native standard-user CI suites and reuses
-   the unittest result recorder. Its PowerShell launcher owns account isolation,
+   the unittest result recorder, including module-preserving core partitions.
+   Full discovery and selected occurrences stay separate in its reports.
+   Its PowerShell launcher owns account isolation,
    exact report validation and cleanup; each matrix entry has its own runner.
+   `ci_environment.py` records non-secret runner inputs for diagnostic comparisons;
+   it does not certify test completion or release acceptance.
    `packaging/` holds the modules an installed host executes. A new
    host-run script belongs in `packaging/`, even if nothing in `ai_router/`
    imports it. `packaging/release.py` includes only its named installed operator
@@ -896,6 +900,10 @@ and named per-user Apps values. It checks ownership before recovery and reads ba
 the result. Binary shortcut writes use the shared compare-before-write helper.
 Recovery keeps a concurrent explicit startup choice and reconciles its shortcut.
 These owner APIs support installation recovery; they never capture client settings.
+When all three shortcut paths are absent, the snapshot records empty entries without
+starting PowerShell. Any existing entry still requires native ownership inspection.
+Symbolic links and filesystem inspection errors stop the operation. This avoids an
+unnecessary process; it does not resolve failures when PowerShell is required.
 `desktop_launch.py` follows retained setup resources, independently of inference rollback.
 Closing the shell never stops routing. Polling is silent and makes no model calls.
 `native_resources.py` consumes only this target's signed Resources descriptor.

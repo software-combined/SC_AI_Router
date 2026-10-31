@@ -12,33 +12,41 @@ No push to a branch publishes a router release; publication requires a tag.
 
 ## Windows standard-user acceptance
 
-Core and native Windows suites use separate disposable runners and accounts.
-This avoids adding their durations while keeping profile and process state isolated.
-Both matrix entries reach the required `Test` gate. One failure does not cancel
-the other entry; failed and cancelled results cannot satisfy acceptance.
+Windows acceptance uses four selections: `core-first`, `core-second`,
+`native-runtime` and `native-shortcuts`. Each has a separate disposable runner
+and standard account, keeping profile and process state isolated.
+All four matrix entries reach the required `Test` gate. One failure does not
+cancel the others; failed and cancelled results cannot satisfy acceptance.
 
-`tools/run_windows_standard.ps1 -Python <interpreter> -Suite core` runs core
-discovery. `-Suite native` runs the existing four native contract modules.
+`tools/run_windows_standard.ps1 -Python <interpreter> -Suite core-first` runs
+the first core partition; `core-second` runs the rest. Partitions preserve
+module fixtures, discovery order and duplicate occurrences. `native-runtime`
+runs the lifecycle, access-control and task-cohort modules; `native-shortcuts`
+runs shortcut recovery. `-Suite core` and `-Suite native` retain complete selections.
 Omitting `-Suite` retains core followed by native. Every selected suite must
 report positive test counts and success; native contracts permit no skips.
 The launcher retains its standard-user identity checks and account cleanup.
 Its default child timeout remains 20 minutes; tests can request a shorter timeout.
 
-The split passed the bounded diagnostic comparison: two samples per layout
+The earlier core/native split passed its bounded diagnostic comparison: two samples per layout
 recorded 31.5% lower median complete-pipeline time and 6.7% more aggregate job
 execution. Both paired candidates were faster, with matching Windows execution.
-First use the separate safety workflow for Windows launch/cleanup contracts,
-failure in each synthetic matrix entry, and cancellation of a waiting run.
-These short probes do not execute the full acceptance workload.
-The experiment uses identical source and tests for serial and split layouts,
-retains all other acceptance jobs, and cannot produce the required `Test` check.
-Run control, candidate, candidate, control, with at most four full runs.
-Stop after the first pair if correctness fails or no useful improvement appears.
-Accept only matching executed cases and outcomes, faster candidates in both pairs,
-and at least 20% lower median workflow elapsed. Report aggregate runner time
-separately; this experiment targets waiting time and makes no billing claim.
 The [Windows comparison record](windows-ci-benchmark.md) retains every sample
-and the acceptance decision. These measurements describe this four-run cohort.
+and the acceptance decision for that historical four-run cohort.
+
+The current four-selection layout follows the
+[complete source and layout comparison](ci-source-comparison.md). That trial
+ran two independent complete paths with no shared results. One eligible pair
+recorded 40.45% lower complete elapsed time and 1.43% more allocated runner time.
+Its conservative model recorded 39.00% lower elapsed time and 8.38% more allocation.
+Those results cover the shortcut fix and partitioning together; they do not
+establish separate component savings, typical speed or production acceptance.
+
+The earlier [shared-work experiment](ci-partition-experiment.md) retains its
+own protocol and rejected attempts. Diagnostic runs cannot produce the required
+`Test` check. The production matrix needs no diagnostic native aggregate:
+the existing matrix dependency makes `Test` wait for all four selections.
+Final-candidate production acceptance remains a separate gate.
 
 ## Why overlap these jobs
 

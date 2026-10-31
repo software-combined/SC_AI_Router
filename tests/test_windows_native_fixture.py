@@ -6,15 +6,88 @@ import json
 import shutil
 import subprocess
 import sys
+import traceback
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from types import SimpleNamespace
 from unittest import mock
 
-from tests.windows_native_fixture import NativeChild, cleanup
+from tests.windows_native_fixture import NativeChild, cleanup, create_shortcut
 
 NAME = 'SCG-CI-' + 'a' * 32
 POWERSHELL = shutil.which('powershell' if sys.platform == 'win32' else 'pwsh')
+
+
+class ShortcutCreationDiagnosticsTests(unittest.TestCase):
+    def test_timeout_reports_only_closed_phases_and_bounds_fixture_creation(self):
+        cases = [(None, 'script-entry-unobserved'),
+                 (b'PRIVATE STDERR\nSCG_SHORTCUT_STAGE=PRIVATE\n', 'script-entry-unobserved')]
+        for phase in ('entry', 'new-object', 'create-shortcut', 'target', 'arguments', 'save', 'complete'):
+            stderr = 'SCG_SHORTCUT_STAGE=%s\r\nPRIVATE STDERR\nSCG_SHORTCUT_STAGE=PRIVATE\n' % phase
+            cases.append((stderr.encode(), phase))
+        cases.append(('SCG_SHORTCUT_STAGE=save\n', 'save'))
+        for stderr, phase in cases:
+            run = mock.Mock(side_effect=subprocess.TimeoutExpired(
+                'PRIVATE COMMAND', 60, output=b'PRIVATE STDOUT', stderr=stderr))
+            values = dict(path='PRIVATE PATH', target='PRIVATE TARGET', arguments='PRIVATE ARGUMENTS')
+            with self.subTest(phase=phase):
+                try:
+                    create_shortcut(run, **values)
+                except AssertionError as error:
+                    self.assertEqual(str(error),
+                        'Windows shortcut creation timed out after 60 seconds (phase=%s)' % phase)
+                    self.assertTrue(error.__suppress_context__)
+                    self.assertNotIn('PRIVATE', traceback.format_exc())
+                else:
+                    self.fail('Shortcut creation did not refuse the timeout')
+                run.assert_called_once()
+                self.assertEqual(run.call_args.kwargs['timeout'], 60)
+                self.assertTrue(run.call_args.kwargs['check'])
+                self.assertTrue(run.call_args.kwargs['capture_output'])
+                self.assertEqual(run.call_args.args[0][:3], ['powershell', '-NoProfile', '-Command'])
+
+    @unittest.skipUnless(POWERSHELL, 'requires PowerShell to exercise the shortcut script')
+    def test_real_script_marks_creation_order_and_preserves_quoted_values(self):
+        fixture = r'''
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+$script:link = [pscustomobject]@{TargetPath='';Arguments=''}
+$script:link | Add-Member ScriptMethod Save {
+    [Console]::Error.WriteLine('ACTION=save')
+    [Console]::Out.WriteLine((@{path=$script:path;target=$this.TargetPath;arguments=$this.Arguments} |
+                            ConvertTo-Json -Compress))
+}
+$script:shell = [pscustomobject]@{}
+$script:shell | Add-Member ScriptMethod CreateShortcut {
+    param($path)
+    [Console]::Error.WriteLine('ACTION=create-shortcut')
+    $script:path = $path
+    return $script:link
+}
+function New-Object {
+    param($ComObject)
+    if ($ComObject -ne 'WScript.Shell') { throw 'Unexpected COM class' }
+    [Console]::Error.WriteLine('ACTION=new-object')
+    return $script:shell
+}
+'''
+        def run(command, **kwargs):
+            return subprocess.run([POWERSHELL, *command[1:-1], fixture + command[-1]], **kwargs)
+        values = dict(path="C:\\fixture é's\\SCG Router.lnk", target="C:\\fixture é's\\pythonw.exe",
+                      arguments='"C:\\fixture é\'s\\native_launch.py" --action remove')
+        result = create_shortcut(run, **values)
+        self.assertEqual(json.loads(result.stdout), values)
+        phases = [line for line in result.stderr.decode().splitlines()
+                  if line.startswith(('SCG_SHORTCUT_STAGE=', 'ACTION='))]
+        self.assertEqual(phases, [
+            'SCG_SHORTCUT_STAGE=entry', 'SCG_SHORTCUT_STAGE=new-object', 'ACTION=new-object',
+            'SCG_SHORTCUT_STAGE=create-shortcut', 'ACTION=create-shortcut',
+            'SCG_SHORTCUT_STAGE=target', 'SCG_SHORTCUT_STAGE=arguments',
+            'SCG_SHORTCUT_STAGE=save', 'ACTION=save', 'SCG_SHORTCUT_STAGE=complete'])
+        fixture = fixture.replace("[Console]::Error.WriteLine('ACTION=save')", "throw 'synthetic Save failure'")
+        with self.assertRaises(subprocess.CalledProcessError) as failure:
+            create_shortcut(run, **values)
+        self.assertIn(b'SCG_SHORTCUT_STAGE=save', failure.exception.stderr)
+        self.assertNotIn(b'SCG_SHORTCUT_STAGE=complete', failure.exception.stderr)
 
 
 class NativeHandleTests(unittest.TestCase):
