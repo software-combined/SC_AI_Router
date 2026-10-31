@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.test_native_setup import module
+from tests.windows_native_fixture import create_shortcut
 
 
 class ShortcutRecoveryTests(unittest.TestCase):
@@ -258,20 +259,13 @@ class NativeShortcutRecoveryTests(unittest.TestCase):
                     path.parent.mkdir(exist_ok=True)
                     target = home / 'setup/retained/runtime/pythonw.exe'
                     args = subprocess.list2cmdline([str(home.resolve() / 'native_launch.py')])
-                    command = ("$s=(New-Object -ComObject WScript.Shell).CreateShortcut(%s);"
-                               "$s.TargetPath=%s;$s.Arguments=%s;$s.Save()" %
-                               (owner._quote(path), owner._quote(target), owner._quote(args)))
-                    subprocess.run(['powershell', '-NoProfile', '-Command', command], check=True,
-                                   capture_output=True, timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
+                    create_shortcut(subprocess.run, path, target, args)
                     owned = owner.snapshot(home)
                     self.assertIsNotNone(owned['links']['open'])
                     path.unlink()
                     owner.restore(home, owned)
                     self.assertEqual(owner.snapshot(home)['links'], owned['links'])
-                    command = ("$s=(New-Object -ComObject WScript.Shell).CreateShortcut(%s);"
-                               "$s.TargetPath=$env:ComSpec;$s.Arguments='foreign';$s.Save()" % owner._quote(path))
-                    subprocess.run(['powershell', '-NoProfile', '-Command', command], check=True,
-                                   capture_output=True, timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
+                    create_shortcut(subprocess.run, path, os.environ['COMSPEC'], 'foreign')
                     exact = path.read_bytes()
                     foreign = dict(owned, links=dict(owned['links'], open=base64.b64encode(exact).decode()))
                     path.unlink()

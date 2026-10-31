@@ -8,6 +8,32 @@ import sys
 import time
 
 
+def create_shortcut(run, path, target, arguments):
+    """Keep real shortcut creation bounded and report only fixed timeout phases."""
+    path, target, arguments = ("'" + str(value).replace("'", "''") + "'"
+                               for value in (path, target, arguments))
+    steps = (('entry', ''), ('new-object', '$shell=New-Object -ComObject WScript.Shell'),
+             ('create-shortcut', '$link=$shell.CreateShortcut(%s)' % path),
+             ('target', '$link.TargetPath=%s' % target),
+             ('arguments', '$link.Arguments=%s' % arguments),
+             ('save', '$link.Save()'), ('complete', ''))
+    script = "$ErrorActionPreference='Stop';" + ''.join(
+        "[Console]::Error.WriteLine('SCG_SHORTCUT_STAGE=%s');"
+        "[Console]::Error.Flush();%s;" % step for step in steps)
+    try:
+        return run(['powershell', '-NoProfile', '-Command', script], check=True,
+                   capture_output=True, timeout=60,
+                   **({'creationflags': subprocess.CREATE_NO_WINDOW} if sys.platform == 'win32' else {}))
+    except subprocess.TimeoutExpired as error:
+        stderr = error.stderr
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode('utf-8', errors='replace')
+        markers = re.findall(r'^SCG_SHORTCUT_STAGE=(entry|new-object|create-shortcut|'
+                             r'target|arguments|save|complete)\r?$', stderr or '', re.M)
+        phase = markers[-1] if markers else 'script-entry-unobserved'
+        raise AssertionError('Windows shortcut creation timed out after 60 seconds (phase=%s)' % phase) from None
+
+
 def task_diagnostics(run, name, heartbeat, log):
     script = ("$ErrorActionPreference='Stop';$s=New-Object -ComObject Schedule.Service;"
               "$s.Connect();$n=[Console]::In.ReadToEnd();$t=$s.GetFolder('\\').GetTask($n);"

@@ -29,7 +29,15 @@ with the exact original arguments. Compare each invocation separately, including
 duplicate cases, outcomes, subtest callbacks and fixture suppression.
 Retain complete reports, failed reports and cache-state logs.
 
-The after source adds six shortcut regressions and four harness contracts.
+Shortcut creation emits fixed phase markers before each native operation.
+A timeout reports only the last recognised marker, or `script-entry-unobserved`.
+Markers distinguish script entry, object creation, property assignments and saving.
+Fixture construction has a 60-second limit; the original source had no limit.
+Production shortcut operations retain their 30-second limits.
+The markers do not establish an underlying timeout cause.
+
+The after source adds six shortcut regressions, two shortcut diagnostic contracts
+and four harness contracts.
 The original 17 native cases remain an ordered subset of its 23 native cases.
 Preserve all original outcomes; declare additions by exact test ID before dispatch.
 Count the added work in every duration and allocation where it executes.
@@ -54,6 +62,9 @@ Disclose that difference and retain the whole-job minimum/maximum penalties.
 The trigger is `cyril/ci-source-bench-*`, outside the legacy experiment prefix.
 Both calls have read-only permissions and diagnostic acceptance names.
 They cannot emit the required `Test` check or authorise publication.
+Targeted `windows-ci-safety-shortcut-only-*-proof` refs run the isolated
+shortcut diagnostic. They reuse unchanged passing launcher contracts; normal
+proof refs and both complete source paths retain those contracts.
 The [reusable-workflow rules](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)
 bind the local called definition to the caller's commit; checkout readback
 separately establishes the deliberately different application sources.

@@ -36,6 +36,7 @@ jobs:
             throw 'Proof step did not execute the verified shell.'
           }
       - name: Real standard-user launch, reports, failures and cleanup
+        if: ${{ !contains(github.ref_name, '-shortcut-only-') }}
         env:
           SCG_TEST_WINDOWS_SHELL: ${{ steps.pinned-shell.outputs.executable }}
         run: python -m unittest tests.test_windows_standard_ci tests.test_windows_standard_suites -v
