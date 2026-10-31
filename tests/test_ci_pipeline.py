@@ -68,14 +68,21 @@ class AcceptancePipelineTests(unittest.TestCase):
 
 
 class PartitionExperimentTests(unittest.TestCase):
-    def test_native_workers_record_only_the_legacy_shell_they_execute(self):
+    def test_native_workers_execute_the_verified_shell_they_record(self):
         experiment = jobs(DIAGNOSTIC)
+        action = (CHECK.parents[1] / 'actions/diagnostic-powershell/action.yml').read_text()
+        self.assertLess(action.index('Get-FileHash'), action.index('Expand-Archive'))
+        self.assertLess(action.index('Expand-Archive'), action.index('$version = & $executable'))
+        self.assertIn("$version.Trim() -cne '7.6.9'", action)
+        self.assertIn('CE7484804C0F0AD4DDA10C958E71ACDAF7EEBFB22505C1B480F89E0E9F1DA94D', action)
         for name in ('windows-control-native', 'windows-native'):
             with self.subTest(job=name):
                 block = experiment[name]
-                self.assertEqual(block.count('shell: powershell'), 2)
-                self.assertIn('python tools/ci_environment.py --windows-shell powershell', block)
-                self.assertNotIn('shell: pwsh', block)
+                self.assertIn('uses: ./.github/actions/diagnostic-powershell', block)
+                self.assertIn('id: pinned-shell', block)
+                self.assertEqual(block.count('CI_PWSH: ${{ steps.pinned-shell.outputs.executable }}'), 2)
+                self.assertIn('python tools/ci_environment.py --pwsh-executable "$env:CI_PWSH"', block)
+                self.assertIn('& $env:CI_PWSH -NoProfile -NonInteractive -ExecutionPolicy Bypass -File', block)
 
     def test_both_arms_keep_every_platform_and_the_current_control(self):
         experiment = jobs(DIAGNOSTIC)

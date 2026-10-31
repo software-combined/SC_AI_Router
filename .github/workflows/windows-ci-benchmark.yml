@@ -147,12 +147,20 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           python-version: '3.14.9'
+      - uses: ./.github/actions/diagnostic-powershell
+        id: pinned-shell
       - name: Resolved runner environment
-        shell: powershell
-        run: python tools/ci_environment.py --windows-shell powershell
+        shell: pwsh
+        env:
+          CI_PWSH: ${{ steps.pinned-shell.outputs.executable }}
+        run: python tools/ci_environment.py --pwsh-executable "$env:CI_PWSH"
       - name: Native contracts without administrator rights
-        shell: powershell
-        run: ./tools/run_windows_standard.ps1 -Python (Get-Command python).Source -Suite native -EvidencePath "$env:RUNNER_TEMP/windows-results.json"
+        shell: pwsh
+        env:
+          CI_PWSH: ${{ steps.pinned-shell.outputs.executable }}
+        run: |
+          & $env:CI_PWSH -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ./tools/run_windows_standard.ps1 -Python (Get-Command python).Source -Suite native -EvidencePath "$env:RUNNER_TEMP/windows-results.json"
+          exit $LASTEXITCODE
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -178,12 +186,20 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           python-version: '3.14.9'
+      - uses: ./.github/actions/diagnostic-powershell
+        id: pinned-shell
       - name: Resolved runner environment
-        shell: powershell
-        run: python tools/ci_environment.py --windows-shell powershell
+        shell: pwsh
+        env:
+          CI_PWSH: ${{ steps.pinned-shell.outputs.executable }}
+        run: python tools/ci_environment.py --pwsh-executable "$env:CI_PWSH"
       - name: Native contracts without administrator rights
-        shell: powershell
-        run: ./tools/run_windows_standard.ps1 -Python (Get-Command python).Source -Suite ${{ matrix.suite }} -EvidencePath "$env:RUNNER_TEMP/windows-results.json"
+        shell: pwsh
+        env:
+          CI_PWSH: ${{ steps.pinned-shell.outputs.executable }}
+        run: |
+          & $env:CI_PWSH -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ./tools/run_windows_standard.ps1 -Python (Get-Command python).Source -Suite ${{ matrix.suite }} -EvidencePath "$env:RUNNER_TEMP/windows-results.json"
+          exit $LASTEXITCODE
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

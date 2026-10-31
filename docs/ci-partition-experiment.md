@@ -32,8 +32,12 @@ inventory, order, duplicate occurrences, outcomes and fixture skips. Native
 selections require positive counts and zero skips. Each worker retains its
 standard-account identity validation, process ownership and cleanup checks.
 
-Native launchers explicitly use Windows PowerShell 5.1, which their helpers also
-use. Record the actual version, not the unrelated installed PowerShell 7 version.
+Native launchers explicitly execute the self-contained PowerShell 7.6.9 archive
+from its official release. Verify its frozen SHA-256 before extraction or execution.
+Record that executable's version. The image's shell only dispatches this command;
+its overhead remains in each complete job. Isolated native helpers retain their
+existing Windows PowerShell 5.1 environment. A separate 5.1 outer-launcher proof
+failed before evidence creation and is retained; it is not a supported substitute.
 Use `windows-2025` for native workers and `ubuntu-26.04` for static tails.
 These operating-system labels still receive rolling image builds.
 
@@ -48,7 +52,7 @@ inside the residual full-job duration; none is removed from accounting.
 Local contracts execute both strict diagnostic gates with failed, cancelled,
 skipped and missing prerequisites. Remote probes retain shared failure, control
 failure, both candidate failure directions and cancellation checks. Validate the
-launcher with both Windows PowerShell 5.1 and PowerShell 7, including actual
+launcher with the verified PowerShell 7.6.9 executable, including actual
 standard accounts, failed starts, timeout cleanup and plain UTF-8 reports.
 Complete those checks before timing the new cohort.
 
@@ -66,7 +70,7 @@ incompatible required inputs, or failure of either performance criterion below.
 Before opening timing totals, verify actual checkout commits and trees, complete
 job coverage, native case outcomes and duration-record identities. Separately
 executed native workers must match Python, OS release, architecture, CPU count,
-OpenSSL, C# compiler hash and the executed Windows PowerShell version. Both static
+OpenSSL, C# compiler hash and both executed PowerShell versions. Both static
 tails must also match actual PowerShell, installed dependencies and certificate
 fingerprints. Retain toolchain and environment records for every common job.
 

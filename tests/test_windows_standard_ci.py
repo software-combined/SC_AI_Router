@@ -169,6 +169,7 @@ sys.exit(status)
                                          '-EvidencePath', str(evidence),
                                          '-TimeoutSeconds', '5' if mode == 'timeout' else '30'],
                                         capture_output=True, text=True, timeout=90)
+                self.assertTrue(evidence.is_file(), result.stdout + result.stderr)
                 recorded = json.loads(evidence.read_text(encoding='utf-8'))
                 self.assertEqual(recorded['selection'], selection)
                 self.assertEqual(recorded['identity_verified'], mode == 'success')
