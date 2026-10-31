@@ -1,7 +1,7 @@
 {
   "name": "scg-agent-factory",
-  "version": "0.1.0",
-  "description": "AI Agent Factory Method for one agent to own a measurable project outcome through verified cycles.",
+  "version": "0.2.0",
+  "description": "AI Agent Factory Method for persistent project agents, clear area ownership and temporary helpers.",
   "author": {
     "name": "Software Combined"
   },

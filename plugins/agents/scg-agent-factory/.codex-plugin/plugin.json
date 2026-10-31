@@ -1,19 +1,19 @@
 {
   "name": "scg-agent-factory",
-  "version": "0.1.0",
-  "description": "AI Agent Factory Method for one agent to own a measurable project outcome through verified cycles.",
+  "version": "0.2.0",
+  "description": "AI Agent Factory Method for persistent project agents, clear area ownership and temporary helpers.",
   "author": {
     "name": "Software Combined"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "AI Agent Factory Method",
-    "shortDescription": "Let one agent own an outcome in verified cycles.",
-    "longDescription": "Start, resume and evaluate outcome-owning agents with shared project state, direct signals, explicit authority, verification and recovery. Use the separate Subagents plugin when helpers are needed.",
+    "shortDescription": "Run persistent project agents with temporary helpers.",
+    "longDescription": "Start, resume and evaluate a persistent project orchestrator and role agents with clear area ownership, shared state, stable task titles, explicit authority, verification and recovery. Use the separate Subagents plugin for helper model selection.",
     "developerName": "Software Combined",
     "category": "Productivity",
     "capabilities": [],
-    "defaultPrompt": "Use the AI Agent Factory Method in this project to agree the loop record and prove one verified cycle."
+    "defaultPrompt": "Use the AI Agent Factory Method to establish this project's persistent orchestrator and role owners, record their titles and limits, and prove one verified cycle."
   },
   "repository": "https://github.com/software-combined/SC_AI_Router"
 }

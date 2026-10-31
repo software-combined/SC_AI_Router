@@ -1,15 +1,27 @@
 ---
 name: ai-agent-factory-method
-description: Run the AI Agent Factory Method, where one agent owns a measurable project outcome through repeated observe, reproduce, decide, change, verify and recover cycles under human-set authority. Use when asked to apply this method, including a one-cycle pilot, or to start, resume or evaluate an agent that owns an outcome across cycles or sessions. Not for an ordinary one-off fix; optimal-subagents owns helper model choice.
+description: Run the AI Agent Factory Method with a persistent project orchestrator and multiple persistent role agents, each owning a measurable area through verified work cycles and temporary helpers. Use to start, resume or evaluate this project team, including a one-cycle pilot. Not for an ordinary one-off fix; optimal-subagents owns helper model choice.
 ---
 
 # AI Agent Factory Method
 
-One agent owns one measurable outcome and improves it in short, verified
-cycles. Bounded helpers take parallel work. Shared project state replaces
+Use a small team of persistent agents per project: one orchestrator and
+multiple role agents with distinct ongoing areas to own. Each role owns its
+area end to end and improves measurable outcomes in short, verified cycles.
+Give temporary helpers bounded assignments. Shared project state replaces
 status chatter, and direct operational signals replace humans relaying faults.
 Humans set direction, reserved decisions and authority. Judge the method by
 accepted user results, not by activity.
+
+The orchestrator owns the overall outcome, priorities, ownership boundaries
+and integration. Role owners act within their recorded authority and verify
+their own helper results. Use continuing responsibilities that the project
+needs; avoid a fixed department chart or handoff chain for every change.
+
+Preserve each project agent's identity, responsibility, chat and saved state
+across features and sessions. Resume the existing role rather than creating
+a new permanent agent for each feature. Temporary reviewers and other helpers
+finish their assignment and return their results to its owner.
 
 The host's and project's instructions, approvals, checks, reviews and release
 paths stay authoritative, and their stricter rules win; this skill grants no
@@ -19,41 +31,85 @@ user data.
 
 ## Start or resume
 
-The first proof is one realistic signal reaching a verified improvement in the
-agreed test environment. A plan, a code change or a passing execution status
-alone does not meet it.
+For implementation, the first proof is one realistic signal reaching a
+verified improvement in the agreed test environment. A plan, code change or
+passing execution status alone does not meet it. Observe-only work delivers
+evidence and triage; proposal work delivers an actionable proposal and
+verification plan.
 
-1. Read the project's instructions. Find its backlog or tracker,
+1. Read the project's instructions. Find its backlog or tracker, role roster,
    implementation, owners, checks, reviews and release path, and reuse them.
    Do not create a competing work list or a new runtime framework.
 2. If a loop record exists, read it, check current state and concurrent work,
    then continue from its next safe action. A restart never renews consumed
    budget, paid-call caps or approval; only explicit new limits from the
-   human owner revise them. Read-only work also uses its applicable caps. You
-   may set a tighter session ceiling within the existing limits.
+   human owner revise them. Read-only work also uses its applicable caps. Use
+   the project's cap definitions. Resume and title housekeeping are not a work
+   cycle unless the project counts them; all time, tool and paid-operation
+   caps still apply. You may set a tighter ceiling within the existing limits.
 3. Otherwise agree the loop record before dependent work. Fill routine details
-   from available sources. Ask only for a missing owner, authority, limit or
-   acceptance check.
-4. Begin with one work item and one writer.
+   from available sources. Ask only when an unresolved owner, authority,
+   limit, retention rule, required review/release path or acceptance check
+   affects the next action. Record harmless unknowns as `not recorded`.
+4. Begin the pilot with one work item in one ownership area. Keep one writer
+   per resource; distinct owners may work on independent areas in parallel.
 
-Keep one compact record in the project's existing plan, tracker or issue; if
-none exists, add a small section to the project's own plan. Keep
-implementation and runtime evidence in their canonical sources and link them.
+Resolve the durable project from its instructions and human owner. Features
+such as Chat and Work belong to that parent project and use the same
+orchestrator, role roster and shared state as future features. A feature name
+or current chat topic does not establish a new project. If the project boundary
+is unclear, resolve it before creating or renaming permanent roles.
+
+Identify the project's single orchestrator and continuing owners in the role
+roster. Create or reuse one persistent task/chat for each continuing owner
+role, including the orchestrator, through the host's authorised path. Record
+the actual task/chat link or ID where available and reuse that owner task for
+future features and sessions. A role label or temporary helper does not fulfil
+this setup. If the host cannot create or resume persistent owner tasks, report
+the limitation and proposed roster rather than claiming the team is configured.
+Do not turn a feature or role chat into another orchestrator. Name the
+orchestrator chat exactly `{Project name}-Orchestrator`. Name other
+persistent role tasks/chats `{Project name}: {Role}`, for example
+`Atlas: Product manager`, `Atlas: Documentation` or `Atlas: Engineering`.
+Keep these titles stable across features and sessions; put the current
+assignment in the brief and shared state. Temporary helper titles use the
+project name and their actual helper role. Internal tool IDs keep their
+required format.
+
+At start or resume, check and set titles with the client's supported rename
+tool or control. Verify the saved title; a suggested name in a message is not
+a rename. If renaming is unavailable, record the intended title and tell the
+human owner. The orchestrator checks the role roster and titles. Each owner
+checks its helper titles.
+
+Keep the role roster and outcome records in the project's existing plan,
+tracker or issue; if none exists, add a small section to the project's own
+plan. For each persistent role, record its owner, area, authority, task/chat
+link or ID where available, and next safe action. Keep a compact record like
+the following for each owned outcome. Link implementation and runtime evidence
+from their canonical sources rather than copying them.
 
 ```text
+Project:      <durable parent project; list current features separately>
 Outcome:      <observable result>
 Human owner:  <accountable person or role>
-Agent owner:  <the one agent session or service that owns the outcome>
+Agent owner:  <persistent role and responsible agent session or service>
 Signals:      <allowed sources and access scope>
 Acceptance:   <downstream proof that the outcome improved>
 Mode:         observe-only | propose | implement-in-test | release via approved path
 Environment:  <test target; production only when approved>
 Authority:    <permitted actions; required approvals; decisions reserved for the human owner>
 Recovery:     <rollback or repair path, and how it was tested>
-Limits:       <numeric time, cycle, tool or model-call, paid-operation and no-progress caps; amount used>
+Limits:       <shared project caps, this owner's allocation and amount used; numeric time, cycle, call, paid-operation and no-progress caps>
 Retention:    <what may be kept, where and for how long>
 State:        <active item, revision, last verified result, parked items and their asks, next safe action>
 ```
+
+Project limits apply across all persistent agents and temporary helpers. The
+orchestrator allocates the remaining allowance before parallel work. Record
+which caps each role or helper draws on and its consumption in shared state.
+If the applicable allowance is unknown or exhausted, hold that assignment.
+A new role, helper or session never renews project limits.
 
 Follow the authorised mode. If none is set, begin in `propose` within existing
 read permissions. `observe-only` ends with evidence and triage; `propose` adds
@@ -85,7 +141,9 @@ or permissions.
 
 ## Work one cycle
 
-Stop at the selected mode's boundary and record the next safe action.
+Stop at the selected mode's boundary. Observe-only ends after evidence and
+triage. Propose ends after the proposal and verification plan, before
+implementation. Record the next safe action.
 
 1. Observe the allowed signals and select one relevant item. Reject
    duplicates and work outside the outcome.
@@ -96,7 +154,7 @@ Stop at the selected mode's boundary and record the next safe action.
    Disabling or removing required behaviour to clear an error, finding or
    check fails acceptance.
 6. Complete the project's checks and reviews, then release only through its
-   authorised path. In `propose` or `implement-in-test` mode, stop at the
+   authorised path. In `implement-in-test` mode, stop at the
    release approval gate and report the test proof as test evidence; release
    is a separate decision.
 7. Read back the actual downstream result. Monitor the signal for the
@@ -134,12 +192,14 @@ authority.
 
 ## Coordinate through shared state
 
-Give each helper one deliverable, its inputs, write scope, checks and stop
-condition. The agent owner keeps the outcome and verifies helper results
-before integration. When using helpers, load `scg-subagents:optimal-subagents`
+Give each helper one deliverable, its inputs, write scope, allocated limits,
+checks and stop condition. Its persistent role owner keeps the outcome and
+verifies helper results before integration. When using helpers, load
+`scg-subagents:optimal-subagents`
 from the active client's skill catalogue to choose models, then read its tool
 guide before the first delegation. The `scg-subagents` plugin supplies this
-helper capability; it is optional for work that one agent can complete alone.
+helper capability; it is optional when a role owner completes its own work
+without helpers.
 If it is unavailable, work locally or report the missing helper capability.
 
 Coordinate through shared state (the loop record, tracker, repository and
@@ -149,11 +209,16 @@ assumptions. When the project's rules or the risk call for independent
 review, ask a helper that did not write the change to try to break it. Do not
 add review steps that neither the project nor the risk requires.
 
+Follow the project's pre-commit review procedure and configured reviewer
+models. Method-design advisers do not replace those required review lanes.
+
 ## Improve the loop
 
-At each checkpoint, count accepted outcomes, elapsed and waiting time,
-incorrect actions, human corrections and cost per accepted outcome, using the
-record and existing tools. Remove the largest demonstrated wait. Common waits
+At each checkpoint, count test-verified, released and accepted outcomes
+separately, with their environments and required acceptance evidence. Track
+elapsed and waiting time, incorrect actions, human corrections and cost per
+accepted outcome in the record and existing tools. Remove the largest
+demonstrated wait. Common waits
 are humans relaying faults, missing evidence, slow verification, untested
 recovery, large release batches and a growing decision queue. Improve how work
 reaches required reviews and approvals; keep those controls.
