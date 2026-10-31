@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI Agent Factory Method"
+  short_description: "Let one agent own an outcome in verified cycles"
+  default_prompt: "Use $ai-agent-factory-method in this project to agree the loop record and prove one verified cycle."
