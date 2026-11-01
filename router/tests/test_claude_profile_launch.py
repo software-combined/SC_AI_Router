@@ -214,11 +214,13 @@ class ProfileLaunchTests(unittest.TestCase):
                         'fedcbaab-4321-4567-8123-123456789abc', 'third-only')
         cowork_before = [fixtures.fingerprint(path / cowork) for path in (first, third)]
         release = self.home / 'releases/fixture/packaging'
-        inventory = fixtures.load_helper('release').bundle_files(ROOT)
+        release_builder = fixtures.load_helper('release')
+        inventory = release_builder.bundle_files(ROOT)
         archive = self.root / 'release.tar'
         with tarfile.open(archive, 'w') as bundle:
             for relative in inventory:
-                bundle.add(ROOT / relative, arcname=relative, recursive=False)
+                bundle.add(release_builder.source_file(ROOT, relative),
+                           arcname=relative, recursive=False)
         with tarfile.open(archive) as bundle:
             bundle.extractall(release.parent, filter='data')
         (self.home / 'current').write_text('fixture', encoding='utf-8')
