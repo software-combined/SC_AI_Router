@@ -1,4 +1,4 @@
 interface:
   display_name: "AI Agent Factory Method"
   short_description: "Run project agents with a clear shared progress page"
-  default_prompt: "Use $ai-agent-factory-method to establish this project's persistent orchestrator and role owners, record their titles and authority, and prove one verified cycle."
+  default_prompt: "Use $ai-agent-factory-method to start or resume this project's Project manager, add role owners only where needed, and deliver one verified outcome."
