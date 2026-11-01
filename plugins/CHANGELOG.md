@@ -1,5 +1,12 @@
 # Changelog
 
+## scg-optimise-ci 0.1.13 (2026-11-01)
+
+- Screen process, worker and cache candidates on the target platform before
+  expanding proof work. Keep local measurements separate from CI claims.
+- Check instrumentation precision before enabling compilation or runtime caches;
+  preserve exact coverage with the tool's supported opt-out.
+
 ## scg-agent-factory 0.3.0 (2026-11-01)
 
 - Bundle the shared project progress template, blank records and offline HTML
