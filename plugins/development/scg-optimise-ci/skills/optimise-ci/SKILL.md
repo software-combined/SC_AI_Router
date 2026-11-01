@@ -54,6 +54,9 @@ Set a bounded proof budget and a success or stopping criterion before spending m
 
 Start with existing timing and execution reports and the smallest credible
 comparison of equivalent workloads. Match the claim to the evidence available.
+Screen process, worker and cache candidates on the target operating system and
+runner early. A local speed-up does not establish a CI gain. Where possible,
+use native flags in existing diagnostics before building more proof machinery.
 Add instrumentation or samples only when missing evidence, variability or risk
 could change the decision. Stronger claims need stronger evidence.
 Do not copy a worked example's harness or sample count into every repository.
@@ -208,6 +211,8 @@ Check which successful runs can seed future consumers, including new pull reques
 Do not add recurring warm-up jobs unless their cost is justified by measured reuse.
 Key each cache on the lock or requirements files that resolve it, plus any toolchain version those artifacts need.
 A cache miss must run the same install and the same tests, only slower.
+Check that compilation and runtime caches preserve instrumentation. Use the
+tool's opt-out for precise coverage when cached code reduces its accuracy.
 Verify a cache change with one cold run and one warm run of the same revision, and report both.
 A cache that changes resolved versions, hides a failed install or lets a required check skip is a defect, not an optimisation.
 
