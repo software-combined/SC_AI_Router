@@ -1,5 +1,14 @@
 # Changelog
 
+## scg-agent-factory 0.3.1 (2026-11-02)
+
+- Use `{Project name}: Project manager` for the human's single point of contact.
+  Rename existing chats in place and preserve their identity and shared state.
+- Start with one manager. Add persistent owners only for distinct continuing
+  work, with optional role examples for software and other project types.
+- Keep direct collaboration, independent review and existing authority gates
+  while choosing suitable workers without a fixed management hierarchy.
+
 ## scg-optimise-ci 0.1.13 (2026-11-01)
 
 - Screen process, worker and cache candidates on the target platform before

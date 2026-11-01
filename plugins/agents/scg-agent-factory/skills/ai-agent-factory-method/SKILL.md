@@ -5,10 +5,10 @@ description: Run the AI Agent Factory Method with persistent project owners and 
 
 # AI Agent Factory Method
 
-Build a small team of persistent agents that own outcomes end to end. Give
-them direct signals, shared current state and room to make routine decisions.
-Use temporary subagents for bounded work. Judge the team by verified user
-results, not activity or the size of its roster.
+Start with a persistent project manager and add role owners where needed.
+Give them direct signals, shared current state and room to make routine
+decisions. Use temporary subagents for bounded work. Judge delivery by
+verified user results, not activity or the size of the team.
 
 Humans set direction, taste, authority and reserved decisions. Agents choose
 how to deliver within those boundaries. Avoid copying a human department chart,
@@ -24,14 +24,39 @@ only. Keep the project's existing owners and workflow.
 
 ## Keep durable owners
 
-Use one project orchestrator and continuing role owners with distinct areas
-to own. The orchestrator owns priorities, boundaries and integration. Each
-role owns its area end to end, including verification and its subagents.
-Choose roles from actual work; do not create a fixed handoff chain for every
-feature. Owners may work in parallel on independent resources.
+Use one persistent project manager as the human's single front door. It turns
+human direction into priorities, coordinates owners, resolves cross-area
+conflicts and brings back progress and reserved decisions. It can do work
+directly; it need not approve every routine action or relay every message.
+
+Start with the smallest team that can deliver the outcome:
+
+- A small project can use just the project manager, working directly or with
+  temporary subagents. Do not add a separate product-owner or coordination
+  agent by default.
+- Add a persistent role owner only for an area that needs continuing,
+  distinct ownership. One owner can cover several areas; split them when
+  the work needs separate ownership. Each owner verifies its own area and
+  remains responsible for its temporary workers.
+- Name roles for the work. Research, Finance, Operations and Content are as
+  valid as Engineering. Do not create roles to fill a template.
+
+A larger software project might use an Engineering Lead, combining software
+leadership and delivery coordination. Add Architecture, UX/Design, QA or
+DevOps/Release owners only where needed. They collaborate as peers; an
+Architect is not a required approval step above implementation or release.
+Independent reviewers must not have written the work they check, whether
+or not the project has a separate QA owner. Existing project gates still apply.
+
+Owners collaborate directly through shared state and evidence. The human
+should not have to relay messages or visit each role chat. Bring priorities,
+scope conflicts and decisions needing the human to the project manager;
+keep routine coordination between owners. Work in parallel on independent
+resources. Choose workers that can meet the task and checks, then prefer
+the lowest-cost suitable option within the user's model and access choices.
 
 Resolve the durable project from its existing instructions, backlog and human
-owner. Features reuse that project's team and state. If the boundary is
+owner. New outcomes reuse that project's team and state. If the boundary is
 unclear, resolve it before creating permanent roles.
 
 Create or reuse one real persistent task/chat for each owner through the
@@ -40,16 +65,19 @@ owner. Keep each owner's identity, responsibility, chat and saved state across
 features and sessions. Resume that owner instead of creating a replacement.
 Temporary subagents finish an assignment and return to its owner.
 
-Name the orchestrator `{Project name}-Orchestrator` and role chats
-`{Project name}: {Role}`, for example `Atlas: Engineering`. Verify the saved
-title when creating or renaming a chat; keep it stable afterwards. Put the
-current assignment in shared state. Subagent titles describe their project
-and actual role; internal tool IDs keep the host's required format.
+Name the project manager chat `{Project name}: Project manager` and role
+chats `{Project name}: {Role}`, for example `Atlas: Research`. Rename an
+existing manager chat in place, including one named `Orchestrator`; preserve
+its chat ID, saved state and roster links. Do not create a replacement chat
+for a title change. Verify the saved title and roster link, then keep them
+stable. Put the current assignment in shared state. Subagent titles describe
+their project and actual role; internal tool IDs keep the host's required format.
 
 Record actual owner chat links or IDs in the existing role roster. If the host
 cannot create or resume persistent chats, report the limitation and proposed
 roster rather than claiming the team exists. Do not make a feature chat or
-role owner into another orchestrator.
+role owner into a second project manager. A role or title change does not
+grant new tools, production access or decision authority.
 
 ## Work from current state
 
@@ -105,7 +133,7 @@ urgent faults and actual questions. Keep the outcome, current availability,
 one owner and the next step clear. Put technical evidence behind its optional
 detail control. Separate named human decisions from work the team can resolve.
 
-Role owners maintain their existing source records. Only the orchestrator
+Role owners maintain their existing source records. Only the project manager
 refreshes the page from those records. Reconcile it at completed milestones,
 commits, scope changes and handoffs; batch interim activity. Verify the saved
 or published view. Do not refresh a timestamp to imply new verification.
@@ -225,8 +253,8 @@ A portable method does not prove equal model capability.
 
 ## Clean up as work progresses
 
-The orchestrator makes cleanup part of each completed milestone, integration
-and handoff. Role owners clean their task-owned resources; the orchestrator
+The project manager makes cleanup part of each completed milestone, integration
+and handoff. Role owners clean their task-owned resources; the project manager
 verifies the result. Use the existing current record to track ownership and
 retention. Do not create a separate cleanup ledger or periodic sweep.
 
