@@ -42,7 +42,7 @@ class PublicationTests(unittest.TestCase):
             shutil.copyfile(ROOT.parent / '.gitattributes', root / '.gitattributes')
             env = {**os.environ, 'GIT_CONFIG_GLOBAL': os.devnull, 'GIT_CONFIG_NOSYSTEM': '1'}
             for args in (('init', '-q'), ('add', '.gitattributes', relative),
-                         ('checkout-index', '--all', '--prefix=' + str(root / 'checkout') + os.sep)):
+                         ('checkout-index', '--all', '--prefix=checkout/')):
                 subprocess.run(['git', '-c', 'core.autocrlf=true', *args], cwd=root,
                                env=env, check=True, capture_output=True)
             inventory = json.loads((ROOT / 'packaging/runtime-components.json').read_text())
