@@ -1,5 +1,12 @@
 # Changelog
 
+## scg-agent-factory 0.3.2 (2026-11-02)
+
+- For projects with several active workstreams, the project manager normally
+  delegates substantial execution to existing owners and stays available for
+  coordination and human decisions. Short tasks can remain with the manager;
+  routine updates need no relay, and existing approval gates still apply.
+
 ## scg-agent-factory 0.3.1 (2026-11-02)
 
 - Use `{Project name}: Project manager` for the human's single point of contact.

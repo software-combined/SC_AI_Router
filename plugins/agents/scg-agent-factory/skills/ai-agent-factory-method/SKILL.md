@@ -26,8 +26,12 @@ only. Keep the project's existing owners and workflow.
 
 Use one persistent project manager as the human's single front door. It turns
 human direction into priorities, coordinates owners, resolves cross-area
-conflicts and brings back progress and reserved decisions. It can do work
-directly; it need not approve every routine action or relay every message.
+conflicts and brings back progress and reserved decisions.
+
+For projects with several active workstreams, the project manager normally
+delegates substantial execution to existing owners and stays available for
+coordination and human decisions. It can handle short, bounded tasks directly.
+Avoid making it the relay for routine updates; existing approval gates still apply.
 
 Start with the smallest team that can deliver the outcome:
 
