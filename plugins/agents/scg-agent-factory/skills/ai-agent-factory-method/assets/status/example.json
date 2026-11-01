@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "title": "Customer workspace",
+    "outcome": "Find customer information and share clear reports with your team.",
+    "checked": "",
+    "template": true,
+    "liveEnvironment": "Production",
+    "environments": [
+      "Staging",
+      "Production"
+    ],
+    "source": {
+      "label": "Work plan",
+      "url": ""
+    }
+  },
+  "features": [
+    {
+      "scope": "active",
+      "kind": "implementation",
+      "owner": "Engineering (agent team)",
+      "nextActionOwner": "Engineering (agent team)",
+      "releases": [],
+      "acceptance": {
+        "state": "Not recorded",
+        "owner": "",
+        "environment": "",
+        "revision": "",
+        "acceptedAt": "",
+        "evidence": []
+      },
+      "criteria": [
+        {
+          "id": "find-1",
+          "text": "A search by company name returns the matching customer.",
+          "state": "Not recorded",
+          "evidence": []
+        }
+      ],
+      "sample": true,
+      "id": "find",
+      "title": "Find a customer",
+      "outcome": "Find the right customer by name or company.",
+      "build": "Building",
+      "nextAction": "Check that the search returns the right customer."
+    },
+    {
+      "scope": "active",
+      "kind": "implementation",
+      "owner": "Engineering (agent team)",
+      "nextActionOwner": "Engineering (agent team)",
+      "releases": [],
+      "acceptance": {
+        "state": "Not recorded",
+        "owner": "",
+        "environment": "",
+        "revision": "",
+        "acceptedAt": "",
+        "evidence": []
+      },
+      "criteria": [],
+      "sample": true,
+      "id": "report",
+      "title": "Download a report",
+      "outcome": "Save a readable report to share with your team.",
+      "build": "In review",
+      "nextAction": "Check the report on a phone and a laptop."
+    },
+    {
+      "scope": "active",
+      "kind": "implementation",
+      "owner": "Project owner",
+      "nextActionOwner": "Project owner",
+      "releases": [],
+      "acceptance": {
+        "state": "Not recorded",
+        "owner": "",
+        "environment": "",
+        "revision": "",
+        "acceptedAt": "",
+        "evidence": []
+      },
+      "criteria": [],
+      "sample": true,
+      "id": "access",
+      "title": "Choose who can see reports",
+      "outcome": "Make reports available to the right people.",
+      "build": "Planned",
+      "nextAction": "Choose the starting audience.",
+      "decisions": [
+        {
+          "audience": "human",
+          "owner": "Project owner",
+          "text": "Who should see the first reports?",
+          "context": "The choice sets the first audience. The team can keep building while you decide.",
+          "options": [
+            "Only the project team",
+            "Everyone in the company"
+          ],
+          "result": ""
+        }
+      ]
+    },
+    {
+      "scope": "active",
+      "kind": "implementation",
+      "owner": "Engineering (agent team)",
+      "nextActionOwner": "Engineering (agent team)",
+      "releases": [],
+      "acceptance": {
+        "state": "Not recorded",
+        "owner": "",
+        "environment": "",
+        "revision": "",
+        "acceptedAt": "",
+        "evidence": []
+      },
+      "criteria": [],
+      "sample": true,
+      "id": "saved",
+      "title": "Save useful searches",
+      "outcome": "Return to a useful search without typing it again.",
+      "build": "Planned",
+      "nextAction": "Start after the customer search is checked."
+    }
+  ],
+  "tasks": [],
+  "changes": []
+}

@@ -1,0 +1,254 @@
+"""Plan 062 Step 1: freeze the two observable protocol contracts.
+
+Responses and Messages traverse the same HTTP transport with explicitly
+selected policy. These pins use FakeUpstream and the local handler harness
+only. Add only missing cases needed to tell whether the extraction changes
+on-wire behavior; existing handler/ingress/response/V2 suites own the rest.
+"""
+import http.client
+import json
+import unittest
+
+from tests.fakes import FakeUpstream, install_fake
+from tests.harness import (
+    auth_file as _auth_file,
+    post as _post,
+    start_server as _start_server,
+    test_state as _test_state,
+)
+from tests.test_claude_ingress import _messages
+
+
+class ProtocolContractTests(unittest.TestCase):
+    def test_protocol_rows_derive_from_their_path_owners(self):
+        # Plan 125: a path added to providers/claude is routable here with
+        # no second edit, and the union stays exact.
+        from ai_router import claude as claude_mod
+        from ai_router import image_provider, protocols, providers as providers_mod
+        from ai_router.protocols import images as images_mod
+        from ai_router.protocols import messages as messages_mod
+        from ai_router.protocols import responses as responses_mod
+        for path in providers_mod.NATIVE_SERVICE_PATHS:
+            self.assertIs(protocols.select('POST', path), responses_mod.POLICY)
+        for path in claude_mod.CLAUDE_POST_PATHS:
+            self.assertIs(protocols.select('POST', path), messages_mod.POLICY)
+        for path in image_provider.IMAGE_POST_PATHS:
+            self.assertIs(protocols.select('POST', path), images_mod.POLICY)
+        self.assertEqual(
+            protocols.owned_paths(),
+            frozenset(providers_mod.NATIVE_SERVICE_PATHS)
+            | claude_mod.CLAUDE_POST_PATHS
+            | image_provider.IMAGE_POST_PATHS
+            | {'/responses', '/responses/compact', '/models', '/v1/models'})
+
+    def test_policy_names_are_the_definition_constants(self):
+        # Plan 155 (F10): the table exports the protocol names, so a policy
+        # name cannot drift into a second literal.
+        from ai_router import provider_defs
+        from ai_router.protocols import images as images_mod
+        from ai_router.protocols import messages as messages_mod
+        from ai_router.protocols import responses as responses_mod
+        self.assertEqual(responses_mod.POLICY.name, provider_defs.RESPONSES)
+        self.assertEqual(messages_mod.POLICY.name, provider_defs.MESSAGES)
+        self.assertEqual(images_mod.POLICY.name, provider_defs.IMAGES)
+
+    def test_the_discovery_listing_is_a_table_row(self):
+        # Plan 155 (F10): the handler asks the table, so the GET is owned by
+        # the Messages family; an allowlist that names nothing lists nothing,
+        # and the Responses family serves no listing at all.
+        from ai_router import protocols
+        from ai_router.protocols import messages as messages_mod
+        self.assertIs(protocols.select('GET', '/v1/models'), messages_mod.POLICY)
+        self.assertIsNone(protocols.select('POST', '/v1/models'))
+        self.assertIsNone(protocols.listing('GET', '/responses'))
+        self.assertEqual(protocols.listing('GET', '/v1/models', allowed=()),
+                         {'data': []})
+
+    def test_the_listing_hides_rows_outside_the_allowlist(self):
+        # Every row this listing serves is externally routed, so the portco
+        # allowlist is the whole answer: one named slug, one row.
+        from unittest import mock
+
+        from ai_router import availability, claude, protocols, registry
+        from ai_router.clients import client_table
+        self.enterContext(mock.patch.object(
+            availability, 'combined_ids', return_value=None))
+        defn = client_table.get('claude')
+        slug = next(m.slug for m in registry.MODELS
+                    if defn.discovery_visible(m) and claude.claude_alias(m.slug))
+        listed = protocols.listing('GET', '/v1/models', allowed=(slug,))
+        self.assertEqual([row['id'] for row in listed['data']],
+                         [claude.claude_alias(slug)])
+
+    def test_the_listing_without_an_allowlist_is_unchanged(self):
+        from ai_router import claude, protocols
+        self.assertEqual(protocols.listing('GET', '/v1/models'),
+                         claude.models_listing())
+
+    def test_native_prefix_paths_select_the_responses_policy(self):
+        # Plan 171: the prefix rule routes new backend paths with no second
+        # edit; the exact union above stays pinned.
+        from ai_router import protocols
+        from ai_router.protocols import responses as responses_mod
+        for path in ('/alpha/history/v2/list_items', '/alpha/notes/v2/write_file',
+                     '/alpha/search', '/guardian-classifier'):
+            self.assertIs(protocols.select('POST', path), responses_mod.POLICY)
+        for path in ('/alphabet', '/alpha/../v1/me', '/alpha/%2e%2e/x'):
+            self.assertIsNone(protocols.select('POST', path))
+
+    def _server(self, **overrides):
+        state = _test_state(_auth_file(self))
+        state.update(overrides)
+        server = _start_server(state)
+        self.addCleanup(server.shutdown)
+        return server
+
+    def test_messages_quota_429_names_credit_in_a_native_final_error(self):
+        # An explicit credit cause is not a temporary rate limit.
+        install_fake(self, lambda: FakeUpstream(429, b'{"error": {"code": "insufficient_quota"}}',
+                                                [('Content-Type', 'application/json')]))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/v1/messages',
+                         _messages(), {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 400)
+        self.assertEqual(json.loads(response.read())['error']['type'], 'invalid_request_error')
+
+    def test_messages_402_names_key_credit(self):
+        # No separate wording fork: the shared policy names the key on
+        # Messages too, as the client-visible status for the turn.
+        install_fake(self, lambda: FakeUpstream(
+            402, b'{"error": {"code": "insufficient_credits", "message": "out"}}',
+            [('Content-Type', 'application/json')]))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/v1/messages',
+                         _messages(), {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 400)
+        body = json.loads(response.read())
+        self.assertEqual(body['error']['code'], 'KEY_NO_CREDIT')
+        self.assertIn('Contact IT', body['error']['message'])
+
+    def test_messages_429_uses_native_rate_limit_and_preserves_retry_after(self):
+        install_fake(self, lambda: FakeUpstream(429, b'{"error": "slow"}',
+                                                [('Content-Type', 'application/json'),
+                                                 ('Retry-After', '7')]))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/v1/messages',
+                         _messages(), {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 429)
+        self.assertEqual(response.getheader('Retry-After'), '7')
+        body = json.loads(response.read())
+        self.assertEqual(body['error']['code'], 'UPSTREAM_RATE_LIMITED')
+        self.assertEqual(body['error']['message'],
+                         'The model is rate limited right now and the turn was '
+                         'not served. Retry shortly.')
+
+    def test_native_subscription_history_keeps_encrypted_content(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server(openai_models=['gpt-6-astra'])
+        response = _post(server.server_port, '/test-token/responses',
+                         {'model': 'gpt-6-astra',
+                          'input': [{'type': 'agent_message', 'author': '/root',
+                                     'encrypted_content': 'NATIVE-BLOB'}]},
+                         {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 200)
+        self.assertIn(b'NATIVE-BLOB', recorded[0][3])
+
+    def test_messages_subscription_429_names_the_claude_subscription(self):
+        # The subscription row's refusal names the model and the
+        # subscription; the external row above keeps the neutral text.
+        install_fake(self, lambda: FakeUpstream(
+            429, b'{"error": "slow"}', [('Content-Type', 'application/json')]))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/v1/messages',
+                         _messages('claude-opus-4-6'),
+                         {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 429)
+        body = json.loads(response.read())
+        self.assertEqual(body['error']['code'], 'UPSTREAM_RATE_LIMITED')
+        self.assertIn('claude-opus-4-6 is rate limited on your Claude subscription',
+                      body['error']['message'])
+
+    def test_messages_response_shares_the_model_pin_behavior(self):
+        # Coupling pin: the shared relay path currently pins openai-model on
+        # Messages responses too. Preserved through extraction; a later change
+        # needs a client contract test or live compatibility gate.
+        install_fake(self, lambda: FakeUpstream(
+            200, b'{"id":"msg_1","type":"message","content":[]}',
+            [('Content-Type', 'application/json')]))
+        server = self._server()
+        response = _post(server.server_port, '/test-token/v1/messages',
+                         _messages(), {'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(response.status, 200)
+        response.read()
+        self.assertEqual(response.getheader('openai-model'), 'z-ai/glm-5.3-flash')
+
+    def test_messages_alias_body_stays_byte_identical(self):
+        # The ingress contract is byte-identity: a known alias slug is a
+        # registry slug already, so resolve() returns it unchanged and the
+        # whole body forwards untouched.
+        recorded = install_fake(self, lambda: FakeUpstream(
+            200, b'{"id":"msg_1","type":"message","content":[]}', []))
+        server = self._server()
+        payload = _messages('anthropic/claude-sonnet-5.5')
+        raw = json.dumps(payload)
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+        conn.request('POST', '/test-token/v1/messages', body=raw,
+                     headers={'Content-Type': 'application/json',
+                              'Authorization': 'Bearer subscription-secret'})
+        self.assertEqual(conn.getresponse().status, 200)
+        self.assertEqual(recorded[0][3].decode(), raw)
+
+    def test_unknown_paths_cause_no_upstream_call(self):
+        for path in ('/test-token/nope', '/test-token/v1/unknown'):
+            with self.subTest(path=path):
+                recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+                server = self._server()
+                response = _post(server.server_port, path,
+                                 {'model': 'z-ai/glm-5.3', 'input': []})
+                self.assertEqual(response.status, 404)
+                response.read()
+                self.assertEqual(recorded, [])
+
+    def test_unsupported_external_protocol_pairs_fail_before_any_send(self):
+        # Plan 188: the pair is judged on the row resolved at ingress, so a
+        # refresh that makes the row servable mid-request cannot turn into a send.
+        from unittest import mock
+        from ai_router import model_refresh, provider_defs
+        from tests.test_request_context import _after_resolution, _generation, _refreshed
+        defs = tuple(provider_defs.ProviderDef(
+            id='acme-' + protocol, label='Acme', kind=provider_defs.EXTERNAL,
+            host='acme.invalid', key=provider_defs.KeySpec('ACME_KEY', 'acme.key'),
+            dialect=provider_defs.DIALECT_OPENAI_COMPATIBLE, **{protocol + '_path': '/v1'})
+            for protocol in (provider_defs.RESPONSES, provider_defs.MESSAGES))
+        every = provider_defs.PROVIDERS + defs
+        self.enterContext(mock.patch.object(provider_defs, 'PROVIDERS', every))
+        self.enterContext(mock.patch.object(provider_defs, 'BY_ID', {d.id: d for d in every}))
+        cases = (('/v1/messages', _messages('acme/responses-only'), 409, 'Codex only'),
+                 ('/responses', {'model': 'acme/messages-only', 'input': []}, 400,
+                  'Claude Code only'))
+        for (path, payload, status, reason), defn in zip(cases, defs):
+            slug = payload['model']
+            with self.subTest(path=path), _generation():
+                model_refresh.apply(_refreshed(slug, provider=defn.id))
+                recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+                server = self._server()
+                move = lambda: model_refresh.apply(_refreshed(slug, provider='openrouter'))
+                with _after_resolution(move):
+                    response = _post(server.server_port, '/test-token' + path, payload,
+                                     {'Authorization': 'Bearer subscription-secret'})
+                self.assertEqual(response.status, status)
+                self.assertIn(reason, json.loads(response.read())['error']['message'])
+                self.assertEqual(recorded, [])
+
+    def test_missing_token_is_rejected_without_upstream_call(self):
+        recorded = install_fake(self, lambda: FakeUpstream(200, b'{}', []))
+        server = self._server()
+        response = _post(server.server_port, '/wrong-token/responses',
+                         {'model': 'z-ai/glm-5.3', 'input': []})
+        self.assertEqual(response.status, 403)
+        response.read()
+        self.assertEqual(recorded, [])
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "title": "Project name",
+    "outcome": "",
+    "checked": "",
+    "template": false,
+    "liveEnvironment": "Production",
+    "environments": [
+      "Staging",
+      "Production"
+    ],
+    "source": {
+      "label": "Work plan",
+      "url": ""
+    }
+  },
+  "features": [],
+  "tasks": [],
+  "changes": []
+}

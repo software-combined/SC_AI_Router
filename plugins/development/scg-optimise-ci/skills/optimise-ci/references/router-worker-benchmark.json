@@ -1,0 +1,4620 @@
+{
+  "schema_version": 1,
+  "repository": "software-combined/SC_AI_Router-archive",
+  "comparison": "one versus two isolated unittest processes inside the same parallel CI job graph",
+  "payload_commit": "88a01c658fcbb75b16e4a85c6e529fb89aeaffac",
+  "payload_tree": "127f9171c0f99e156391dc78fc4f92fd366e6b12",
+  "harness_commit": "e77d02ebbfacaee9a14f58478bc8fd1549ad4fde",
+  "harness_url": "https://github.com/software-combined/SC_AI_Router-archive/blob/e77d02ebbfacaee9a14f58478bc8fd1549ad4fde/.github/workflows/router-ci-worker-benchmark.yml",
+  "declared_sampling_rule": {
+    "declared_before_measurement": "2026-10-23T21:53:01.356261+00:00",
+    "order": [
+      "control",
+      "candidate",
+      "candidate",
+      "control",
+      "control",
+      "candidate"
+    ],
+    "primary_samples_per_arm": 3,
+    "replacement_limit": "At most one diagnosed infrastructure replacement per arm; retain all attempts. Source, test or measurement-input fixes restart the cohort.",
+    "execution": "Sequential complete runs; no artificial project cache or prewarming in either arm",
+    "control": "Existing parallel job graph; one instrumented unittest process",
+    "candidate": "Identical graph and inputs; two instrumented processes in existing unit-suite job",
+    "assignment": "One contiguous split of canonical discovered occurrence order, at the actual-module boundary nearest half the case count, earliest boundary breaks ties",
+    "acceptance": [
+      "All required diagnostic jobs successful with complete reports",
+      "Candidate median aggregate job execution below control and all three paired aggregate differences improve",
+      "Candidate median elapsed no greater than control",
+      "Matching per-phase/platform discovery occurrence multisets and executed case outcomes/skips",
+      "Matching native matrix, frozen checkouts, relevant toolchains and dependency versions"
+    ],
+    "metrics": "Elapsed from run creation to last relevant job completion; aggregate sum of job started_at to completed_at, including uniform observer/metadata/artifact overhead; report queue/setup separately",
+    "runtime_pins": {
+      "python": "3.14.9",
+      "installer_compatibility_python": "3.9.25",
+      "macos_certifi": "2026.10.23"
+    },
+    "limitations": [
+      "Job duration measures allocated runner wall time, not CPU time or a billing amount",
+      "No line or branch coverage measurement; compare actual unittest execution records and native verification",
+      "Hosted image builds, host load and hosted tool-cache warmth may vary; record them and include setup in totals."
+    ],
+    "execution_identity_rule": "Require identical top-level test IDs, multiplicity and outcomes in each phase/platform; require identical all skip callback IDs/reasons and fixture-suppressed IDs. Retain successful subtest display digests and require matching callback counts. Disclose varying successful parameter displays instead of claiming their textual identities match.",
+    "cohort_restart_reason": "Windows lifecycle fixture correction after a native test failed in control-2; the whole interrupted cohort excluded. Both arms use the same on-demand fixture and every original assertion. This is not an infrastructure replacement.",
+    "environment_identity": "Require per-role exact Python/platform/CPU/package/compiler and OpenSSL/effective CA certificate-content fingerprints. Record image-build identifiers as observed variation.",
+    "declared_before_restarted_measurement": "2026-10-23T23:55:04.486580+00:00",
+    "payload": "88a01c658fcbb75b16e4a85c6e529fb89aeaffac",
+    "payload_tree": "127f9171c0f99e156391dc78fc4f92fd366e6b12",
+    "prior_cohorts": [
+      {
+        "runs": [
+          40032698483,
+          40033866987
+        ],
+        "reason": "macOS default-CA input mismatch without effective fingerprints"
+      },
+      {
+        "runs": [
+          40036476036,
+          40037467329,
+          40038266057,
+          40038982366
+        ],
+        "reason": "cohort interrupted by Windows fixture race; source correction requires fresh cohort"
+      }
+    ],
+    "harness_commit": "e77d02ebbfacaee9a14f58478bc8fd1549ad4fde",
+    "native_proof": {
+      "run_id": 40041814923,
+      "outcome": "Original reproduced timer race4!=1; corrected fixture passed; both cleanup zero definitions/instances/errors",
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40041814923"
+    }
+  },
+  "accepted": true,
+  "summary": {
+    "control": {
+      "samples": 3,
+      "elapsed_seconds": {
+        "median": 562.0,
+        "minimum": 562.0,
+        "maximum": 580.0,
+        "total": 1704.0
+      },
+      "aggregate_job_seconds": {
+        "median": 1580.0,
+        "minimum": 1533.0,
+        "maximum": 1749.0,
+        "total": 4862.0
+      }
+    },
+    "candidate": {
+      "samples": 3,
+      "elapsed_seconds": {
+        "median": 395.0,
+        "minimum": 368.0,
+        "maximum": 410.0,
+        "total": 1173.0
+      },
+      "aggregate_job_seconds": {
+        "median": 1432.0,
+        "minimum": 1430.0,
+        "maximum": 1452.0,
+        "total": 4314.0
+      }
+    }
+  },
+  "paired_differences_candidate_minus_control": [
+    {
+      "pair": 1,
+      "elapsed_seconds": -194.0,
+      "aggregate_job_seconds": -297.0
+    },
+    {
+      "pair": 2,
+      "elapsed_seconds": -152.0,
+      "aggregate_job_seconds": -103.0
+    },
+    {
+      "pair": 3,
+      "elapsed_seconds": -185.0,
+      "aggregate_job_seconds": -148.0
+    }
+  ],
+  "execution_evidence": {
+    "unit-suite-0/unittest-1": {
+      "discovered_occurrences": 3625,
+      "unique_ids": 3614,
+      "started_cases": 3625,
+      "summary": {
+        "skipped": 25,
+        "errors": 0,
+        "failures": 0,
+        "expectedFailures": 0,
+        "unexpectedSuccesses": 0,
+        "testsRun": 3625
+      },
+      "fixture_skipped": [],
+      "skips": [
+        {
+          "id": "tests.test_claude_client_limits.ClientLimitsTests.test_http_failure_stops_with_a_bounded_client_recovery",
+          "outcome": "skipped",
+          "reason": "opt-in real-client check"
+        },
+        {
+          "id": "tests.test_claude_client_limits.ClientLimitsTests.test_turn_and_output_caps_apply_after_resume",
+          "outcome": "skipped",
+          "reason": "opt-in real-client check"
+        },
+        {
+          "id": "tests.test_claude_hook_client.CallbackClientTests.test_generated_callback_runs_with_spaces_unicode_and_shell_metacharacters",
+          "outcome": "skipped",
+          "reason": "opt-in native Windows client check"
+        },
+        {
+          "id": "tests.test_key_prompt.CliTests.test_macos_script_compiles",
+          "outcome": "skipped",
+          "reason": "compiles AppleScript"
+        },
+        {
+          "id": "tests.test_key_prompt.CliTests.test_real_osascript_blank_key_keeps_the_leading_field",
+          "outcome": "skipped",
+          "reason": "runs osascript"
+        },
+        {
+          "id": "tests.test_key_prompt.CliTests.test_real_osascript_output_parses",
+          "outcome": "skipped",
+          "reason": "runs osascript"
+        },
+        {
+          "id": "tests.test_local_feed.LocalFeedTests.test_legacy_windows_percent_sign_is_not_decoded",
+          "outcome": "skipped",
+          "reason": "legacy Windows native path"
+        },
+        {
+          "id": "tests.test_notice.DialogCommandTests.test_darwin_script_compiles",
+          "outcome": "skipped",
+          "reason": "compiles AppleScript; macOS only"
+        },
+        {
+          "id": "tests.test_notice.DialogCommandTests.test_darwin_script_compiles_with_a_non_ascii_path",
+          "outcome": "skipped",
+          "reason": "compiles AppleScript; macOS only"
+        },
+        {
+          "id": "tests.test_notice_delivery.ShowPendingTests.test_dialog_survives_a_vanished_bundle_icon",
+          "outcome": "skipped",
+          "reason": "compiles AppleScript; macOS only"
+        },
+        {
+          "id": "tests.test_plan_references.PlanReferenceTests.test_every_reference_resolves",
+          "outcome": "skipped",
+          "reason": "plans/ is gitignored and not present"
+        },
+        {
+          "id": "tests.test_plan_references.PlanReferenceTests.test_resolver_is_not_vacuous",
+          "outcome": "skipped",
+          "reason": "plans/ is gitignored and not present"
+        },
+        {
+          "id": "tests.test_router_scheduler_native.NativeRouterSchedulerTests.test_migrate_read_back_and_run_the_stable_launcher_after_rollback",
+          "outcome": "skipped",
+          "reason": "disposable GitHub Linux user manager only"
+        },
+        {
+          "id": "tests.test_router_warning_native.NativeWarningSyntaxTests.test_repair_and_later_labels_compile_with_the_product_icon",
+          "outcome": "skipped",
+          "reason": "native AppleScript compiler"
+        },
+        {
+          "id": "tests.test_router_warning_native.NativeWarningSyntaxTests.test_repair_and_later_labels_parse_without_showing_a_dialog",
+          "outcome": "skipped",
+          "reason": "native PowerShell parser"
+        },
+        {
+          "id": "tests.test_scheduling_native.NativeSchedulingTest.test_migration_leaves_one_shared_schedule_that_updates_both_plugins",
+          "outcome": "skipped",
+          "reason": "disposable CI runners only"
+        },
+        {
+          "id": "tests.test_scheduling_native.NativeSchedulingTest.test_router_retires_both_timers_and_clears_their_failed_services",
+          "outcome": "skipped",
+          "reason": "disposable CI runners only"
+        },
+        {
+          "id": "tests.test_windows_acl_native.NativeAclTests.test_inherited_private_file_broad_grant_refusal_and_recovery",
+          "outcome": "skipped",
+          "reason": "requires native Windows ACL APIs"
+        },
+        {
+          "id": "tests.test_windows_agent_skills.WindowsClientPathTest.test_scheduled_path_resolves_the_app_cli",
+          "outcome": "skipped",
+          "reason": "native Windows executable resolution"
+        },
+        {
+          "id": "tests.test_windows_native.NativeWindowsContractTests.test_current_standard_or_admin_user_is_read_without_powershell",
+          "outcome": "skipped",
+          "reason": "native Windows API contract"
+        },
+        {
+          "id": "tests.test_windows_native_lifecycle.WindowsNativeLifecycleTests.test_compiled_progress_protocol_closes_when_its_parent_pipe_closes",
+          "outcome": "skipped",
+          "reason": "native Windows process integration"
+        },
+        {
+          "id": "tests.test_windows_native_lifecycle.WindowsNativeLifecycleTests.test_fifty_owned_processes_are_checked_within_two_hundred_ms",
+          "outcome": "skipped",
+          "reason": "native Windows process integration"
+        },
+        {
+          "id": "tests.test_windows_native_lifecycle.WindowsNativeLifecycleTests.test_verified_native_handle_ends_only_our_child",
+          "outcome": "skipped",
+          "reason": "native Windows process integration"
+        },
+        {
+          "id": "tests.test_windows_task_ownership.NativeTaskTests.test_native_migration_keeps_parent_until_exit_and_preserves_disabled_schedule",
+          "outcome": "skipped",
+          "reason": "requires the real Windows Task Scheduler"
+        },
+        {
+          "id": "tests.test_windows_task_ownership.NativeTaskTests.test_real_ownership_instances_and_parent_survival",
+          "outcome": "skipped",
+          "reason": "requires the real Windows Task Scheduler"
+        }
+      ],
+      "inventory_sha256": "3e58ee0d1312f8467d3f64353f81a55b175f408e7059e1fbaea55d6bdc14eb1f",
+      "discovery_order_sha256": "b5122b341748871213b690757548dd432a7f9cd403299b6b39304ad01d187a00",
+      "case_order_sha256": "b5122b341748871213b690757548dd432a7f9cd403299b6b39304ad01d187a00",
+      "case_outcomes_sha256": "3c32bc318ff603dc37b006b17a1c4cc040e21accf0025f0078b21f6be5816a09",
+      "events_sha256": "5ddefb165c1862274a35c08aee0c06d87c7c507579ae33edbc7c53b14349764e",
+      "event_count": 4207
+    },
+    "plugin-schedulers-1/unittest-1": {
+      "discovered_occurrences": 2,
+      "unique_ids": 2,
+      "started_cases": 2,
+      "summary": {
+        "skipped": 1,
+        "errors": 0,
+        "failures": 0,
+        "expectedFailures": 0,
+        "unexpectedSuccesses": 0,
+        "testsRun": 2
+      },
+      "fixture_skipped": [],
+      "skips": [
+        {
+          "id": "tests.test_scheduling_native.NativeSchedulingTest.test_router_retires_both_timers_and_clears_their_failed_services",
+          "outcome": "skipped",
+          "reason": "systemd retirement is Linux-only"
+        }
+      ],
+      "inventory_sha256": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+      "discovery_order_sha256": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+      "case_order_sha256": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+      "case_outcomes_sha256": "bdd47af5d5154bca0a4837d399173038735f5e8cf53e4796e52beb73ac3561e4",
+      "events_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "event_count": 0
+    },
+    "plugin-schedulers-0/unittest-1": {
+      "discovered_occurrences": 2,
+      "unique_ids": 2,
+      "started_cases": 2,
+      "summary": {
+        "skipped": 0,
+        "errors": 0,
+        "failures": 0,
+        "expectedFailures": 0,
+        "unexpectedSuccesses": 0,
+        "testsRun": 2
+      },
+      "fixture_skipped": [],
+      "skips": [],
+      "inventory_sha256": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+      "discovery_order_sha256": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+      "case_order_sha256": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+      "case_outcomes_sha256": "9017c29a759a4bd64826bd236eaca6bd295e7ec730050df616fd292a4eb0341c",
+      "events_sha256": "0ad7e2bd8a730cc151ab1185a29a8dd1dac5e682c2be4a7b46c656a1602fa4a2",
+      "event_count": 2
+    },
+    "plugin-schedulers-0/unittest-2": {
+      "discovered_occurrences": 1,
+      "unique_ids": 1,
+      "started_cases": 1,
+      "summary": {
+        "skipped": 0,
+        "errors": 0,
+        "failures": 0,
+        "expectedFailures": 0,
+        "unexpectedSuccesses": 0,
+        "testsRun": 1
+      },
+      "fixture_skipped": [],
+      "skips": [],
+      "inventory_sha256": "7b8f68df8891cbdf70f7deec6d88467f6b6f313ea41a44270ab2c2b03af049e8",
+      "discovery_order_sha256": "7b8f68df8891cbdf70f7deec6d88467f6b6f313ea41a44270ab2c2b03af049e8",
+      "case_order_sha256": "7b8f68df8891cbdf70f7deec6d88467f6b6f313ea41a44270ab2c2b03af049e8",
+      "case_outcomes_sha256": "c00171532fdf64478121b4b4cadc9ddcf3184895d81d116f2803abe788c81e9b",
+      "events_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "event_count": 0
+    },
+    "installer-windows-0/unittest-1": {
+      "discovered_occurrences": 874,
+      "unique_ids": 874,
+      "started_cases": 874,
+      "summary": {
+        "skipped": 174,
+        "errors": 0,
+        "failures": 0,
+        "expectedFailures": 0,
+        "unexpectedSuccesses": 0,
+        "testsRun": 874
+      },
+      "fixture_skipped": [],
+      "skips": [
+        {
+          "id": "tests.test_bootstrap.BootstrapTests.test_bootstrap_pins_the_channel_and_persists_it_after_success",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap.BootstrapTests.test_bootstrap_sends_no_credential_header",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap.BootstrapTests.test_channel_switch_clears_the_stale_feed_serial",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap.BootstrapTests.test_choose_clients_reaches_both_bootstraps",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap.BootstrapTests.test_deferred_run_leaves_the_channel_alone",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap.BootstrapTests.test_failed_bootstrap_does_not_switch_the_channel",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap.BootstrapTests.test_failed_fetch_leaves_existing_files_alone",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap.BootstrapTests.test_failed_install_leaves_the_channel_alone",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap.BootstrapTests.test_runtime_url_percent_encodes_the_mirror",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap.BootstrapTests.test_same_channel_run_keeps_the_feed_serial",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap.BootstrapTests.test_sha256sum_fallback_refuses_a_bad_digest",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap.BootstrapTests.test_sha256sum_verifies_when_shasum_is_absent",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap.BootstrapTests.test_switch_to_an_older_channel_still_writes_it",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap.BootstrapTests.test_unknown_channel_is_refused_before_any_fetch",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap_interpreter.RetainedInterpreterTests.test_a_replacement_runtime_does_not_overwrite_the_old_runtime",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap_interpreter.RetainedInterpreterTests.test_bootstrap_passes_its_retained_python_despite_competing_path",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap_interpreter.RetainedInterpreterTests.test_existing_repair_reuses_runtime_and_preserves_saved_access_and_channel",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_bootstrap_interpreter.RetainedInterpreterTests.test_legacy_directory_pointer_gets_repair_and_keeps_the_channel",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_claude_attachment_path.ClaudeAttachmentPathTests.test_symlink_alias_cannot_retarget_the_owned_profile",
+          "outcome": "skipped",
+          "reason": "creating symlinks needs Windows privileges"
+        },
+        {
+          "id": "tests.test_claude_desktop_config.DesktopMergeTests.test_rerun_is_stable_and_reports_unchanged",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_claude_desktop_config.DesktopMergeTests.test_uninstall_detaches_desktop_only_attachment",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_claude_desktop_platform.DesktopPlatformTests.test_linux_launcher_round_trips_desktop_argument_escaping_and_ownership",
+          "outcome": "skipped",
+          "reason": "Windows forbids the quote this Linux path escapes"
+        },
+        {
+          "id": "tests.test_claude_desktop_platform.DesktopPlatformTests.test_native_identity_uses_bundle_and_desktop_entries",
+          "outcome": "skipped",
+          "reason": "macOS and Linux identity records a POSIX user ID"
+        },
+        {
+          "id": "tests.test_claude_desktop_policy.DesktopPolicyTests.test_linux_requires_root_owned_regular_file_and_protected_directory",
+          "outcome": "skipped",
+          "reason": "asserts POSIX permission bits (chmod 600) not expressible on Windows"
+        },
+        {
+          "id": "tests.test_claude_desktop_setup.DesktopSetupTests.test_older_current_release_connects_without_creating_a_dead_shortcut",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_claude_desktop_setup.DesktopSetupTests.test_upgrade_refreshes_existing_desktop_shortcut_and_keeps_subscription_mode",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_claude_desktop_upgrade_paths.UpdateAndPlatformTests.test_update_keeps_the_saved_profile_after_the_default_moved",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_claude_profile_records.ProfileRecordsTests.test_nonregular_configuration_is_refused_before_open",
+          "outcome": "skipped",
+          "reason": "POSIX FIFO"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_channel_beta_uses_origin_without_api_call",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_checksum_mismatch_is_rejected",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_deferred_update_keeps_old_etag",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_direct_install_bundle_call_reads_every_patched_seam",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_extract_rejects_traversal_and_links",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_fresh_install_writes_plists_before_first_restart",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_health_failure_triggers_rollback",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_install_dry_run_performs_no_writes",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_jitter_bounded",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_manifest_mismatch_deletes_partial_dir",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_newer_compares_tuples",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_recheck_reports_up_to_date_after_install",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_render_plist_contains_label_home_and_python",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_replace_config_block_preserves_unrelated_lines_and_refuses_double_markers",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_replace_config_block_truncates_shorter_replacement",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_self_test_passes_on_extracted_bundle",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_swap_current_is_atomic_and_rollback_restores_previous",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_up_to_date_update_stores_new_etag",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install.InstallTests.test_update_plist_checks_every_four_hours",
+          "outcome": "skipped",
+          "reason": "Unix-only install/service layer"
+        },
+        {
+          "id": "tests.test_install_catalogue.InstallCatalogueTests.test_a_client_with_no_chatgpt_login_installs_without_subscription",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_catalogue.InstallCatalogueTests.test_catalogue_merge_failure_aborts_install",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_catalogue.InstallCatalogueTests.test_default_install_uses_native_model_discovery",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_catalogue.InstallCatalogueTests.test_install_catalogue_contains_subscription_roster",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_catalogue.InstallCatalogueTests.test_install_generates_working_picker_catalogue",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_catalogue.InstallCatalogueTests.test_none_mode_install_lists_twins_without_subscription_stubs",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_catalogue.InstallCatalogueTests.test_static_catalogue_flag_writes_the_file_pointer",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_a_dead_key_window_never_fails_the_install",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_channel_feed_prefers_pinned_file",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_claude_only_setup_still_asks_for_the_key",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_default_install_uses_native_model_discovery",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_explicit_flag_flips_mode",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_fresh_install_bootstraps_missing_updater_after_main",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_fresh_install_leaves_loaded_updater_alone",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_headless_terminal_still_gets_the_setup_link",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_mode_survives_update_without_flag",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_none_mode_block_keeps_owner_root_keys_at_root",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_setup_mode_installs_without_key_and_opens_window",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_setup_mode_with_key_still_opens_window",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_update_plist_carries_home_without_feed_pin",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_update_plist_never_names_a_release_path",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_update_plist_omits_feed_for_channel_resolution",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_update_preserves_picker_model_selection",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_config.InstallConfigTests.test_update_reinvoke_does_not_pin_channel_feed",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_key_window.InstallKeyWindowTests.test_env_only_key_arms_the_window_and_names_the_var",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_key_window.InstallKeyWindowTests.test_fresh_install_without_key_arms_the_window_and_proceeds",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_key_window.InstallKeyWindowTests.test_key_window_opt_out_mints_the_nonce_without_a_dialog",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_key_window.InstallKeyWindowTests.test_popup_spawn_failure_prints_no_url_off_a_tty",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_key_window.InstallKeyWindowTests.test_present_key_file_arms_nothing",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_key_window.InstallKeyWindowTests.test_repair_restart_failure_leaves_the_release_intact",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_key_window.InstallKeyWindowTests.test_setup_rearms_on_an_up_to_date_home",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_key_window.InstallKeyWindowTests.test_setup_refreshes_a_missing_claude_snapshot",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_key_window.InstallKeyWindowTests.test_setup_repair_survives_a_corrupt_activation_receipt",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_key_window.InstallKeyWindowTests.test_setup_repairs_when_the_feed_lags_the_install",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_key_window.InstallKeyWindowTests.test_widened_key_file_refuses_before_install",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_key_window.UpdateKeyWindowTests.test_update_child_carries_the_key_window_opt_out",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_key_window.UpdateKeyWindowTests.test_update_on_a_keyless_home_mints_the_nonce_without_a_dialog",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_lifecycle.InstallLifecycleTests.test_config_backup_holds_pre_replacement_content",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_lifecycle.InstallLifecycleTests.test_failed_first_install_retries_instead_of_up_to_date",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_lifecycle.InstallLifecycleTests.test_swap_current_migrates_legacy_symlink",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_lifecycle.InstallLifecycleTests.test_uninstall_proceeds_when_restore_succeeds",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_lifecycle.InstallLifecycleTests.test_version_rollback_restores_previous_on_health_failure",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_lifecycle.InstallLifecycleTests.test_version_rolls_back_from_installed_release",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_lifecycle.SafeUpdateTests.test_busy_upgrade_proceeds_and_hands_over_in_place",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_lifecycle.SafeUpdateTests.test_failed_upgrade_rolls_back_with_term_not_bootout",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_owner_keys.OwnerRootKeyTests.test_a_line_re_added_while_attached_comes_back_once",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_owner_keys.OwnerRootKeyTests.test_a_mode_flip_keeps_every_earlier_removed_line_for_detach",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_owner_keys.OwnerRootKeyTests.test_a_rolled_back_switch_gives_back_the_owner_lines_it_set_aside",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_owner_keys.OwnerRootKeyTests.test_an_owner_provider_line_never_makes_the_config_unreadable",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_owner_keys.OwnerRootKeyTests.test_an_update_from_the_table_shape_keeps_codex_readable",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_install_owner_keys.OwnerRootKeyTests.test_switch_codex_keeps_every_removed_line_for_detach",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_interpreter_resolution.HandoverTests.test_upgrade_hands_over_with_term_not_bootout",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_interpreter_resolution.LegacyReloadTests.test_bare_legacy_plist_triggers_main_reload_not_term",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_interpreter_resolution.LegacyReloadTests.test_persistent_reload_failure_rolls_back_and_reports_not_serving",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_interpreter_resolution.LegacyReloadTests.test_transient_bootstrap_failure_is_retried_not_fatal",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_interpreter_resolution.RenderGuardTests.test_render_plist_accepts_absolute",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_key_prompt.CliTests.test_macos_script_compiles",
+          "outcome": "skipped",
+          "reason": "compiles AppleScript"
+        },
+        {
+          "id": "tests.test_key_prompt.CliTests.test_real_osascript_blank_key_keeps_the_leading_field",
+          "outcome": "skipped",
+          "reason": "runs osascript"
+        },
+        {
+          "id": "tests.test_key_prompt.CliTests.test_real_osascript_output_parses",
+          "outcome": "skipped",
+          "reason": "runs osascript"
+        },
+        {
+          "id": "tests.test_launchd.EnsureServingTests.test_bootstraps_a_missing_job_before_reporting_health",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd.InterpreterIdentityTests.test_symlinked_spellings_are_the_same_interpreter",
+          "outcome": "skipped",
+          "reason": "symlink creation needs elevation on Windows"
+        },
+        {
+          "id": "tests.test_launchd.LoadTests.test_no_op_when_already_loaded",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd.LoadTests.test_retries_a_bootstrap_that_lost_the_teardown_race",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd.LoadTests.test_returns_false_when_bootstrap_never_succeeds",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd.LoadedCommandTests.test_falls_back_to_the_bare_program_with_no_arguments_block",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd.LoadedCommandTests.test_none_when_the_label_is_not_loaded",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd.LoadedCommandTests.test_reads_the_whole_in_memory_command",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd.LoadedCommandTests.test_records_what_bootstrap_actually_loaded_not_the_file_after",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd.ReloadTests.test_fails_closed_when_the_old_job_survives",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd.ReloadTests.test_never_bootstraps_while_the_old_job_is_still_loaded",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd.UnloadTests.test_returns_false_when_the_job_never_goes_away",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd.UnloadTests.test_waits_for_the_label_to_leave_the_domain",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd.UpdateLauncherTests.test_fails_closed_when_the_release_is_missing",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd.UpdateLauncherTests.test_follows_the_pointer_after_an_update",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd.UpdateLauncherTests.test_invokes_the_installer_of_the_release_current_points_at",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd.UpdateLauncherTests.test_pointer_content_cannot_escape_the_releases_directory",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd.UpdateLauncherTests.test_uses_the_verb_the_resolved_release_advertises",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_launchd_guard.LaunchAgentsIsolationTests.test_isolated_install_never_touches_the_real_launch_agents",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_linux_dialog_delivery.DialogDeliveryTests.test_only_the_wrapper_child_receives_bundled_gtk_environment",
+          "outcome": "skipped",
+          "reason": "The retained Linux wrapper uses POSIX shell."
+        },
+        {
+          "id": "tests.test_linux_dialog_delivery.DialogDeliveryTests.test_pointer_folder_and_wrapper_symlink_escapes_are_rejected",
+          "outcome": "skipped",
+          "reason": "Unprivileged Windows cannot create these file links."
+        },
+        {
+          "id": "tests.test_maintenance_recovery.MaintenanceRecoveryTests.test_an_old_runtime_cannot_replace_the_newer_updater",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_maintenance_recovery.MaintenanceRecoveryTests.test_attachment_exit_still_finishes_delivery_without_masking_the_exit",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_maintenance_recovery.MaintenanceRecoveryTests.test_failed_controller_delivery_keeps_launchers_and_records_its_own_failure",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_maintenance_recovery.MaintenanceRecoveryTests.test_failure_before_verification_does_not_deliver_anything",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_maintenance_recovery.MaintenanceRecoveryTests.test_intermediate_runtime_upgrade_keeps_the_newer_controller_launchers",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_maintenance_recovery.MaintenanceRecoveryTests.test_launcher_retry_clears_only_its_own_failure_without_native_resources",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_maintenance_recovery.MaintenanceRecoveryTests.test_preparation_does_not_read_the_broken_attachment",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_maintenance_recovery.MaintenanceRecoveryTests.test_stable_launchers_work_before_the_legacy_main_job_is_migrated",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_maintenance_recovery.MaintenanceRecoveryTests.test_unreadable_receipt_cannot_block_real_installer_maintenance",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_native_setup.NativeKeyRefreshTests.test_explicit_key_refresh_restores_service_and_retains_saved_install",
+          "outcome": "skipped",
+          "reason": "This service-boundary fixture uses launchd."
+        },
+        {
+          "id": "tests.test_notice.DialogCommandTests.test_darwin_script_compiles",
+          "outcome": "skipped",
+          "reason": "compiles AppleScript; macOS only"
+        },
+        {
+          "id": "tests.test_notice.DialogCommandTests.test_darwin_script_compiles_with_a_non_ascii_path",
+          "outcome": "skipped",
+          "reason": "compiles AppleScript; macOS only"
+        },
+        {
+          "id": "tests.test_notice_delivery.InstallNoticeTests.test_a_failed_install_does_not_lose_the_next_prompt",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_notice_delivery.InstallNoticeTests.test_cli_path_shows_pending_after_install",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_notice_delivery.InstallNoticeTests.test_first_attach_stages_a_restart_notice",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_notice_delivery.InstallNoticeTests.test_upgrade_stages_notice_when_the_picker_gains_a_row",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_notice_delivery.InstallNoticeTests.test_upgrade_with_an_unchanged_picker_stays_silent",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_notice_delivery.ShowPendingTests.test_dialog_survives_a_vanished_bundle_icon",
+          "outcome": "skipped",
+          "reason": "compiles AppleScript; macOS only"
+        },
+        {
+          "id": "tests.test_platform_dispatch_order.DispatchOrderTests.test_launchd_fresh_install_bootstraps_router_before_updater",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_platform_dispatch_order.DispatchOrderTests.test_launchd_uninstall_restores_config_then_boots_out",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_platform_dispatch_order.DispatchOrderTests.test_systemd_install_writes_units_then_reloads_and_restarts",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_public_repair.NativeRepairArgumentsTests.test_native_legacy_pointer_uses_repair_without_the_client_chooser",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_public_repair.PublicRepairTests.test_cancelled_interactive_repair_never_changes_client_settings",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_public_repair.PublicRepairTests.test_current_and_newer_repairs_keep_key_channel_and_harmless_client_drift",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_public_repair.PublicRepairTests.test_only_verified_repair_clears_the_install_warning",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_public_repair.PublicRepairTests.test_same_version_legacy_pointer_migrates_after_the_main_job_is_repaired",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_removal_recovery.RemovalRecoveryTests.test_service_only_checks_later_claude_conflict_before_detaching_codex",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_router_scheduler_native.NativeRouterSchedulerTests.test_migrate_read_back_and_run_the_stable_launcher_after_rollback",
+          "outcome": "skipped",
+          "reason": "disposable GitHub Linux user manager only"
+        },
+        {
+          "id": "tests.test_router_warning_native.NativeWarningSyntaxTests.test_repair_and_later_labels_compile_with_the_product_icon",
+          "outcome": "skipped",
+          "reason": "native AppleScript compiler"
+        },
+        {
+          "id": "tests.test_systemd.SystemdTests.test_deferred_child_keeps_etag_and_does_not_report_success",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_systemd.SystemdTests.test_failed_upgrade_restores_pointer_catalogue_and_timer",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_systemd.SystemdTests.test_fresh_install_and_legacy_symlink_upgrade",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_systemd.SystemdTests.test_legacy_repair_delegates_verb_selection_to_the_stable_launcher",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_systemd.SystemdTests.test_missing_user_manager_fails_before_installation",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_systemd.SystemdTests.test_refused_settings_merge_leaves_the_update_timer_running",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_systemd.SystemdTests.test_rollback_and_uninstall_use_systemd_and_preserve_home",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_systemd.SystemdTests.test_scheduled_installer_does_not_stop_its_parent_service",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_systemd_recovery.SystemdRecoveryTests.test_loaded_release_is_retained_and_unknown_manager_prevents_pruning",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_systemd_recovery.SystemdRecoveryTests.test_missing_launcher_refuses_before_stopping_any_job",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_systemd_recovery.SystemdRecoveryTests.test_running_legacy_updater_survives_a_successful_scheduler_reload",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_systemd_recovery.SystemdRecoveryTests.test_stale_effective_command_refuses_even_when_the_unit_file_is_new",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_systemd_recovery.SystemdRecoveryTests.test_update_job_uses_the_stable_launcher_and_reads_back_after_reload",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_systemd_runtime.SystemdRuntimeTests.test_legacy_migration_scheduled_update_and_rollback",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_update_channel.UpdaterAdoptionTests.test_a_missing_updater_is_bootstrapped",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_update_channel.UpdaterAdoptionTests.test_a_stale_updater_command_is_adopted_even_when_python_is_unchanged",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_update_channel.UpdaterAdoptionTests.test_never_boots_out_the_job_this_installer_is_running_inside",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        },
+        {
+          "id": "tests.test_update_channel.UpdaterAdoptionTests.test_prune_keeps_the_release_launchd_still_names",
+          "outcome": "skipped",
+          "reason": "exercises the macOS launchd / Linux systemd install & service layer"
+        }
+      ],
+      "inventory_sha256": "f4de996ea083a8f46e42c4b8d32beb8f6710296c0fe3c3125aef18bb6e72cea9",
+      "discovery_order_sha256": "3a12fdcaf3dda0d37a609f50edead983f14ccfdba247264988fd95046d6344e6",
+      "case_order_sha256": "3a12fdcaf3dda0d37a609f50edead983f14ccfdba247264988fd95046d6344e6",
+      "case_outcomes_sha256": "15280e1840492bab3f5f6d957280c91e0d6699deb6ee1db42c7ed4c3168e2c87",
+      "events_sha256": "7e0bc4431757c9518de841e39ca9b5dbca48b7ad54986ef4d144194878107088",
+      "event_count": 937
+    },
+    "installer-windows-0/unittest-2": {
+      "discovered_occurrences": 31,
+      "unique_ids": 31,
+      "started_cases": 31,
+      "summary": {
+        "skipped": 2,
+        "errors": 0,
+        "failures": 0,
+        "expectedFailures": 0,
+        "unexpectedSuccesses": 0,
+        "testsRun": 31
+      },
+      "fixture_skipped": [],
+      "skips": [
+        {
+          "id": "tests.test_native_packages.NativePackageTests.test_launchers_use_their_own_resources_with_spaces",
+          "outcome": "skipped",
+          "reason": "Unix shell launchers run on macOS and Linux"
+        },
+        {
+          "id": "tests.test_native_setup.NativeKeyRefreshTests.test_explicit_key_refresh_restores_service_and_retains_saved_install",
+          "outcome": "skipped",
+          "reason": "This service-boundary fixture uses launchd."
+        }
+      ],
+      "inventory_sha256": "72d682641186471a0ea0e163f6d567429264958a144ba34d5cc0af2f3209dfb9",
+      "discovery_order_sha256": "6f177c474e9aafd47b201e5d8f07a5ff851602c342bb4152215138cab6bd5a87",
+      "case_order_sha256": "6f177c474e9aafd47b201e5d8f07a5ff851602c342bb4152215138cab6bd5a87",
+      "case_outcomes_sha256": "5902a61d3ef38880c97da0913a82886fa29e59d4b4372ea4f7881e1a9ca326c5",
+      "events_sha256": "cc3f60256efd1a02c60586ce35d286285dbc3ef507f3e836e85ffe320bf94b67",
+      "event_count": 12
+    },
+    "installer-windows-0/unittest-3": {
+      "discovered_occurrences": 1,
+      "unique_ids": 1,
+      "started_cases": 1,
+      "summary": {
+        "skipped": 0,
+        "errors": 0,
+        "failures": 0,
+        "expectedFailures": 0,
+        "unexpectedSuccesses": 0,
+        "testsRun": 1
+      },
+      "fixture_skipped": [],
+      "skips": [],
+      "inventory_sha256": "a6102c306472b0a5f54fa43f4811277a26698fe2d4a2e61988681da331f4a567",
+      "discovery_order_sha256": "a6102c306472b0a5f54fa43f4811277a26698fe2d4a2e61988681da331f4a567",
+      "case_order_sha256": "a6102c306472b0a5f54fa43f4811277a26698fe2d4a2e61988681da331f4a567",
+      "case_outcomes_sha256": "0302ff57ed95d56b4fad3f7ffc58a5195af15ad817f3021e729b280e61d80566",
+      "events_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "event_count": 0
+    },
+    "installer-macos-0/unittest-1": {
+      "discovered_occurrences": 1031,
+      "unique_ids": 1031,
+      "started_cases": 1031,
+      "summary": {
+        "skipped": 10,
+        "errors": 0,
+        "failures": 0,
+        "expectedFailures": 0,
+        "unexpectedSuccesses": 0,
+        "testsRun": 1031
+      },
+      "fixture_skipped": [],
+      "skips": [
+        {
+          "id": "tests.test_router_scheduler_native.NativeRouterSchedulerTests.test_migrate_read_back_and_run_the_stable_launcher_after_rollback",
+          "outcome": "skipped",
+          "reason": "disposable GitHub Linux user manager only"
+        },
+        {
+          "id": "tests.test_router_warning_native.NativeWarningSyntaxTests.test_repair_and_later_labels_parse_without_showing_a_dialog",
+          "outcome": "skipped",
+          "reason": "native PowerShell parser"
+        },
+        {
+          "id": "tests.test_windows_acl_native.NativeAclTests.test_inherited_private_file_broad_grant_refusal_and_recovery",
+          "outcome": "skipped",
+          "reason": "requires native Windows ACL APIs"
+        },
+        {
+          "id": "tests.test_windows_agent_skills.WindowsClientPathTest.test_scheduled_path_resolves_the_app_cli",
+          "outcome": "skipped",
+          "reason": "native Windows executable resolution"
+        },
+        {
+          "id": "tests.test_windows_native.NativeWindowsContractTests.test_current_standard_or_admin_user_is_read_without_powershell",
+          "outcome": "skipped",
+          "reason": "native Windows API contract"
+        },
+        {
+          "id": "tests.test_windows_native_lifecycle.WindowsNativeLifecycleTests.test_compiled_progress_protocol_closes_when_its_parent_pipe_closes",
+          "outcome": "skipped",
+          "reason": "native Windows process integration"
+        },
+        {
+          "id": "tests.test_windows_native_lifecycle.WindowsNativeLifecycleTests.test_fifty_owned_processes_are_checked_within_two_hundred_ms",
+          "outcome": "skipped",
+          "reason": "native Windows process integration"
+        },
+        {
+          "id": "tests.test_windows_native_lifecycle.WindowsNativeLifecycleTests.test_verified_native_handle_ends_only_our_child",
+          "outcome": "skipped",
+          "reason": "native Windows process integration"
+        },
+        {
+          "id": "tests.test_windows_task_ownership.NativeTaskTests.test_native_migration_keeps_parent_until_exit_and_preserves_disabled_schedule",
+          "outcome": "skipped",
+          "reason": "requires the real Windows Task Scheduler"
+        },
+        {
+          "id": "tests.test_windows_task_ownership.NativeTaskTests.test_real_ownership_instances_and_parent_survival",
+          "outcome": "skipped",
+          "reason": "requires the real Windows Task Scheduler"
+        }
+      ],
+      "inventory_sha256": "41cab4eb97696941ed520c61fd02aa4c5abd4de34980a5543066ec36735ef66a",
+      "discovery_order_sha256": "411aa5bef2870df9da6978cd9a1821ef18b41c170c81ccf081e857e9a700ca9d",
+      "case_order_sha256": "411aa5bef2870df9da6978cd9a1821ef18b41c170c81ccf081e857e9a700ca9d",
+      "case_outcomes_sha256": "67396c5b14deca12477731f8ec583baee08561f749f01e8e85059dc3a40aaee2",
+      "events_sha256": "118441aa2c1892835d67c4ca94a967a32feb940fc466067e0201304b68747f7f",
+      "event_count": 1140
+    },
+    "hook-adapter-1/unittest-1": {
+      "discovered_occurrences": 35,
+      "unique_ids": 35,
+      "started_cases": 35,
+      "summary": {
+        "skipped": 5,
+        "errors": 0,
+        "failures": 0,
+        "expectedFailures": 0,
+        "unexpectedSuccesses": 0,
+        "testsRun": 35
+      },
+      "fixture_skipped": [],
+      "skips": [
+        {
+          "id": "test_gitleaks_pin_portability.GitleaksPinPortabilityTest.test_posix_absolute_binary_path_is_accepted",
+          "outcome": "skipped",
+          "reason": "POSIX absolute-path form"
+        },
+        {
+          "id": "test_interpreter_selection.InterpreterSelectionTest.test_installed_non_ascii_interpreter_path_runs",
+          "outcome": "skipped",
+          "reason": "needs a POSIX scanner stub and interpreter symlink"
+        },
+        {
+          "id": "test_interpreter_selection.ShimTest.test_posix_shim_keeps_python3_when_the_setting_is_absent",
+          "outcome": "skipped",
+          "reason": "no python3 on a native Windows PATH"
+        },
+        {
+          "id": "test_review_gate.ReviewGateTest.test_scan_blocks_on_drift_external_config_and_leaks",
+          "outcome": "skipped",
+          "reason": "drives a /bin/sh scanner stub"
+        },
+        {
+          "id": "test_review_gate.ReviewGateTest.test_scan_passes_with_pinned_clean_scanner",
+          "outcome": "skipped",
+          "reason": "drives a /bin/sh scanner stub"
+        }
+      ],
+      "inventory_sha256": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65",
+      "discovery_order_sha256": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65",
+      "case_order_sha256": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65",
+      "case_outcomes_sha256": "2c2eb81584329964d99be7593290e77ad3de396834ebae188b008ea38d6f9e61",
+      "events_sha256": "06d6954e2ea2b126bfe3856d7db0e2294c8123c0ba1c434d4b1bf39e49a2a07b",
+      "event_count": 28
+    },
+    "hook-adapter-0/unittest-1": {
+      "discovered_occurrences": 35,
+      "unique_ids": 35,
+      "started_cases": 35,
+      "summary": {
+        "skipped": 2,
+        "errors": 0,
+        "failures": 0,
+        "expectedFailures": 0,
+        "unexpectedSuccesses": 0,
+        "testsRun": 35
+      },
+      "fixture_skipped": [],
+      "skips": [
+        {
+          "id": "test_gitleaks_pin_portability.GitleaksPinPortabilityTest.test_windows_absolute_binary_path_is_accepted",
+          "outcome": "skipped",
+          "reason": "Windows absolute-path form"
+        },
+        {
+          "id": "test_gitleaks_pin_portability.GitleaksPinPortabilityTest.test_windows_drive_relative_binary_path_is_rejected",
+          "outcome": "skipped",
+          "reason": "Windows drive-relative-path form"
+        }
+      ],
+      "inventory_sha256": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65",
+      "discovery_order_sha256": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65",
+      "case_order_sha256": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65",
+      "case_outcomes_sha256": "e1bbae375d15b6bb969dbb6a7097ee7a4735712548d54ae123119328652b184d",
+      "events_sha256": "e017067680d677df8ee191393cb46e0688830353bfe2020ab4fa9d1618de3d05",
+      "event_count": 34
+    }
+  },
+  "samples": [
+    {
+      "sample": "control-1",
+      "primary_slot": "control-1",
+      "run_id": 40042296437,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40042296437",
+      "event_head": "e77d02ebbfacaee9a14f58478bc8fd1549ad4fde",
+      "actual_checkout": "88a01c658fcbb75b16e4a85c6e529fb89aeaffac",
+      "actual_tree": "127f9171c0f99e156391dc78fc4f92fd366e6b12",
+      "run_created_at_utc": "2026-10-23T23:55:09Z",
+      "elapsed_seconds": 562.0,
+      "aggregate_job_seconds": 1749.0,
+      "unit_step_seconds": 505.0,
+      "initial_dispatch_seconds": 2.0,
+      "runner_class_seconds": {
+        "ubuntu-latest": 609.0,
+        "windows-latest": 241.0,
+        "macos-latest": 355.0,
+        "ubuntu-24.04": 146.0,
+        "macos-15": 50.0,
+        "windows-2025": 33.0,
+        "macos-15-intel": 185.0,
+        "ubuntu-24.04-arm": 130.0
+      },
+      "unit_job_seconds": 520.0,
+      "other_jobs_seconds": 1229.0,
+      "hosted_images": {
+        "installer-python39-0": "20261023.334.3",
+        "changes-0": "20261012.163.1",
+        "unit-suite-0": "20261012.163.1",
+        "plugin-schedulers-1": "20261021.278.1",
+        "plugin-schedulers-0": "20261012.163.1",
+        "installer-windows-0": "20261021.278.1",
+        "desktop-menus-0": "20260907.0337.1",
+        "desktop-menus-1": "20260824.0482.1",
+        "installer-macos-0": "20261013.0424.1",
+        "hook-adapter-1": "20261021.278.1",
+        "hook-adapter-0": "20261012.163.1",
+        "test-0": "20261012.163.1",
+        "desktop-menus-3": "20261012.334.1",
+        "desktop-menus-4": "20261023.149.3",
+        "desktop-menus-2": "20261021.278.1"
+      },
+      "setup_steps_by_job": {
+        "Offline unit suite (workers)": {
+          "Run ./.github/actions/setup": 7.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Plugin schedulers (windows-latest)": {
+          "Run ./.github/actions/setup": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Change scope": {},
+        "Plugin schedulers (ubuntu-latest)": {
+          "Run ./.github/actions/setup": 8.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Hook adapter portability (ubuntu-latest)": {
+          "Run ./.github/actions/setup": 6.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Hook adapter portability (windows-latest)": {
+          "Run ./.github/actions/setup": 0.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Installer (macOS)": {
+          "Run ./.github/actions/setup": 34.0,
+          "Pin macOS certificate bundle": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (linux/x86_64)": {
+          "Run ./.github/actions/setup": 8.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Installer (Python 3.9)": {
+          "Run ./.github/actions/setup": 9.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Installer (Windows)": {
+          "Run ./.github/actions/setup": 0.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Desktop menu (darwin/arm64)": {
+          "Run ./.github/actions/setup": 30.0,
+          "Pin macOS certificate bundle": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (windows/x86_64)": {
+          "Run ./.github/actions/setup": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (darwin/x86_64)": {
+          "Run ./.github/actions/setup": 111.0,
+          "Pin macOS certificate bundle": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (linux/arm64)": {
+          "Run ./.github/actions/setup": 8.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Benchmark verification": {
+          "Run ./.github/actions/setup": 7.0,
+          "Post Run ./.github/actions/setup": 0.0
+        }
+      },
+      "jobs": [
+        {
+          "name": "Offline unit suite (workers)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-23T23:55:12Z",
+          "completed_at": "2026-10-24T00:03:52Z"
+        },
+        {
+          "name": "Plugin schedulers (windows-latest)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-23T23:55:11Z",
+          "completed_at": "2026-10-23T23:55:30Z"
+        },
+        {
+          "name": "Change scope",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-23T23:55:12Z",
+          "completed_at": "2026-10-23T23:55:19Z"
+        },
+        {
+          "name": "Plugin schedulers (ubuntu-latest)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-23T23:55:11Z",
+          "completed_at": "2026-10-23T23:55:36Z"
+        },
+        {
+          "name": "Hook adapter portability (ubuntu-latest)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-23T23:55:12Z",
+          "completed_at": "2026-10-23T23:55:32Z"
+        },
+        {
+          "name": "Hook adapter portability (windows-latest)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-23T23:55:11Z",
+          "completed_at": "2026-10-23T23:55:38Z"
+        },
+        {
+          "name": "Installer (macOS)",
+          "labels": [
+            "macos-latest"
+          ],
+          "started_at": "2026-10-23T23:55:22Z",
+          "completed_at": "2026-10-24T00:01:17Z"
+        },
+        {
+          "name": "Desktop menu (linux/x86_64)",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "started_at": "2026-10-23T23:55:21Z",
+          "completed_at": "2026-10-23T23:57:31Z"
+        },
+        {
+          "name": "Installer (Python 3.9)",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "started_at": "2026-10-23T23:55:21Z",
+          "completed_at": "2026-10-23T23:55:37Z"
+        },
+        {
+          "name": "Installer (Windows)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-23T23:55:21Z",
+          "completed_at": "2026-10-23T23:58:36Z"
+        },
+        {
+          "name": "Desktop menu (darwin/arm64)",
+          "labels": [
+            "macos-15"
+          ],
+          "started_at": "2026-10-23T23:55:21Z",
+          "completed_at": "2026-10-23T23:56:11Z"
+        },
+        {
+          "name": "Desktop menu (windows/x86_64)",
+          "labels": [
+            "windows-2025"
+          ],
+          "started_at": "2026-10-23T23:55:23Z",
+          "completed_at": "2026-10-23T23:55:56Z"
+        },
+        {
+          "name": "Desktop menu (darwin/x86_64)",
+          "labels": [
+            "macos-15-intel"
+          ],
+          "started_at": "2026-10-23T23:55:24Z",
+          "completed_at": "2026-10-23T23:58:29Z"
+        },
+        {
+          "name": "Desktop menu (linux/arm64)",
+          "labels": [
+            "ubuntu-24.04-arm"
+          ],
+          "started_at": "2026-10-23T23:55:23Z",
+          "completed_at": "2026-10-23T23:57:33Z"
+        },
+        {
+          "name": "Benchmark verification",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:03:54Z",
+          "completed_at": "2026-10-24T00:04:31Z"
+        }
+      ],
+      "case_outcomes_by_phase": {
+        "unit-suite-0/unittest-1": "3c32bc318ff603dc37b006b17a1c4cc040e21accf0025f0078b21f6be5816a09",
+        "plugin-schedulers-1/unittest-1": "bdd47af5d5154bca0a4837d399173038735f5e8cf53e4796e52beb73ac3561e4",
+        "plugin-schedulers-0/unittest-1": "9017c29a759a4bd64826bd236eaca6bd295e7ec730050df616fd292a4eb0341c",
+        "plugin-schedulers-0/unittest-2": "c00171532fdf64478121b4b4cadc9ddcf3184895d81d116f2803abe788c81e9b",
+        "installer-windows-0/unittest-1": "15280e1840492bab3f5f6d957280c91e0d6699deb6ee1db42c7ed4c3168e2c87",
+        "installer-windows-0/unittest-2": "5902a61d3ef38880c97da0913a82886fa29e59d4b4372ea4f7881e1a9ca326c5",
+        "installer-windows-0/unittest-3": "0302ff57ed95d56b4fad3f7ffc58a5195af15ad817f3021e729b280e61d80566",
+        "installer-macos-0/unittest-1": "67396c5b14deca12477731f8ec583baee08561f749f01e8e85059dc3a40aaee2",
+        "hook-adapter-1/unittest-1": "2c2eb81584329964d99be7593290e77ad3de396834ebae188b008ea38d6f9e61",
+        "hook-adapter-0/unittest-1": "e1bbae375d15b6bb969dbb6a7097ee7a4735712548d54ae123119328652b184d"
+      },
+      "events_by_phase": {
+        "unit-suite-0/unittest-1": "5ddefb165c1862274a35c08aee0c06d87c7c507579ae33edbc7c53b14349764e",
+        "plugin-schedulers-1/unittest-1": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "plugin-schedulers-0/unittest-1": "0ad7e2bd8a730cc151ab1185a29a8dd1dac5e682c2be4a7b46c656a1602fa4a2",
+        "plugin-schedulers-0/unittest-2": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "installer-windows-0/unittest-1": "7e0bc4431757c9518de841e39ca9b5dbca48b7ad54986ef4d144194878107088",
+        "installer-windows-0/unittest-2": "cc3f60256efd1a02c60586ce35d286285dbc3ef507f3e836e85ffe320bf94b67",
+        "installer-windows-0/unittest-3": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "installer-macos-0/unittest-1": "118441aa2c1892835d67c4ca94a967a32feb940fc466067e0201304b68747f7f",
+        "hook-adapter-1/unittest-1": "06d6954e2ea2b126bfe3856d7db0e2294c8123c0ba1c434d4b1bf39e49a2a07b",
+        "hook-adapter-0/unittest-1": "e017067680d677df8ee191393cb46e0688830353bfe2020ab4fa9d1618de3d05"
+      },
+      "case_order_by_phase": {
+        "unit-suite-0/unittest-1": "b5122b341748871213b690757548dd432a7f9cd403299b6b39304ad01d187a00",
+        "plugin-schedulers-1/unittest-1": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+        "plugin-schedulers-0/unittest-1": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+        "plugin-schedulers-0/unittest-2": "7b8f68df8891cbdf70f7deec6d88467f6b6f313ea41a44270ab2c2b03af049e8",
+        "installer-windows-0/unittest-1": "3a12fdcaf3dda0d37a609f50edead983f14ccfdba247264988fd95046d6344e6",
+        "installer-windows-0/unittest-2": "6f177c474e9aafd47b201e5d8f07a5ff851602c342bb4152215138cab6bd5a87",
+        "installer-windows-0/unittest-3": "a6102c306472b0a5f54fa43f4811277a26698fe2d4a2e61988681da331f4a567",
+        "installer-macos-0/unittest-1": "411aa5bef2870df9da6978cd9a1821ef18b41c170c81ccf081e857e9a700ca9d",
+        "hook-adapter-1/unittest-1": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65",
+        "hook-adapter-0/unittest-1": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65"
+      },
+      "artifact_receipts": [
+        {
+          "id": 12540215368,
+          "name": "results-installer-python39-0",
+          "digest": "sha256:9022ac5ea0b700c899ff31934afae476e6eba358d43f064692c250b13665f61f",
+          "expires_at": "2026-11-22T23:55:34Z"
+        },
+        {
+          "id": 12540085900,
+          "name": "results-changes-0",
+          "digest": "sha256:4113ca0a8f93f95e77ca12979f13eb46b3dd235e70e3c2c8c9b68d74c947e2c2",
+          "expires_at": "2026-11-22T23:55:15Z"
+        },
+        {
+          "id": 12539941870,
+          "name": "results-desktop-menus-0",
+          "digest": "sha256:c2affecf3982abdcc843bb5c8a4906491b9cd05fb84863d354659ea51dd0949b",
+          "expires_at": "2026-11-22T23:56:07Z"
+        },
+        {
+          "id": 12539922162,
+          "name": "results-unit-suite-0",
+          "digest": "sha256:7f44b3ef04a8508b768edaed766e4a04401f87a91ebadda6be67ac5e33c411b9",
+          "expires_at": "2026-11-23T00:03:47Z"
+        },
+        {
+          "id": 12539858313,
+          "name": "results-installer-macos-0",
+          "digest": "sha256:83927c6dadcb344d60e9b1c2c7b29eeb3700df0c9a1e680b78415293857ab568",
+          "expires_at": "2026-11-23T00:01:11Z"
+        },
+        {
+          "id": 12539811993,
+          "name": "results-desktop-menus-4",
+          "digest": "sha256:27d90db2b636996c2e7c3a7677833665f3c4dc202382fb0223caee71137d673d",
+          "expires_at": "2026-11-22T23:57:29Z"
+        },
+        {
+          "id": 12539757722,
+          "name": "results-plugin-schedulers-0",
+          "digest": "sha256:7234e121d14ad4328c6bc9b0e1c5eb2a73274bf7b19c8253d04a115821d29577",
+          "expires_at": "2026-11-22T23:55:32Z"
+        },
+        {
+          "id": 12539743284,
+          "name": "results-installer-windows-0",
+          "digest": "sha256:b041b93910c777d5a83a2750fbfd676e37bc1d69d9aa35cbff320bf76366cefc",
+          "expires_at": "2026-11-22T23:58:30Z"
+        },
+        {
+          "id": 12539743133,
+          "name": "results-desktop-menus-3",
+          "digest": "sha256:ccec83e6e8004245d68e582e37c2e97fc87b21b70f613b132b5eb2e8e560a786",
+          "expires_at": "2026-11-22T23:57:27Z"
+        },
+        {
+          "id": 12539613334,
+          "name": "results-test-0",
+          "digest": "sha256:ada638b8d89bf974f85cd69cac9b22627f7cc660b34bb7b9fb6b7cd830b46102",
+          "expires_at": "2026-11-23T00:04:28Z"
+        },
+        {
+          "id": 12539583682,
+          "name": "results-hook-adapter-0",
+          "digest": "sha256:85536e06ac7a7130c9e00365c3827e69d98bed852de47dd204fd0896cbfa8c69",
+          "expires_at": "2026-11-22T23:55:28Z"
+        },
+        {
+          "id": 12539559131,
+          "name": "results-desktop-menus-1",
+          "digest": "sha256:edd6763df696ff5ba35003e704b726396f2fdbfcbffdd5425467f6e1b5c75fce",
+          "expires_at": "2026-11-22T23:58:25Z"
+        },
+        {
+          "id": 12539454119,
+          "name": "results-desktop-menus-2",
+          "digest": "sha256:506ee97dde9fcc8684fe23e4b4941286bacaa475fdef89551cb0b745073bec27",
+          "expires_at": "2026-11-22T23:55:51Z"
+        },
+        {
+          "id": 12538874414,
+          "name": "results-plugin-schedulers-1",
+          "digest": "sha256:dea834028bda40c28e11219592bbd9fa6e8c21df010f24ad18af22c140bb3b9a",
+          "expires_at": "2026-11-22T23:55:25Z"
+        },
+        {
+          "id": 12538824400,
+          "name": "results-hook-adapter-1",
+          "digest": "sha256:cd846202d8e10816ab796987f601f68231eeaa4a9c3bf2e52267e91fbec8b936",
+          "expires_at": "2026-11-22T23:55:34Z"
+        }
+      ]
+    },
+    {
+      "sample": "candidate-1",
+      "primary_slot": "candidate-1",
+      "run_id": 40043179669,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40043179669",
+      "event_head": "e77d02ebbfacaee9a14f58478bc8fd1549ad4fde",
+      "actual_checkout": "88a01c658fcbb75b16e4a85c6e529fb89aeaffac",
+      "actual_tree": "127f9171c0f99e156391dc78fc4f92fd366e6b12",
+      "run_created_at_utc": "2026-10-24T00:05:11Z",
+      "elapsed_seconds": 368.0,
+      "aggregate_job_seconds": 1452.0,
+      "unit_step_seconds": 305.0,
+      "initial_dispatch_seconds": 2.0,
+      "runner_class_seconds": {
+        "windows-latest": 226.0,
+        "ubuntu-latest": 422.0,
+        "macos-latest": 314.0,
+        "ubuntu-24.04": 152.0,
+        "macos-15": 52.0,
+        "windows-2025": 23.0,
+        "ubuntu-24.04-arm": 117.0,
+        "macos-15-intel": 146.0
+      },
+      "unit_job_seconds": 327.0,
+      "other_jobs_seconds": 1125.0,
+      "hosted_images": {
+        "installer-python39-0": "20261012.334.1",
+        "changes-0": "20261012.163.1",
+        "unit-suite-0": "20261023.163.3",
+        "plugin-schedulers-1": "20261021.278.1",
+        "plugin-schedulers-0": "20261023.163.3",
+        "installer-windows-0": "20261021.278.1",
+        "desktop-menus-0": "20260907.0337.1",
+        "desktop-menus-1": "20260824.0482.1",
+        "installer-macos-0": "20261021.0445.8",
+        "hook-adapter-1": "20261021.278.1",
+        "hook-adapter-0": "20261012.163.1",
+        "test-0": "20261012.163.1",
+        "desktop-menus-3": "20261012.334.1",
+        "desktop-menus-4": "20261012.149.1",
+        "desktop-menus-2": "20261021.278.1"
+      },
+      "setup_steps_by_job": {
+        "Hook adapter portability (windows-latest)": {
+          "Run ./.github/actions/setup": 0.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Change scope": {},
+        "Plugin schedulers (ubuntu-latest)": {
+          "Run ./.github/actions/setup": 10.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Hook adapter portability (ubuntu-latest)": {
+          "Run ./.github/actions/setup": 9.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Plugin schedulers (windows-latest)": {
+          "Run ./.github/actions/setup": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Offline unit suite (workers)": {
+          "Run ./.github/actions/setup": 13.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Installer (Windows)": {
+          "Run ./.github/actions/setup": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Installer (macOS)": {
+          "Run ./.github/actions/setup": 0.0,
+          "Pin macOS certificate bundle": 2.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Installer (Python 3.9)": {
+          "Run ./.github/actions/setup": 9.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (linux/x86_64)": {
+          "Run ./.github/actions/setup": 9.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Desktop menu (darwin/arm64)": {
+          "Run ./.github/actions/setup": 27.0,
+          "Pin macOS certificate bundle": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (windows/x86_64)": {
+          "Run ./.github/actions/setup": 0.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (linux/arm64)": {
+          "Run ./.github/actions/setup": 7.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (darwin/x86_64)": {
+          "Run ./.github/actions/setup": 79.0,
+          "Pin macOS certificate bundle": 2.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Benchmark verification": {
+          "Run ./.github/actions/setup": 8.0,
+          "Post Run ./.github/actions/setup": 0.0
+        }
+      },
+      "jobs": [
+        {
+          "name": "Hook adapter portability (windows-latest)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-24T00:05:13Z",
+          "completed_at": "2026-10-24T00:05:37Z"
+        },
+        {
+          "name": "Change scope",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:05:13Z",
+          "completed_at": "2026-10-24T00:05:20Z"
+        },
+        {
+          "name": "Plugin schedulers (ubuntu-latest)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:05:13Z",
+          "completed_at": "2026-10-24T00:05:42Z"
+        },
+        {
+          "name": "Hook adapter portability (ubuntu-latest)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:05:13Z",
+          "completed_at": "2026-10-24T00:05:35Z"
+        },
+        {
+          "name": "Plugin schedulers (windows-latest)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-24T00:05:13Z",
+          "completed_at": "2026-10-24T00:05:30Z"
+        },
+        {
+          "name": "Offline unit suite (workers)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:05:13Z",
+          "completed_at": "2026-10-24T00:10:40Z"
+        },
+        {
+          "name": "Installer (Windows)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-24T00:05:21Z",
+          "completed_at": "2026-10-24T00:08:26Z"
+        },
+        {
+          "name": "Installer (macOS)",
+          "labels": [
+            "macos-latest"
+          ],
+          "started_at": "2026-10-24T00:05:23Z",
+          "completed_at": "2026-10-24T00:10:37Z"
+        },
+        {
+          "name": "Installer (Python 3.9)",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "started_at": "2026-10-24T00:05:22Z",
+          "completed_at": "2026-10-24T00:05:41Z"
+        },
+        {
+          "name": "Desktop menu (linux/x86_64)",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "started_at": "2026-10-24T00:05:22Z",
+          "completed_at": "2026-10-24T00:07:35Z"
+        },
+        {
+          "name": "Desktop menu (darwin/arm64)",
+          "labels": [
+            "macos-15"
+          ],
+          "started_at": "2026-10-24T00:05:23Z",
+          "completed_at": "2026-10-24T00:06:15Z"
+        },
+        {
+          "name": "Desktop menu (windows/x86_64)",
+          "labels": [
+            "windows-2025"
+          ],
+          "started_at": "2026-10-24T00:05:22Z",
+          "completed_at": "2026-10-24T00:05:45Z"
+        },
+        {
+          "name": "Desktop menu (linux/arm64)",
+          "labels": [
+            "ubuntu-24.04-arm"
+          ],
+          "started_at": "2026-10-24T00:05:24Z",
+          "completed_at": "2026-10-24T00:07:21Z"
+        },
+        {
+          "name": "Desktop menu (darwin/x86_64)",
+          "labels": [
+            "macos-15-intel"
+          ],
+          "started_at": "2026-10-24T00:05:24Z",
+          "completed_at": "2026-10-24T00:07:50Z"
+        },
+        {
+          "name": "Benchmark verification",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:10:42Z",
+          "completed_at": "2026-10-24T00:11:19Z"
+        }
+      ],
+      "case_outcomes_by_phase": {
+        "unit-suite-0/unittest-1": "3c32bc318ff603dc37b006b17a1c4cc040e21accf0025f0078b21f6be5816a09",
+        "plugin-schedulers-1/unittest-1": "bdd47af5d5154bca0a4837d399173038735f5e8cf53e4796e52beb73ac3561e4",
+        "plugin-schedulers-0/unittest-1": "9017c29a759a4bd64826bd236eaca6bd295e7ec730050df616fd292a4eb0341c",
+        "plugin-schedulers-0/unittest-2": "c00171532fdf64478121b4b4cadc9ddcf3184895d81d116f2803abe788c81e9b",
+        "installer-windows-0/unittest-1": "15280e1840492bab3f5f6d957280c91e0d6699deb6ee1db42c7ed4c3168e2c87",
+        "installer-windows-0/unittest-2": "5902a61d3ef38880c97da0913a82886fa29e59d4b4372ea4f7881e1a9ca326c5",
+        "installer-windows-0/unittest-3": "0302ff57ed95d56b4fad3f7ffc58a5195af15ad817f3021e729b280e61d80566",
+        "installer-macos-0/unittest-1": "67396c5b14deca12477731f8ec583baee08561f749f01e8e85059dc3a40aaee2",
+        "hook-adapter-1/unittest-1": "2c2eb81584329964d99be7593290e77ad3de396834ebae188b008ea38d6f9e61",
+        "hook-adapter-0/unittest-1": "e1bbae375d15b6bb969dbb6a7097ee7a4735712548d54ae123119328652b184d"
+      },
+      "events_by_phase": {
+        "unit-suite-0/unittest-1": "4627bed98002af3864aa5a9f7588a55a75109e48c681d60bef508cb594ec6f10",
+        "plugin-schedulers-1/unittest-1": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "plugin-schedulers-0/unittest-1": "0ad7e2bd8a730cc151ab1185a29a8dd1dac5e682c2be4a7b46c656a1602fa4a2",
+        "plugin-schedulers-0/unittest-2": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "installer-windows-0/unittest-1": "7e0bc4431757c9518de841e39ca9b5dbca48b7ad54986ef4d144194878107088",
+        "installer-windows-0/unittest-2": "cc3f60256efd1a02c60586ce35d286285dbc3ef507f3e836e85ffe320bf94b67",
+        "installer-windows-0/unittest-3": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "installer-macos-0/unittest-1": "b39777d0bf5ecc3e2c90979f9899c04f7ef5059f0cce709ab48c03263a936d62",
+        "hook-adapter-1/unittest-1": "06d6954e2ea2b126bfe3856d7db0e2294c8123c0ba1c434d4b1bf39e49a2a07b",
+        "hook-adapter-0/unittest-1": "e017067680d677df8ee191393cb46e0688830353bfe2020ab4fa9d1618de3d05"
+      },
+      "case_order_by_phase": {
+        "unit-suite-0/unittest-1": "b5122b341748871213b690757548dd432a7f9cd403299b6b39304ad01d187a00",
+        "plugin-schedulers-1/unittest-1": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+        "plugin-schedulers-0/unittest-1": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+        "plugin-schedulers-0/unittest-2": "7b8f68df8891cbdf70f7deec6d88467f6b6f313ea41a44270ab2c2b03af049e8",
+        "installer-windows-0/unittest-1": "3a12fdcaf3dda0d37a609f50edead983f14ccfdba247264988fd95046d6344e6",
+        "installer-windows-0/unittest-2": "6f177c474e9aafd47b201e5d8f07a5ff851602c342bb4152215138cab6bd5a87",
+        "installer-windows-0/unittest-3": "a6102c306472b0a5f54fa43f4811277a26698fe2d4a2e61988681da331f4a567",
+        "installer-macos-0/unittest-1": "411aa5bef2870df9da6978cd9a1821ef18b41c170c81ccf081e857e9a700ca9d",
+        "hook-adapter-1/unittest-1": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65",
+        "hook-adapter-0/unittest-1": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65"
+      },
+      "artifact_receipts": [
+        {
+          "id": 12540800670,
+          "name": "results-test-0",
+          "digest": "sha256:ea0aa06f35af0f80f9c5bb8d158d22ebbd95115df21d008973cd7d85b9fccef5",
+          "expires_at": "2026-11-23T00:11:16Z"
+        },
+        {
+          "id": 12540640724,
+          "name": "results-desktop-menus-3",
+          "digest": "sha256:4fbc924668b99291b27d965b421222c2b706f12244b2c2f4887e1717b10457c2",
+          "expires_at": "2026-11-23T00:07:33Z"
+        },
+        {
+          "id": 12540431057,
+          "name": "results-desktop-menus-0",
+          "digest": "sha256:1bdbf7e84714164b6ad3dbe2e813c5d01b321d7571f9434c1cc44bba9baaf2e1",
+          "expires_at": "2026-11-23T00:06:12Z"
+        },
+        {
+          "id": 12540401092,
+          "name": "results-hook-adapter-0",
+          "digest": "sha256:7e44519dcfe717ba081fce593b10b437437e28cb9e84c6213d20582f0c2121e3",
+          "expires_at": "2026-11-23T00:05:32Z"
+        },
+        {
+          "id": 12540331556,
+          "name": "results-desktop-menus-2",
+          "digest": "sha256:4d28956b4d88b2b5463d4765e692ed53f69d05adf1b8b6e4719b978191bd5650",
+          "expires_at": "2026-11-23T00:05:40Z"
+        },
+        {
+          "id": 12540266111,
+          "name": "results-installer-python39-0",
+          "digest": "sha256:ec347e9f097f897be6fa68914e8e4023fcfd713e5a9c67f605eba234bdd975dd",
+          "expires_at": "2026-11-23T00:05:36Z"
+        },
+        {
+          "id": 12540191318,
+          "name": "results-plugin-schedulers-0",
+          "digest": "sha256:b35123fdacd788340c7000536e71e65178bbd5a84124d049301869ef2632bf12",
+          "expires_at": "2026-11-23T00:05:37Z"
+        },
+        {
+          "id": 12540077537,
+          "name": "results-plugin-schedulers-1",
+          "digest": "sha256:f1571b148e5660512a37d6d772063a8c0d8881cbe39e5a44106132470e6c5793",
+          "expires_at": "2026-11-23T00:05:26Z"
+        },
+        {
+          "id": 12540063107,
+          "name": "results-unit-suite-0",
+          "digest": "sha256:521025232a717efb1126663dcd1bffd9a17bdb01b174afbe9f0bfcd37fc1895e",
+          "expires_at": "2026-11-23T00:10:35Z"
+        },
+        {
+          "id": 12540022849,
+          "name": "results-changes-0",
+          "digest": "sha256:481040c651f8f1619a3a78f9b42acd7c8f7e21667abe231043b278cfd23a5ed0",
+          "expires_at": "2026-11-23T00:05:17Z"
+        },
+        {
+          "id": 12539992926,
+          "name": "results-hook-adapter-1",
+          "digest": "sha256:3dbca7c8cf9d90e942761b404a15413d2fd262dc339295480f0bef6f9c5bec37",
+          "expires_at": "2026-11-23T00:05:33Z"
+        },
+        {
+          "id": 12539952607,
+          "name": "results-installer-windows-0",
+          "digest": "sha256:6130c522f9babcad0a3631f19adb5a8d3f68fcb5d6d15875f54bbcece9ab32a8",
+          "expires_at": "2026-11-23T00:08:22Z"
+        },
+        {
+          "id": 12539908996,
+          "name": "results-desktop-menus-1",
+          "digest": "sha256:560a1e104897710b99b5ee990e69bb36ffcab2595c0595d8154b4c7286ef27f6",
+          "expires_at": "2026-11-23T00:07:39Z"
+        },
+        {
+          "id": 12539804697,
+          "name": "results-desktop-menus-4",
+          "digest": "sha256:774acc7dd2176fbed14ebd38d6ba3ae28aaedfd670a2fd0e4dd2434b99af8fc9",
+          "expires_at": "2026-11-23T00:07:18Z"
+        },
+        {
+          "id": 12539594191,
+          "name": "results-installer-macos-0",
+          "digest": "sha256:afc53cb5ef607fec715843a4423942b0f9a4858e756944e3087f2ad2741b4fa2",
+          "expires_at": "2026-11-23T00:10:30Z"
+        }
+      ]
+    },
+    {
+      "sample": "candidate-2",
+      "primary_slot": "candidate-2",
+      "run_id": 40043756582,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40043756582",
+      "event_head": "e77d02ebbfacaee9a14f58478bc8fd1549ad4fde",
+      "actual_checkout": "88a01c658fcbb75b16e4a85c6e529fb89aeaffac",
+      "actual_tree": "127f9171c0f99e156391dc78fc4f92fd366e6b12",
+      "run_created_at_utc": "2026-10-24T00:11:49Z",
+      "elapsed_seconds": 410.0,
+      "aggregate_job_seconds": 1430.0,
+      "unit_step_seconds": 306.0,
+      "initial_dispatch_seconds": 2.0,
+      "runner_class_seconds": {
+        "ubuntu-latest": 407.0,
+        "windows-latest": 176.0,
+        "macos-latest": 360.0,
+        "ubuntu-24.04": 153.0,
+        "windows-2025": 19.0,
+        "macos-15-intel": 143.0,
+        "ubuntu-24.04-arm": 124.0,
+        "macos-15": 48.0
+      },
+      "unit_job_seconds": 323.0,
+      "other_jobs_seconds": 1107.0,
+      "hosted_images": {
+        "installer-python39-0": "20261012.334.1",
+        "changes-0": "20261023.163.3",
+        "unit-suite-0": "20261012.163.1",
+        "plugin-schedulers-1": "20261021.278.1",
+        "plugin-schedulers-0": "20261023.163.3",
+        "installer-windows-0": "20261021.278.1",
+        "desktop-menus-0": "20260907.0337.1",
+        "desktop-menus-1": "20260824.0482.1",
+        "installer-macos-0": "20261013.0424.1",
+        "hook-adapter-1": "20261021.278.1",
+        "hook-adapter-0": "20261012.163.1",
+        "test-0": "20261023.163.3",
+        "desktop-menus-3": "20261012.334.1",
+        "desktop-menus-4": "20261012.149.1",
+        "desktop-menus-2": "20261021.278.1"
+      },
+      "setup_steps_by_job": {
+        "Offline unit suite (workers)": {
+          "Run ./.github/actions/setup": 9.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Hook adapter portability (ubuntu-latest)": {
+          "Run ./.github/actions/setup": 6.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Plugin schedulers (windows-latest)": {
+          "Run ./.github/actions/setup": 0.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Change scope": {},
+        "Hook adapter portability (windows-latest)": {
+          "Run ./.github/actions/setup": 0.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Plugin schedulers (ubuntu-latest)": {
+          "Run ./.github/actions/setup": 9.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Installer (macOS)": {
+          "Run ./.github/actions/setup": 32.0,
+          "Pin macOS certificate bundle": 1.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Installer (Windows)": {
+          "Run ./.github/actions/setup": 0.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Installer (Python 3.9)": {
+          "Run ./.github/actions/setup": 9.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Desktop menu (windows/x86_64)": {
+          "Run ./.github/actions/setup": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (darwin/x86_64)": {
+          "Run ./.github/actions/setup": 86.0,
+          "Pin macOS certificate bundle": 1.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Desktop menu (linux/x86_64)": {
+          "Run ./.github/actions/setup": 9.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (linux/arm64)": {
+          "Run ./.github/actions/setup": 7.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (darwin/arm64)": {
+          "Run ./.github/actions/setup": 30.0,
+          "Pin macOS certificate bundle": 0.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Benchmark verification": {
+          "Run ./.github/actions/setup": 7.0,
+          "Post Run ./.github/actions/setup": 0.0
+        }
+      },
+      "jobs": [
+        {
+          "name": "Offline unit suite (workers)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:11:51Z",
+          "completed_at": "2026-10-24T00:17:14Z"
+        },
+        {
+          "name": "Hook adapter portability (ubuntu-latest)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:11:51Z",
+          "completed_at": "2026-10-24T00:12:09Z"
+        },
+        {
+          "name": "Plugin schedulers (windows-latest)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-24T00:11:51Z",
+          "completed_at": "2026-10-24T00:12:09Z"
+        },
+        {
+          "name": "Change scope",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:11:52Z",
+          "completed_at": "2026-10-24T00:11:57Z"
+        },
+        {
+          "name": "Hook adapter portability (windows-latest)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-24T00:11:51Z",
+          "completed_at": "2026-10-24T00:12:16Z"
+        },
+        {
+          "name": "Plugin schedulers (ubuntu-latest)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:11:51Z",
+          "completed_at": "2026-10-24T00:12:16Z"
+        },
+        {
+          "name": "Installer (macOS)",
+          "labels": [
+            "macos-latest"
+          ],
+          "started_at": "2026-10-24T00:12:00Z",
+          "completed_at": "2026-10-24T00:18:00Z"
+        },
+        {
+          "name": "Installer (Windows)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-24T00:11:59Z",
+          "completed_at": "2026-10-24T00:14:12Z"
+        },
+        {
+          "name": "Installer (Python 3.9)",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "started_at": "2026-10-24T00:11:59Z",
+          "completed_at": "2026-10-24T00:12:17Z"
+        },
+        {
+          "name": "Desktop menu (windows/x86_64)",
+          "labels": [
+            "windows-2025"
+          ],
+          "started_at": "2026-10-24T00:11:59Z",
+          "completed_at": "2026-10-24T00:12:18Z"
+        },
+        {
+          "name": "Desktop menu (darwin/x86_64)",
+          "labels": [
+            "macos-15-intel"
+          ],
+          "started_at": "2026-10-24T00:12:01Z",
+          "completed_at": "2026-10-24T00:14:24Z"
+        },
+        {
+          "name": "Desktop menu (linux/x86_64)",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "started_at": "2026-10-24T00:12:00Z",
+          "completed_at": "2026-10-24T00:14:15Z"
+        },
+        {
+          "name": "Desktop menu (linux/arm64)",
+          "labels": [
+            "ubuntu-24.04-arm"
+          ],
+          "started_at": "2026-10-24T00:12:02Z",
+          "completed_at": "2026-10-24T00:14:06Z"
+        },
+        {
+          "name": "Desktop menu (darwin/arm64)",
+          "labels": [
+            "macos-15"
+          ],
+          "started_at": "2026-10-24T00:12:00Z",
+          "completed_at": "2026-10-24T00:12:48Z"
+        },
+        {
+          "name": "Benchmark verification",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:18:03Z",
+          "completed_at": "2026-10-24T00:18:39Z"
+        }
+      ],
+      "case_outcomes_by_phase": {
+        "unit-suite-0/unittest-1": "3c32bc318ff603dc37b006b17a1c4cc040e21accf0025f0078b21f6be5816a09",
+        "plugin-schedulers-1/unittest-1": "bdd47af5d5154bca0a4837d399173038735f5e8cf53e4796e52beb73ac3561e4",
+        "plugin-schedulers-0/unittest-1": "9017c29a759a4bd64826bd236eaca6bd295e7ec730050df616fd292a4eb0341c",
+        "plugin-schedulers-0/unittest-2": "c00171532fdf64478121b4b4cadc9ddcf3184895d81d116f2803abe788c81e9b",
+        "installer-windows-0/unittest-1": "15280e1840492bab3f5f6d957280c91e0d6699deb6ee1db42c7ed4c3168e2c87",
+        "installer-windows-0/unittest-2": "5902a61d3ef38880c97da0913a82886fa29e59d4b4372ea4f7881e1a9ca326c5",
+        "installer-windows-0/unittest-3": "0302ff57ed95d56b4fad3f7ffc58a5195af15ad817f3021e729b280e61d80566",
+        "installer-macos-0/unittest-1": "67396c5b14deca12477731f8ec583baee08561f749f01e8e85059dc3a40aaee2",
+        "hook-adapter-1/unittest-1": "2c2eb81584329964d99be7593290e77ad3de396834ebae188b008ea38d6f9e61",
+        "hook-adapter-0/unittest-1": "e1bbae375d15b6bb969dbb6a7097ee7a4735712548d54ae123119328652b184d"
+      },
+      "events_by_phase": {
+        "unit-suite-0/unittest-1": "1b1404c16af351ff3193ddaf9cfecdba43dd42b8fd36476513704ac8f30a8cb8",
+        "plugin-schedulers-1/unittest-1": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "plugin-schedulers-0/unittest-1": "0ad7e2bd8a730cc151ab1185a29a8dd1dac5e682c2be4a7b46c656a1602fa4a2",
+        "plugin-schedulers-0/unittest-2": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "installer-windows-0/unittest-1": "7e0bc4431757c9518de841e39ca9b5dbca48b7ad54986ef4d144194878107088",
+        "installer-windows-0/unittest-2": "cc3f60256efd1a02c60586ce35d286285dbc3ef507f3e836e85ffe320bf94b67",
+        "installer-windows-0/unittest-3": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "installer-macos-0/unittest-1": "07d6b8f8acefc70057cd011308800f5693cfd31fa2f8cade12d89b8a9a37b681",
+        "hook-adapter-1/unittest-1": "06d6954e2ea2b126bfe3856d7db0e2294c8123c0ba1c434d4b1bf39e49a2a07b",
+        "hook-adapter-0/unittest-1": "e017067680d677df8ee191393cb46e0688830353bfe2020ab4fa9d1618de3d05"
+      },
+      "case_order_by_phase": {
+        "unit-suite-0/unittest-1": "b5122b341748871213b690757548dd432a7f9cd403299b6b39304ad01d187a00",
+        "plugin-schedulers-1/unittest-1": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+        "plugin-schedulers-0/unittest-1": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+        "plugin-schedulers-0/unittest-2": "7b8f68df8891cbdf70f7deec6d88467f6b6f313ea41a44270ab2c2b03af049e8",
+        "installer-windows-0/unittest-1": "3a12fdcaf3dda0d37a609f50edead983f14ccfdba247264988fd95046d6344e6",
+        "installer-windows-0/unittest-2": "6f177c474e9aafd47b201e5d8f07a5ff851602c342bb4152215138cab6bd5a87",
+        "installer-windows-0/unittest-3": "a6102c306472b0a5f54fa43f4811277a26698fe2d4a2e61988681da331f4a567",
+        "installer-macos-0/unittest-1": "411aa5bef2870df9da6978cd9a1821ef18b41c170c81ccf081e857e9a700ca9d",
+        "hook-adapter-1/unittest-1": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65",
+        "hook-adapter-0/unittest-1": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65"
+      },
+      "artifact_receipts": [
+        {
+          "id": 12540795519,
+          "name": "results-desktop-menus-4",
+          "digest": "sha256:f0863dc99ffd2c35296037731072b8a7fda36351ec258bf0f50cbfa7aea398bd",
+          "expires_at": "2026-11-23T00:14:03Z"
+        },
+        {
+          "id": 12540756179,
+          "name": "results-plugin-schedulers-0",
+          "digest": "sha256:bd8c9fb27bf5c36239bc73c1f929b0d02bbb6e88b85faa88c0594e7e79fc2b82",
+          "expires_at": "2026-11-23T00:12:12Z"
+        },
+        {
+          "id": 12540706365,
+          "name": "results-changes-0",
+          "digest": "sha256:b671fdc83d65f3a0ccedfc97d2f33b79882e403444510b9392d0c65012cdf59b",
+          "expires_at": "2026-11-23T00:11:55Z"
+        },
+        {
+          "id": 12540645803,
+          "name": "results-desktop-menus-2",
+          "digest": "sha256:d7e56ffb81b2a9357013232f4bffe5d7947879d83a07d2290b27d4103dc09abe",
+          "expires_at": "2026-11-23T00:12:14Z"
+        },
+        {
+          "id": 12540482064,
+          "name": "results-hook-adapter-1",
+          "digest": "sha256:a3b5c810ffc8a72161024b854e02a45c5d6e4eb7f740012b792e77137e13992e",
+          "expires_at": "2026-11-23T00:12:12Z"
+        },
+        {
+          "id": 12540341926,
+          "name": "results-desktop-menus-3",
+          "digest": "sha256:01345b06c60ee3095c45afea9fa8472ab5c46580552b041f932c716367e37285",
+          "expires_at": "2026-11-23T00:14:13Z"
+        },
+        {
+          "id": 12540332724,
+          "name": "results-desktop-menus-0",
+          "digest": "sha256:ace18bdda5fccec463f7f4218219d8fb9a87d915568b2c2bea5bd81ef152b521",
+          "expires_at": "2026-11-23T00:12:44Z"
+        },
+        {
+          "id": 12540332635,
+          "name": "results-installer-python39-0",
+          "digest": "sha256:4fb736ab840fb1eb0a42d2e4b4ebb81c772dc5c41a44a7802f0ecb7b1d0f6a48",
+          "expires_at": "2026-11-23T00:12:14Z"
+        },
+        {
+          "id": 12540296861,
+          "name": "results-hook-adapter-0",
+          "digest": "sha256:d79950d07c33da06375180a0738cf50e864a0052408f50d5a0f553cf97e93c95",
+          "expires_at": "2026-11-23T00:12:07Z"
+        },
+        {
+          "id": 12540192844,
+          "name": "results-test-0",
+          "digest": "sha256:da141a256d0bb206d1ace81b0945161b866c621218a229974b779d1deee2dcad",
+          "expires_at": "2026-11-23T00:18:35Z"
+        },
+        {
+          "id": 12540079577,
+          "name": "results-installer-macos-0",
+          "digest": "sha256:2a75eb38241558742364423c00558c4af4ba3279fe56f2d764aed613521872dc",
+          "expires_at": "2026-11-23T00:17:55Z"
+        },
+        {
+          "id": 12540054037,
+          "name": "results-installer-windows-0",
+          "digest": "sha256:ad8a1080c4809c1b8ee6884f271a0f2739f2918c4244859b38c0e51ccaed9642",
+          "expires_at": "2026-11-23T00:14:08Z"
+        },
+        {
+          "id": 12539824881,
+          "name": "results-plugin-schedulers-1",
+          "digest": "sha256:584a28e0fdc5c4281916012139025d70383e8895c9b078825f8d168294b40ed0",
+          "expires_at": "2026-11-23T00:12:05Z"
+        },
+        {
+          "id": 12539809044,
+          "name": "results-desktop-menus-1",
+          "digest": "sha256:8b0a709e1eee1b5ad75b65d0c3ba54890c7808f7992f05d1cc0c6b5677a5a09a",
+          "expires_at": "2026-11-23T00:14:17Z"
+        },
+        {
+          "id": 12539689529,
+          "name": "results-unit-suite-0",
+          "digest": "sha256:b4a62d262d1997a55f6e497c9f45ee82a3d6122cb5f774cf4275ac92029a33f7",
+          "expires_at": "2026-11-23T00:17:10Z"
+        }
+      ]
+    },
+    {
+      "sample": "control-2",
+      "primary_slot": "control-2",
+      "run_id": 40044371490,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40044371490",
+      "event_head": "e77d02ebbfacaee9a14f58478bc8fd1549ad4fde",
+      "actual_checkout": "88a01c658fcbb75b16e4a85c6e529fb89aeaffac",
+      "actual_tree": "127f9171c0f99e156391dc78fc4f92fd366e6b12",
+      "run_created_at_utc": "2026-10-24T00:19:07Z",
+      "elapsed_seconds": 562.0,
+      "aggregate_job_seconds": 1533.0,
+      "unit_step_seconds": 510.0,
+      "initial_dispatch_seconds": 2.0,
+      "runner_class_seconds": {
+        "ubuntu-latest": 607.0,
+        "windows-latest": 188.0,
+        "windows-2025": 19.0,
+        "ubuntu-24.04": 116.0,
+        "ubuntu-24.04-arm": 122.0,
+        "macos-15": 48.0,
+        "macos-latest": 321.0,
+        "macos-15-intel": 112.0
+      },
+      "unit_job_seconds": 523.0,
+      "other_jobs_seconds": 1010.0,
+      "hosted_images": {
+        "installer-python39-0": "20261012.334.1",
+        "changes-0": "20261012.163.1",
+        "unit-suite-0": "20261012.163.1",
+        "plugin-schedulers-1": "20261021.278.1",
+        "plugin-schedulers-0": "20261012.163.1",
+        "installer-windows-0": "20261021.278.1",
+        "desktop-menus-0": "20260907.0337.1",
+        "desktop-menus-1": "20260824.0482.1",
+        "installer-macos-0": "20261013.0424.1",
+        "hook-adapter-1": "20261021.278.1",
+        "hook-adapter-0": "20261012.163.1",
+        "test-0": "20261023.163.3",
+        "desktop-menus-3": "20261023.334.3",
+        "desktop-menus-4": "20261023.149.3",
+        "desktop-menus-2": "20261021.278.1"
+      },
+      "setup_steps_by_job": {
+        "Offline unit suite (workers)": {
+          "Run ./.github/actions/setup": 8.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Change scope": {},
+        "Plugin schedulers (ubuntu-latest)": {
+          "Run ./.github/actions/setup": 6.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Plugin schedulers (windows-latest)": {
+          "Run ./.github/actions/setup": 0.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Hook adapter portability (windows-latest)": {
+          "Run ./.github/actions/setup": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Hook adapter portability (ubuntu-latest)": {
+          "Run ./.github/actions/setup": 7.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (windows/x86_64)": {
+          "Run ./.github/actions/setup": 0.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Desktop menu (linux/x86_64)": {
+          "Run ./.github/actions/setup": 8.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (linux/arm64)": {
+          "Run ./.github/actions/setup": 7.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Installer (Windows)": {
+          "Run ./.github/actions/setup": 1.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Desktop menu (darwin/arm64)": {
+          "Run ./.github/actions/setup": 27.0,
+          "Pin macOS certificate bundle": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Installer (macOS)": {
+          "Run ./.github/actions/setup": 24.0,
+          "Pin macOS certificate bundle": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Installer (Python 3.9)": {
+          "Run ./.github/actions/setup": 9.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (darwin/x86_64)": {
+          "Run ./.github/actions/setup": 59.0,
+          "Pin macOS certificate bundle": 2.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Benchmark verification": {
+          "Run ./.github/actions/setup": 9.0,
+          "Post Run ./.github/actions/setup": 0.0
+        }
+      },
+      "jobs": [
+        {
+          "name": "Offline unit suite (workers)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:19:09Z",
+          "completed_at": "2026-10-24T00:27:52Z"
+        },
+        {
+          "name": "Change scope",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:19:09Z",
+          "completed_at": "2026-10-24T00:19:17Z"
+        },
+        {
+          "name": "Plugin schedulers (ubuntu-latest)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:19:09Z",
+          "completed_at": "2026-10-24T00:19:28Z"
+        },
+        {
+          "name": "Plugin schedulers (windows-latest)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-24T00:19:09Z",
+          "completed_at": "2026-10-24T00:19:30Z"
+        },
+        {
+          "name": "Hook adapter portability (windows-latest)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-24T00:19:09Z",
+          "completed_at": "2026-10-24T00:19:35Z"
+        },
+        {
+          "name": "Hook adapter portability (ubuntu-latest)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:19:10Z",
+          "completed_at": "2026-10-24T00:19:32Z"
+        },
+        {
+          "name": "Desktop menu (windows/x86_64)",
+          "labels": [
+            "windows-2025"
+          ],
+          "started_at": "2026-10-24T00:19:19Z",
+          "completed_at": "2026-10-24T00:19:38Z"
+        },
+        {
+          "name": "Desktop menu (linux/x86_64)",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "started_at": "2026-10-24T00:19:19Z",
+          "completed_at": "2026-10-24T00:20:58Z"
+        },
+        {
+          "name": "Desktop menu (linux/arm64)",
+          "labels": [
+            "ubuntu-24.04-arm"
+          ],
+          "started_at": "2026-10-24T00:19:22Z",
+          "completed_at": "2026-10-24T00:21:24Z"
+        },
+        {
+          "name": "Installer (Windows)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-24T00:19:19Z",
+          "completed_at": "2026-10-24T00:21:40Z"
+        },
+        {
+          "name": "Desktop menu (darwin/arm64)",
+          "labels": [
+            "macos-15"
+          ],
+          "started_at": "2026-10-24T00:19:20Z",
+          "completed_at": "2026-10-24T00:20:08Z"
+        },
+        {
+          "name": "Installer (macOS)",
+          "labels": [
+            "macos-latest"
+          ],
+          "started_at": "2026-10-24T00:19:19Z",
+          "completed_at": "2026-10-24T00:24:40Z"
+        },
+        {
+          "name": "Installer (Python 3.9)",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "started_at": "2026-10-24T00:19:20Z",
+          "completed_at": "2026-10-24T00:19:37Z"
+        },
+        {
+          "name": "Desktop menu (darwin/x86_64)",
+          "labels": [
+            "macos-15-intel"
+          ],
+          "started_at": "2026-10-24T00:19:21Z",
+          "completed_at": "2026-10-24T00:21:13Z"
+        },
+        {
+          "name": "Benchmark verification",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:27:54Z",
+          "completed_at": "2026-10-24T00:28:29Z"
+        }
+      ],
+      "case_outcomes_by_phase": {
+        "unit-suite-0/unittest-1": "3c32bc318ff603dc37b006b17a1c4cc040e21accf0025f0078b21f6be5816a09",
+        "plugin-schedulers-1/unittest-1": "bdd47af5d5154bca0a4837d399173038735f5e8cf53e4796e52beb73ac3561e4",
+        "plugin-schedulers-0/unittest-1": "9017c29a759a4bd64826bd236eaca6bd295e7ec730050df616fd292a4eb0341c",
+        "plugin-schedulers-0/unittest-2": "c00171532fdf64478121b4b4cadc9ddcf3184895d81d116f2803abe788c81e9b",
+        "installer-windows-0/unittest-1": "15280e1840492bab3f5f6d957280c91e0d6699deb6ee1db42c7ed4c3168e2c87",
+        "installer-windows-0/unittest-2": "5902a61d3ef38880c97da0913a82886fa29e59d4b4372ea4f7881e1a9ca326c5",
+        "installer-windows-0/unittest-3": "0302ff57ed95d56b4fad3f7ffc58a5195af15ad817f3021e729b280e61d80566",
+        "installer-macos-0/unittest-1": "67396c5b14deca12477731f8ec583baee08561f749f01e8e85059dc3a40aaee2",
+        "hook-adapter-1/unittest-1": "2c2eb81584329964d99be7593290e77ad3de396834ebae188b008ea38d6f9e61",
+        "hook-adapter-0/unittest-1": "e1bbae375d15b6bb969dbb6a7097ee7a4735712548d54ae123119328652b184d"
+      },
+      "events_by_phase": {
+        "unit-suite-0/unittest-1": "a18104450e16d117c6d36bb63e34b9a6811df0674c08d8d436985035810b50a4",
+        "plugin-schedulers-1/unittest-1": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "plugin-schedulers-0/unittest-1": "0ad7e2bd8a730cc151ab1185a29a8dd1dac5e682c2be4a7b46c656a1602fa4a2",
+        "plugin-schedulers-0/unittest-2": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "installer-windows-0/unittest-1": "7e0bc4431757c9518de841e39ca9b5dbca48b7ad54986ef4d144194878107088",
+        "installer-windows-0/unittest-2": "cc3f60256efd1a02c60586ce35d286285dbc3ef507f3e836e85ffe320bf94b67",
+        "installer-windows-0/unittest-3": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "installer-macos-0/unittest-1": "ae7af87f9841b73362d0c31f854a74d1e84840cd023589b6b6462bea47d339a6",
+        "hook-adapter-1/unittest-1": "06d6954e2ea2b126bfe3856d7db0e2294c8123c0ba1c434d4b1bf39e49a2a07b",
+        "hook-adapter-0/unittest-1": "e017067680d677df8ee191393cb46e0688830353bfe2020ab4fa9d1618de3d05"
+      },
+      "case_order_by_phase": {
+        "unit-suite-0/unittest-1": "b5122b341748871213b690757548dd432a7f9cd403299b6b39304ad01d187a00",
+        "plugin-schedulers-1/unittest-1": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+        "plugin-schedulers-0/unittest-1": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+        "plugin-schedulers-0/unittest-2": "7b8f68df8891cbdf70f7deec6d88467f6b6f313ea41a44270ab2c2b03af049e8",
+        "installer-windows-0/unittest-1": "3a12fdcaf3dda0d37a609f50edead983f14ccfdba247264988fd95046d6344e6",
+        "installer-windows-0/unittest-2": "6f177c474e9aafd47b201e5d8f07a5ff851602c342bb4152215138cab6bd5a87",
+        "installer-windows-0/unittest-3": "a6102c306472b0a5f54fa43f4811277a26698fe2d4a2e61988681da331f4a567",
+        "installer-macos-0/unittest-1": "411aa5bef2870df9da6978cd9a1821ef18b41c170c81ccf081e857e9a700ca9d",
+        "hook-adapter-1/unittest-1": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65",
+        "hook-adapter-0/unittest-1": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65"
+      },
+      "artifact_receipts": [
+        {
+          "id": 12541320636,
+          "name": "results-test-0",
+          "digest": "sha256:8092890ed4aa1420b810ad36c3616dfea75932e85cce56b7e6d7e10563dbdb2f",
+          "expires_at": "2026-11-23T00:28:25Z"
+        },
+        {
+          "id": 12541310621,
+          "name": "results-unit-suite-0",
+          "digest": "sha256:cf744819ed3249f99056243c8b3f67ac09e2f9c81327d10e529ee5dfca2686a7",
+          "expires_at": "2026-11-23T00:27:49Z"
+        },
+        {
+          "id": 12541275273,
+          "name": "results-installer-macos-0",
+          "digest": "sha256:555f8917b7d8be0def9e019f9a3a5e9fddc7935312597aa3b72e79c66b54622f",
+          "expires_at": "2026-11-23T00:24:36Z"
+        },
+        {
+          "id": 12541045006,
+          "name": "results-hook-adapter-1",
+          "digest": "sha256:c66b4b0597201f35cad54a6d1dc82365b2f7b08aedc15916e1513c51e8b36733",
+          "expires_at": "2026-11-23T00:19:31Z"
+        },
+        {
+          "id": 12540771270,
+          "name": "results-plugin-schedulers-0",
+          "digest": "sha256:4c300377fecf1c7ee53b04040cf58e37ef860734ca9c073b3e6a3d69db807171",
+          "expires_at": "2026-11-23T00:19:24Z"
+        },
+        {
+          "id": 12540751558,
+          "name": "results-desktop-menus-4",
+          "digest": "sha256:8cb714d6617467b9820c6caf7d73bae3e41c226df8dc4c7dc3a05051f4be6c71",
+          "expires_at": "2026-11-23T00:21:20Z"
+        },
+        {
+          "id": 12540747628,
+          "name": "results-desktop-menus-1",
+          "digest": "sha256:fd54c1b61e9b62b7efef5fa809c699d77c2a910bb7d3ee88a3ddc2b6f3f269d9",
+          "expires_at": "2026-11-23T00:21:06Z"
+        },
+        {
+          "id": 12540672578,
+          "name": "results-desktop-menus-2",
+          "digest": "sha256:57acf4086a32cb1482b6d24de882ab9910975b73867f8bebb4d88b98a42398a8",
+          "expires_at": "2026-11-23T00:19:34Z"
+        },
+        {
+          "id": 12540642703,
+          "name": "results-hook-adapter-0",
+          "digest": "sha256:38c3e373f4b0abe3a4cc35b22bc7b8c96da454d33541b663bc24351a67e205a8",
+          "expires_at": "2026-11-23T00:19:28Z"
+        },
+        {
+          "id": 12540518362,
+          "name": "results-desktop-menus-3",
+          "digest": "sha256:e964f986061529e714623039a82d804927a3feae19f46700b10b89dc8f281e6d",
+          "expires_at": "2026-11-23T00:20:54Z"
+        },
+        {
+          "id": 12540114995,
+          "name": "results-installer-windows-0",
+          "digest": "sha256:6c34bf7a6717a8912bcda27c4db1cca818b355a476cc74a0b8ab7d71b07e6d31",
+          "expires_at": "2026-11-23T00:21:36Z"
+        },
+        {
+          "id": 12539998697,
+          "name": "results-changes-0",
+          "digest": "sha256:637b152dca8b87d4c29bd82a07ff2616ae49a273871026f5912b53705d3fe65a",
+          "expires_at": "2026-11-23T00:19:13Z"
+        },
+        {
+          "id": 12539918945,
+          "name": "results-plugin-schedulers-1",
+          "digest": "sha256:1c6e20ae707bbf172ba7b52f0ed4824d867b7b2f54e036aa4b8ffbdecea66189",
+          "expires_at": "2026-11-23T00:19:26Z"
+        },
+        {
+          "id": 12539834483,
+          "name": "results-installer-python39-0",
+          "digest": "sha256:a542d7cf7116cd1c96445f6a5d0341556afe97a80f7dc54b7b41c53bc61f6dd3",
+          "expires_at": "2026-11-23T00:19:34Z"
+        },
+        {
+          "id": 12539669966,
+          "name": "results-desktop-menus-0",
+          "digest": "sha256:e5b0cfd27bcfd0015af645e87b79e8f11b515b85a5fdd15514310fa9dfb5a516",
+          "expires_at": "2026-11-23T00:20:03Z"
+        }
+      ]
+    },
+    {
+      "sample": "control-3",
+      "primary_slot": "control-3",
+      "run_id": 40045200166,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40045200166",
+      "event_head": "e77d02ebbfacaee9a14f58478bc8fd1549ad4fde",
+      "actual_checkout": "88a01c658fcbb75b16e4a85c6e529fb89aeaffac",
+      "actual_tree": "127f9171c0f99e156391dc78fc4f92fd366e6b12",
+      "run_created_at_utc": "2026-10-24T00:29:10Z",
+      "elapsed_seconds": 580.0,
+      "aggregate_job_seconds": 1580.0,
+      "unit_step_seconds": 520.0,
+      "initial_dispatch_seconds": 2.0,
+      "runner_class_seconds": {
+        "ubuntu-latest": 628.0,
+        "windows-latest": 194.0,
+        "windows-2025": 23.0,
+        "macos-15": 47.0,
+        "ubuntu-24.04": 128.0,
+        "macos-latest": 327.0,
+        "macos-15-intel": 110.0,
+        "ubuntu-24.04-arm": 123.0
+      },
+      "unit_job_seconds": 534.0,
+      "other_jobs_seconds": 1046.0,
+      "hosted_images": {
+        "installer-python39-0": "20261012.334.1",
+        "changes-0": "20261012.163.1",
+        "unit-suite-0": "20261023.163.3",
+        "plugin-schedulers-1": "20261021.278.1",
+        "plugin-schedulers-0": "20261023.163.3",
+        "installer-windows-0": "20261021.278.1",
+        "desktop-menus-0": "20260907.0337.1",
+        "desktop-menus-1": "20260824.0482.1",
+        "installer-macos-0": "20261021.0445.8",
+        "hook-adapter-1": "20261021.278.1",
+        "hook-adapter-0": "20261012.163.1",
+        "test-0": "20261012.163.1",
+        "desktop-menus-3": "20261012.334.1",
+        "desktop-menus-4": "20261023.149.3",
+        "desktop-menus-2": "20261021.278.1"
+      },
+      "setup_steps_by_job": {
+        "Plugin schedulers (ubuntu-latest)": {
+          "Run ./.github/actions/setup": 7.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Plugin schedulers (windows-latest)": {
+          "Run ./.github/actions/setup": 0.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Change scope": {},
+        "Hook adapter portability (ubuntu-latest)": {
+          "Run ./.github/actions/setup": 7.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Hook adapter portability (windows-latest)": {
+          "Run ./.github/actions/setup": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Offline unit suite (workers)": {
+          "Run ./.github/actions/setup": 7.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Installer (Windows)": {
+          "Run ./.github/actions/setup": 1.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Desktop menu (windows/x86_64)": {
+          "Run ./.github/actions/setup": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (darwin/arm64)": {
+          "Run ./.github/actions/setup": 25.0,
+          "Pin macOS certificate bundle": 0.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Installer (Python 3.9)": {
+          "Run ./.github/actions/setup": 10.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Desktop menu (linux/x86_64)": {
+          "Run ./.github/actions/setup": 7.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Installer (macOS)": {
+          "Run ./.github/actions/setup": 1.0,
+          "Pin macOS certificate bundle": 2.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (darwin/x86_64)": {
+          "Run ./.github/actions/setup": 75.0,
+          "Pin macOS certificate bundle": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (linux/arm64)": {
+          "Run ./.github/actions/setup": 8.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Benchmark verification": {
+          "Run ./.github/actions/setup": 13.0,
+          "Post Run ./.github/actions/setup": 0.0
+        }
+      },
+      "jobs": [
+        {
+          "name": "Plugin schedulers (ubuntu-latest)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:29:12Z",
+          "completed_at": "2026-10-24T00:29:34Z"
+        },
+        {
+          "name": "Plugin schedulers (windows-latest)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-24T00:29:12Z",
+          "completed_at": "2026-10-24T00:29:32Z"
+        },
+        {
+          "name": "Change scope",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:29:12Z",
+          "completed_at": "2026-10-24T00:29:22Z"
+        },
+        {
+          "name": "Hook adapter portability (ubuntu-latest)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:29:12Z",
+          "completed_at": "2026-10-24T00:29:32Z"
+        },
+        {
+          "name": "Hook adapter portability (windows-latest)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-24T00:29:13Z",
+          "completed_at": "2026-10-24T00:29:40Z"
+        },
+        {
+          "name": "Offline unit suite (workers)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:29:12Z",
+          "completed_at": "2026-10-24T00:38:06Z"
+        },
+        {
+          "name": "Installer (Windows)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-24T00:29:24Z",
+          "completed_at": "2026-10-24T00:31:51Z"
+        },
+        {
+          "name": "Desktop menu (windows/x86_64)",
+          "labels": [
+            "windows-2025"
+          ],
+          "started_at": "2026-10-24T00:29:25Z",
+          "completed_at": "2026-10-24T00:29:48Z"
+        },
+        {
+          "name": "Desktop menu (darwin/arm64)",
+          "labels": [
+            "macos-15"
+          ],
+          "started_at": "2026-10-24T00:29:25Z",
+          "completed_at": "2026-10-24T00:30:12Z"
+        },
+        {
+          "name": "Installer (Python 3.9)",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "started_at": "2026-10-24T00:29:25Z",
+          "completed_at": "2026-10-24T00:29:45Z"
+        },
+        {
+          "name": "Desktop menu (linux/x86_64)",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "started_at": "2026-10-24T00:29:24Z",
+          "completed_at": "2026-10-24T00:31:12Z"
+        },
+        {
+          "name": "Installer (macOS)",
+          "labels": [
+            "macos-latest"
+          ],
+          "started_at": "2026-10-24T00:29:25Z",
+          "completed_at": "2026-10-24T00:34:52Z"
+        },
+        {
+          "name": "Desktop menu (darwin/x86_64)",
+          "labels": [
+            "macos-15-intel"
+          ],
+          "started_at": "2026-10-24T00:29:25Z",
+          "completed_at": "2026-10-24T00:31:15Z"
+        },
+        {
+          "name": "Desktop menu (linux/arm64)",
+          "labels": [
+            "ubuntu-24.04-arm"
+          ],
+          "started_at": "2026-10-24T00:29:27Z",
+          "completed_at": "2026-10-24T00:31:30Z"
+        },
+        {
+          "name": "Benchmark verification",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:38:08Z",
+          "completed_at": "2026-10-24T00:38:50Z"
+        }
+      ],
+      "case_outcomes_by_phase": {
+        "unit-suite-0/unittest-1": "3c32bc318ff603dc37b006b17a1c4cc040e21accf0025f0078b21f6be5816a09",
+        "plugin-schedulers-1/unittest-1": "bdd47af5d5154bca0a4837d399173038735f5e8cf53e4796e52beb73ac3561e4",
+        "plugin-schedulers-0/unittest-1": "9017c29a759a4bd64826bd236eaca6bd295e7ec730050df616fd292a4eb0341c",
+        "plugin-schedulers-0/unittest-2": "c00171532fdf64478121b4b4cadc9ddcf3184895d81d116f2803abe788c81e9b",
+        "installer-windows-0/unittest-1": "15280e1840492bab3f5f6d957280c91e0d6699deb6ee1db42c7ed4c3168e2c87",
+        "installer-windows-0/unittest-2": "5902a61d3ef38880c97da0913a82886fa29e59d4b4372ea4f7881e1a9ca326c5",
+        "installer-windows-0/unittest-3": "0302ff57ed95d56b4fad3f7ffc58a5195af15ad817f3021e729b280e61d80566",
+        "installer-macos-0/unittest-1": "67396c5b14deca12477731f8ec583baee08561f749f01e8e85059dc3a40aaee2",
+        "hook-adapter-1/unittest-1": "2c2eb81584329964d99be7593290e77ad3de396834ebae188b008ea38d6f9e61",
+        "hook-adapter-0/unittest-1": "e1bbae375d15b6bb969dbb6a7097ee7a4735712548d54ae123119328652b184d"
+      },
+      "events_by_phase": {
+        "unit-suite-0/unittest-1": "eaaf1e0263f1cf6c4d4f293a73ad35164e3d505db5d1592c61987becffaa719f",
+        "plugin-schedulers-1/unittest-1": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "plugin-schedulers-0/unittest-1": "0ad7e2bd8a730cc151ab1185a29a8dd1dac5e682c2be4a7b46c656a1602fa4a2",
+        "plugin-schedulers-0/unittest-2": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "installer-windows-0/unittest-1": "7e0bc4431757c9518de841e39ca9b5dbca48b7ad54986ef4d144194878107088",
+        "installer-windows-0/unittest-2": "cc3f60256efd1a02c60586ce35d286285dbc3ef507f3e836e85ffe320bf94b67",
+        "installer-windows-0/unittest-3": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "installer-macos-0/unittest-1": "8ae056c5d38b8ea85c289da0014910aa85888e362c732183d2a8c8a25aea9e96",
+        "hook-adapter-1/unittest-1": "06d6954e2ea2b126bfe3856d7db0e2294c8123c0ba1c434d4b1bf39e49a2a07b",
+        "hook-adapter-0/unittest-1": "e017067680d677df8ee191393cb46e0688830353bfe2020ab4fa9d1618de3d05"
+      },
+      "case_order_by_phase": {
+        "unit-suite-0/unittest-1": "b5122b341748871213b690757548dd432a7f9cd403299b6b39304ad01d187a00",
+        "plugin-schedulers-1/unittest-1": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+        "plugin-schedulers-0/unittest-1": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+        "plugin-schedulers-0/unittest-2": "7b8f68df8891cbdf70f7deec6d88467f6b6f313ea41a44270ab2c2b03af049e8",
+        "installer-windows-0/unittest-1": "3a12fdcaf3dda0d37a609f50edead983f14ccfdba247264988fd95046d6344e6",
+        "installer-windows-0/unittest-2": "6f177c474e9aafd47b201e5d8f07a5ff851602c342bb4152215138cab6bd5a87",
+        "installer-windows-0/unittest-3": "a6102c306472b0a5f54fa43f4811277a26698fe2d4a2e61988681da331f4a567",
+        "installer-macos-0/unittest-1": "411aa5bef2870df9da6978cd9a1821ef18b41c170c81ccf081e857e9a700ca9d",
+        "hook-adapter-1/unittest-1": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65",
+        "hook-adapter-0/unittest-1": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65"
+      },
+      "artifact_receipts": [
+        {
+          "id": 12541810458,
+          "name": "results-test-0",
+          "digest": "sha256:4b392b5dca89f7f6292249a9a56261ccda5bf480d59e89310c29ffd5fd89db35",
+          "expires_at": "2026-11-23T00:38:45Z"
+        },
+        {
+          "id": 12541490159,
+          "name": "results-changes-0",
+          "digest": "sha256:2fab6bd0ee594487fc369bdb520b03e3308ccbaaebda164a0bdea3adbcba8dc5",
+          "expires_at": "2026-11-23T00:29:18Z"
+        },
+        {
+          "id": 12541485190,
+          "name": "results-desktop-menus-2",
+          "digest": "sha256:c5b9441a00b8a6251f40fdf459d92be3e0d66943ed091dc9e89469972d2442b5",
+          "expires_at": "2026-11-23T00:29:42Z"
+        },
+        {
+          "id": 12541310890,
+          "name": "results-installer-python39-0",
+          "digest": "sha256:e45a4e80b5258765315166f0e219005a532c9f9564e9f8ffa462444b022f102f",
+          "expires_at": "2026-11-23T00:29:40Z"
+        },
+        {
+          "id": 12541306063,
+          "name": "results-desktop-menus-0",
+          "digest": "sha256:3d2d23a8aca40a92e253ffd7640baef1ac5a0ba709bf7913c9e8a0bfb2fd4fcc",
+          "expires_at": "2026-11-23T00:30:06Z"
+        },
+        {
+          "id": 12541302221,
+          "name": "results-unit-suite-0",
+          "digest": "sha256:c3cc7f4bfe88655572b52d585a967bdb6bea300327db6b367a36aaaefa978874",
+          "expires_at": "2026-11-23T00:38:03Z"
+        },
+        {
+          "id": 12541276367,
+          "name": "results-installer-windows-0",
+          "digest": "sha256:1e99e337085da0d741060073bb0dba86ee02f8165ce91d153b1544d832928cf1",
+          "expires_at": "2026-11-23T00:31:46Z"
+        },
+        {
+          "id": 12541076095,
+          "name": "results-hook-adapter-0",
+          "digest": "sha256:948c3af07e5c0d2ac2cbea97dbac02d47e38195e44258b3b66beed9c99a3a6d1",
+          "expires_at": "2026-11-23T00:29:30Z"
+        },
+        {
+          "id": 12540913886,
+          "name": "results-installer-macos-0",
+          "digest": "sha256:6d6331842b0e49af753078f7179f375952b11cce65d8b41c8e04f8d7d0a250e2",
+          "expires_at": "2026-11-23T00:34:46Z"
+        },
+        {
+          "id": 12540689337,
+          "name": "results-desktop-menus-4",
+          "digest": "sha256:f23dc67dbdf552b543c80b3726e1ad42f7f555efc901535d193fa78c07b2bf6d",
+          "expires_at": "2026-11-23T00:31:27Z"
+        },
+        {
+          "id": 12540674352,
+          "name": "results-desktop-menus-3",
+          "digest": "sha256:7a83385b1e8cd7b837d52b48a13e8c9c6887759c283c88d3fa3f1e41d2afc9ac",
+          "expires_at": "2026-11-23T00:31:08Z"
+        },
+        {
+          "id": 12540644294,
+          "name": "results-plugin-schedulers-0",
+          "digest": "sha256:43d8fb5443aa7901117524ae051aec08a495ead295a24916c67b5053036ba9d1",
+          "expires_at": "2026-11-23T00:29:32Z"
+        },
+        {
+          "id": 12540569519,
+          "name": "results-hook-adapter-1",
+          "digest": "sha256:cfecdb83c389d8fe5ab36c82f45a91bfda0652b8192d52e7eb0c390af51f0da9",
+          "expires_at": "2026-11-23T00:29:35Z"
+        },
+        {
+          "id": 12540563291,
+          "name": "results-desktop-menus-1",
+          "digest": "sha256:716b5da93ba7f6a213639f03c5e5b75d0da4bb1010a80104e51b28e7cdccda98",
+          "expires_at": "2026-11-23T00:31:11Z"
+        },
+        {
+          "id": 12540543105,
+          "name": "results-plugin-schedulers-1",
+          "digest": "sha256:f19dd6efd9ad424f8e4a618930062f7efd266e01e1fc4bcfe94f8dad35c9bbeb",
+          "expires_at": "2026-11-23T00:29:27Z"
+        }
+      ]
+    },
+    {
+      "sample": "candidate-3-replacement-1",
+      "primary_slot": "candidate-3",
+      "run_id": 40047211909,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40047211909",
+      "event_head": "e77d02ebbfacaee9a14f58478bc8fd1549ad4fde",
+      "actual_checkout": "88a01c658fcbb75b16e4a85c6e529fb89aeaffac",
+      "actual_tree": "127f9171c0f99e156391dc78fc4f92fd366e6b12",
+      "run_created_at_utc": "2026-10-24T00:53:39Z",
+      "elapsed_seconds": 395.0,
+      "aggregate_job_seconds": 1432.0,
+      "unit_step_seconds": 292.0,
+      "initial_dispatch_seconds": 2.0,
+      "runner_class_seconds": {
+        "ubuntu-latest": 397.0,
+        "windows-latest": 257.0,
+        "macos-latest": 346.0,
+        "ubuntu-24.04": 125.0,
+        "macos-15": 58.0,
+        "ubuntu-24.04-arm": 119.0,
+        "macos-15-intel": 110.0,
+        "windows-2025": 20.0
+      },
+      "unit_job_seconds": 305.0,
+      "other_jobs_seconds": 1127.0,
+      "hosted_images": {
+        "installer-python39-0": "20261012.334.1",
+        "changes-0": "20261023.163.3",
+        "unit-suite-0": "20261023.163.3",
+        "plugin-schedulers-1": "20261021.278.1",
+        "plugin-schedulers-0": "20261012.163.1",
+        "installer-windows-0": "20261021.278.1",
+        "desktop-menus-0": "20260907.0337.1",
+        "desktop-menus-1": "20260824.0482.1",
+        "installer-macos-0": "20261013.0424.1",
+        "hook-adapter-1": "20261021.278.1",
+        "hook-adapter-0": "20261023.163.3",
+        "test-0": "20261023.163.3",
+        "desktop-menus-3": "20261023.334.3",
+        "desktop-menus-4": "20261012.149.1",
+        "desktop-menus-2": "20261021.278.1"
+      },
+      "setup_steps_by_job": {
+        "Offline unit suite (workers)": {
+          "Run ./.github/actions/setup": 6.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Hook adapter portability (windows-latest)": {
+          "Run ./.github/actions/setup": 0.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Change scope": {},
+        "Plugin schedulers (windows-latest)": {
+          "Run ./.github/actions/setup": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Hook adapter portability (ubuntu-latest)": {
+          "Run ./.github/actions/setup": 8.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Plugin schedulers (ubuntu-latest)": {
+          "Run ./.github/actions/setup": 9.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Installer (Windows)": {
+          "Run ./.github/actions/setup": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Installer (macOS)": {
+          "Run ./.github/actions/setup": 33.0,
+          "Pin macOS certificate bundle": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Installer (Python 3.9)": {
+          "Run ./.github/actions/setup": 9.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (darwin/arm64)": {
+          "Run ./.github/actions/setup": 34.0,
+          "Pin macOS certificate bundle": 1.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Desktop menu (linux/arm64)": {
+          "Run ./.github/actions/setup": 7.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Desktop menu (darwin/x86_64)": {
+          "Run ./.github/actions/setup": 71.0,
+          "Pin macOS certificate bundle": 1.0,
+          "Post Run ./.github/actions/setup": 1.0
+        },
+        "Desktop menu (windows/x86_64)": {
+          "Run ./.github/actions/setup": 1.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Desktop menu (linux/x86_64)": {
+          "Run ./.github/actions/setup": 8.0,
+          "Post Run ./.github/actions/setup": 0.0
+        },
+        "Benchmark verification": {
+          "Run ./.github/actions/setup": 7.0,
+          "Post Run ./.github/actions/setup": 0.0
+        }
+      },
+      "jobs": [
+        {
+          "name": "Offline unit suite (workers)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:53:42Z",
+          "completed_at": "2026-10-24T00:58:47Z"
+        },
+        {
+          "name": "Hook adapter portability (windows-latest)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-24T00:53:41Z",
+          "completed_at": "2026-10-24T00:54:12Z"
+        },
+        {
+          "name": "Change scope",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:53:42Z",
+          "completed_at": "2026-10-24T00:53:50Z"
+        },
+        {
+          "name": "Plugin schedulers (windows-latest)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-24T00:53:42Z",
+          "completed_at": "2026-10-24T00:54:25Z"
+        },
+        {
+          "name": "Hook adapter portability (ubuntu-latest)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:53:41Z",
+          "completed_at": "2026-10-24T00:54:06Z"
+        },
+        {
+          "name": "Plugin schedulers (ubuntu-latest)",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:53:42Z",
+          "completed_at": "2026-10-24T00:54:08Z"
+        },
+        {
+          "name": "Installer (Windows)",
+          "labels": [
+            "windows-latest"
+          ],
+          "started_at": "2026-10-24T00:53:53Z",
+          "completed_at": "2026-10-24T00:56:56Z"
+        },
+        {
+          "name": "Installer (macOS)",
+          "labels": [
+            "macos-latest"
+          ],
+          "started_at": "2026-10-24T00:53:53Z",
+          "completed_at": "2026-10-24T00:59:39Z"
+        },
+        {
+          "name": "Installer (Python 3.9)",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "started_at": "2026-10-24T00:53:53Z",
+          "completed_at": "2026-10-24T00:54:09Z"
+        },
+        {
+          "name": "Desktop menu (darwin/arm64)",
+          "labels": [
+            "macos-15"
+          ],
+          "started_at": "2026-10-24T00:53:53Z",
+          "completed_at": "2026-10-24T00:54:51Z"
+        },
+        {
+          "name": "Desktop menu (linux/arm64)",
+          "labels": [
+            "ubuntu-24.04-arm"
+          ],
+          "started_at": "2026-10-24T00:53:55Z",
+          "completed_at": "2026-10-24T00:55:54Z"
+        },
+        {
+          "name": "Desktop menu (darwin/x86_64)",
+          "labels": [
+            "macos-15-intel"
+          ],
+          "started_at": "2026-10-24T00:53:53Z",
+          "completed_at": "2026-10-24T00:55:43Z"
+        },
+        {
+          "name": "Desktop menu (windows/x86_64)",
+          "labels": [
+            "windows-2025"
+          ],
+          "started_at": "2026-10-24T00:53:54Z",
+          "completed_at": "2026-10-24T00:54:14Z"
+        },
+        {
+          "name": "Desktop menu (linux/x86_64)",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "started_at": "2026-10-24T00:53:53Z",
+          "completed_at": "2026-10-24T00:55:42Z"
+        },
+        {
+          "name": "Benchmark verification",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "started_at": "2026-10-24T00:59:41Z",
+          "completed_at": "2026-10-24T01:00:14Z"
+        }
+      ],
+      "case_outcomes_by_phase": {
+        "unit-suite-0/unittest-1": "3c32bc318ff603dc37b006b17a1c4cc040e21accf0025f0078b21f6be5816a09",
+        "plugin-schedulers-1/unittest-1": "bdd47af5d5154bca0a4837d399173038735f5e8cf53e4796e52beb73ac3561e4",
+        "plugin-schedulers-0/unittest-1": "9017c29a759a4bd64826bd236eaca6bd295e7ec730050df616fd292a4eb0341c",
+        "plugin-schedulers-0/unittest-2": "c00171532fdf64478121b4b4cadc9ddcf3184895d81d116f2803abe788c81e9b",
+        "installer-windows-0/unittest-1": "15280e1840492bab3f5f6d957280c91e0d6699deb6ee1db42c7ed4c3168e2c87",
+        "installer-windows-0/unittest-2": "5902a61d3ef38880c97da0913a82886fa29e59d4b4372ea4f7881e1a9ca326c5",
+        "installer-windows-0/unittest-3": "0302ff57ed95d56b4fad3f7ffc58a5195af15ad817f3021e729b280e61d80566",
+        "installer-macos-0/unittest-1": "67396c5b14deca12477731f8ec583baee08561f749f01e8e85059dc3a40aaee2",
+        "hook-adapter-1/unittest-1": "2c2eb81584329964d99be7593290e77ad3de396834ebae188b008ea38d6f9e61",
+        "hook-adapter-0/unittest-1": "e1bbae375d15b6bb969dbb6a7097ee7a4735712548d54ae123119328652b184d"
+      },
+      "events_by_phase": {
+        "unit-suite-0/unittest-1": "e6bd3d036107046ceeb6b7635c9b843bbbfedd884e8f741b5de20f82e5e09a94",
+        "plugin-schedulers-1/unittest-1": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "plugin-schedulers-0/unittest-1": "0ad7e2bd8a730cc151ab1185a29a8dd1dac5e682c2be4a7b46c656a1602fa4a2",
+        "plugin-schedulers-0/unittest-2": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "installer-windows-0/unittest-1": "7e0bc4431757c9518de841e39ca9b5dbca48b7ad54986ef4d144194878107088",
+        "installer-windows-0/unittest-2": "cc3f60256efd1a02c60586ce35d286285dbc3ef507f3e836e85ffe320bf94b67",
+        "installer-windows-0/unittest-3": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "installer-macos-0/unittest-1": "e4a0f50b385f1b9b78e868ea10b65ea1edd59eff601c76bad82ee8c4c41a448c",
+        "hook-adapter-1/unittest-1": "06d6954e2ea2b126bfe3856d7db0e2294c8123c0ba1c434d4b1bf39e49a2a07b",
+        "hook-adapter-0/unittest-1": "e017067680d677df8ee191393cb46e0688830353bfe2020ab4fa9d1618de3d05"
+      },
+      "case_order_by_phase": {
+        "unit-suite-0/unittest-1": "b5122b341748871213b690757548dd432a7f9cd403299b6b39304ad01d187a00",
+        "plugin-schedulers-1/unittest-1": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+        "plugin-schedulers-0/unittest-1": "ff719273270095b670cbf09c9f4626614116fbbf9b98c7cc28e2599573a777d1",
+        "plugin-schedulers-0/unittest-2": "7b8f68df8891cbdf70f7deec6d88467f6b6f313ea41a44270ab2c2b03af049e8",
+        "installer-windows-0/unittest-1": "3a12fdcaf3dda0d37a609f50edead983f14ccfdba247264988fd95046d6344e6",
+        "installer-windows-0/unittest-2": "6f177c474e9aafd47b201e5d8f07a5ff851602c342bb4152215138cab6bd5a87",
+        "installer-windows-0/unittest-3": "a6102c306472b0a5f54fa43f4811277a26698fe2d4a2e61988681da331f4a567",
+        "installer-macos-0/unittest-1": "411aa5bef2870df9da6978cd9a1821ef18b41c170c81ccf081e857e9a700ca9d",
+        "hook-adapter-1/unittest-1": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65",
+        "hook-adapter-0/unittest-1": "b1d0daf260450368c3dcb6ae0c7a25f671f75b9fca1bfbe9749b980136356c65"
+      },
+      "artifact_receipts": [
+        {
+          "id": 12542410290,
+          "name": "results-installer-macos-0",
+          "digest": "sha256:049da9f0060b78f24dc2d71a8ea41877278c22766172c6929af392660a47c0fe",
+          "expires_at": "2026-11-23T00:59:35Z"
+        },
+        {
+          "id": 12542185336,
+          "name": "results-hook-adapter-0",
+          "digest": "sha256:bd0c62b31dfbf2edaeee700c5e3fcafb3d2039b0a009688e78518dd5696b6a9f",
+          "expires_at": "2026-11-23T00:54:03Z"
+        },
+        {
+          "id": 12542016776,
+          "name": "results-desktop-menus-3",
+          "digest": "sha256:aa7c51c53a7cea8b89b4beb78bdfcdb9c3d8a54670055dd2edcc28819dae5289",
+          "expires_at": "2026-11-23T00:55:37Z"
+        },
+        {
+          "id": 12542006303,
+          "name": "results-unit-suite-0",
+          "digest": "sha256:fb242549dc8417cde71eb98a9aeef45402d25ef627cfbfeff57026b02b00372b",
+          "expires_at": "2026-11-23T00:58:43Z"
+        },
+        {
+          "id": 12541977015,
+          "name": "results-desktop-menus-4",
+          "digest": "sha256:7a8c703d398016dcd8e8962e99314b537cf8d240f6acaed329143d20a4a325bf",
+          "expires_at": "2026-11-23T00:55:51Z"
+        },
+        {
+          "id": 12541912180,
+          "name": "results-desktop-menus-0",
+          "digest": "sha256:72e94631c715f76f3028adda06d9fc10ca304756b73547d4ce14b04c56d37a4e",
+          "expires_at": "2026-11-23T00:54:46Z"
+        },
+        {
+          "id": 12541887256,
+          "name": "results-hook-adapter-1",
+          "digest": "sha256:5a2c49f4fc88de6cc84aa4fbe2136c63409f2b6aa2f228c7e3e28c3de43ff2f3",
+          "expires_at": "2026-11-23T00:54:07Z"
+        },
+        {
+          "id": 12541847143,
+          "name": "results-test-0",
+          "digest": "sha256:9745fad840f785e230e93ec0179422078f10625a81ad784a2ea843ab337db48d",
+          "expires_at": "2026-11-23T01:00:11Z"
+        },
+        {
+          "id": 12541633518,
+          "name": "results-changes-0",
+          "digest": "sha256:d4c3868f4613fb23bf008e4c8e364f078af12a2f4516570554786290fefb405f",
+          "expires_at": "2026-11-23T00:53:47Z"
+        },
+        {
+          "id": 12541588641,
+          "name": "results-plugin-schedulers-1",
+          "digest": "sha256:e861676f0a460f6a4f2809057fd9f0bbf43f9d962fd348f19295006756524296",
+          "expires_at": "2026-11-23T00:54:20Z"
+        },
+        {
+          "id": 12541349549,
+          "name": "results-installer-python39-0",
+          "digest": "sha256:fa6b0fea1fe1f430d1389e78fe830beaf6d2a6af62ddbcef46576bf68154a370",
+          "expires_at": "2026-11-23T00:54:06Z"
+        },
+        {
+          "id": 12541213194,
+          "name": "results-plugin-schedulers-0",
+          "digest": "sha256:2a0f167bcbb1d15a252eb3fd0505ed8e38b987720559a7c99e4ef3049bb8ded1",
+          "expires_at": "2026-11-23T00:54:04Z"
+        },
+        {
+          "id": 12541048906,
+          "name": "results-desktop-menus-1",
+          "digest": "sha256:eb4b37966b83c35b926419dd4f428cd294054f1b674eb89a132119d4f3ace8a4",
+          "expires_at": "2026-11-23T00:55:40Z"
+        },
+        {
+          "id": 12540949468,
+          "name": "results-desktop-menus-2",
+          "digest": "sha256:9012e20a89da5156f443f27e428638bf84af7e13ef4a75cf989059599121ca43",
+          "expires_at": "2026-11-23T00:54:09Z"
+        },
+        {
+          "id": 12540894923,
+          "name": "results-installer-windows-0",
+          "digest": "sha256:0b733d2bdefdda72d2327005315a3b1190f7872b51ecd47faa5e6e7446e7bdc8",
+          "expires_at": "2026-11-23T00:56:50Z"
+        }
+      ]
+    }
+  ],
+  "retained_attempts": [
+    {
+      "sample": "control-1",
+      "run_id": 40042296437,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40042296437",
+      "attempt": 1,
+      "conclusion": "success",
+      "eligible_primary": true,
+      "primary_slot": "control-1"
+    },
+    {
+      "sample": "candidate-1",
+      "run_id": 40043179669,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40043179669",
+      "attempt": 1,
+      "conclusion": "success",
+      "eligible_primary": true,
+      "primary_slot": "candidate-1"
+    },
+    {
+      "sample": "candidate-2",
+      "run_id": 40043756582,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40043756582",
+      "attempt": 1,
+      "conclusion": "success",
+      "eligible_primary": true,
+      "primary_slot": "candidate-2"
+    },
+    {
+      "sample": "control-2",
+      "run_id": 40044371490,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40044371490",
+      "attempt": 1,
+      "conclusion": "success",
+      "eligible_primary": true,
+      "primary_slot": "control-2"
+    },
+    {
+      "sample": "control-3",
+      "run_id": 40045200166,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40045200166",
+      "attempt": 1,
+      "conclusion": "success",
+      "eligible_primary": true,
+      "primary_slot": "control-3"
+    },
+    {
+      "sample": "candidate-3",
+      "run_id": 40046083962,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40046083962",
+      "attempt": 1,
+      "conclusion": "success",
+      "eligible_primary": false,
+      "primary_slot": "candidate-3"
+    },
+    {
+      "sample": "candidate-3-replacement-1",
+      "run_id": 40047211909,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40047211909",
+      "attempt": 1,
+      "conclusion": "success",
+      "eligible_primary": true,
+      "primary_slot": "candidate-3"
+    }
+  ],
+  "infrastructure_replacement": {
+    "excluded_run_id": 40046083962,
+    "excluded_url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40046083962",
+    "excluded_conclusion": "success",
+    "reason": "The macOS installer received five logical CPUs rather than the required three; all other strict inputs matched.",
+    "mismatched_input": {
+      "role": "installer-macos-0",
+      "field": "logical_cpus",
+      "required": 3,
+      "observed": 5
+    },
+    "eligibility_decided_before_original_timing_inspection": true,
+    "independent_review": "Astra requested at max effort; served model and effort unverified",
+    "decision_at_utc": "2026-10-24T00:53:20Z",
+    "replacement_run_id": 40047211909,
+    "replacement_url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40047211909",
+    "primary_slot": "candidate-3",
+    "allowance_used": {
+      "control": 0,
+      "candidate": 1
+    },
+    "scope": "One complete 15-job run with identical source, harness, labels and inputs",
+    "rule": "A failed or ineligible replacement stops this cohort as inconclusive. No further candidate replacement or relaxed predicate."
+  },
+  "hash_algorithm": "SHA-256 of UTF-8 json.dumps(value, sort_keys=True, separators=(comma, colon)); inventory IDs sorted with duplicates; discovery_order and case_order preserve list order; case/event dictionaries sorted by json.dumps(row, sort_keys=True)",
+  "observed_variations": {
+    "subtest_displays:unit-suite-0/unittest-1": [
+      "candidate-1",
+      "candidate-2",
+      "control-2",
+      "control-3",
+      "candidate-3-replacement-1"
+    ],
+    "subtest_displays:installer-macos-0/unittest-1": [
+      "candidate-1",
+      "candidate-2",
+      "control-2",
+      "control-3",
+      "candidate-3-replacement-1"
+    ],
+    "hosted_image:installer-python39-0": [
+      {
+        "sample": "candidate-1",
+        "image_version": "20261012.334.1"
+      },
+      {
+        "sample": "candidate-2",
+        "image_version": "20261012.334.1"
+      },
+      {
+        "sample": "control-2",
+        "image_version": "20261012.334.1"
+      },
+      {
+        "sample": "control-3",
+        "image_version": "20261012.334.1"
+      },
+      {
+        "sample": "candidate-3-replacement-1",
+        "image_version": "20261012.334.1"
+      }
+    ],
+    "hosted_image:unit-suite-0": [
+      {
+        "sample": "candidate-1",
+        "image_version": "20261023.163.3"
+      },
+      {
+        "sample": "control-3",
+        "image_version": "20261023.163.3"
+      },
+      {
+        "sample": "candidate-3-replacement-1",
+        "image_version": "20261023.163.3"
+      }
+    ],
+    "hosted_image:plugin-schedulers-0": [
+      {
+        "sample": "candidate-1",
+        "image_version": "20261023.163.3"
+      },
+      {
+        "sample": "candidate-2",
+        "image_version": "20261023.163.3"
+      },
+      {
+        "sample": "control-3",
+        "image_version": "20261023.163.3"
+      }
+    ],
+    "hosted_image:installer-macos-0": [
+      {
+        "sample": "candidate-1",
+        "image_version": "20261021.0445.8"
+      },
+      {
+        "sample": "control-3",
+        "image_version": "20261021.0445.8"
+      }
+    ],
+    "hosted_image:desktop-menus-4": [
+      {
+        "sample": "candidate-1",
+        "image_version": "20261012.149.1"
+      },
+      {
+        "sample": "candidate-2",
+        "image_version": "20261012.149.1"
+      },
+      {
+        "sample": "candidate-3-replacement-1",
+        "image_version": "20261012.149.1"
+      }
+    ],
+    "hosted_image:changes-0": [
+      {
+        "sample": "candidate-2",
+        "image_version": "20261023.163.3"
+      },
+      {
+        "sample": "candidate-3-replacement-1",
+        "image_version": "20261023.163.3"
+      }
+    ],
+    "hosted_image:test-0": [
+      {
+        "sample": "candidate-2",
+        "image_version": "20261023.163.3"
+      },
+      {
+        "sample": "control-2",
+        "image_version": "20261023.163.3"
+      },
+      {
+        "sample": "candidate-3-replacement-1",
+        "image_version": "20261023.163.3"
+      }
+    ],
+    "hosted_image:desktop-menus-3": [
+      {
+        "sample": "control-2",
+        "image_version": "20261023.334.3"
+      },
+      {
+        "sample": "candidate-3-replacement-1",
+        "image_version": "20261023.334.3"
+      }
+    ],
+    "hosted_image:hook-adapter-0": [
+      {
+        "sample": "candidate-3-replacement-1",
+        "image_version": "20261023.163.3"
+      }
+    ]
+  },
+  "excluded_preliminary_runs": [
+    {
+      "run_id": 40032698483,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40032698483",
+      "arm": "control"
+    },
+    {
+      "run_id": 40033866987,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40033866987",
+      "arm": "candidate"
+    }
+  ],
+  "preliminary_exclusion_reason": "Different macOS certifi versions could affect a default-CA input; effective CA contents were not recorded. Both attempts passed the same workload but were excluded before a new frozen six-run cohort.",
+  "excluded_interrupted_cohort": [
+    {
+      "run_id": 40036476036,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40036476036",
+      "outcome": "success"
+    },
+    {
+      "run_id": 40037467329,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40037467329",
+      "outcome": "success"
+    },
+    {
+      "run_id": 40038266057,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40038266057",
+      "outcome": "success"
+    },
+    {
+      "run_id": 40038982366,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40038982366",
+      "outcome": "failure"
+    }
+  ],
+  "interrupted_cohort_exclusion_reason": "An unchanged native Windows lifecycle fixture failed in control-2. Its automatic recovery trigger could race a stopped-state assertion. The whole interrupted cohort was excluded; it was not an infrastructure replacement. Both new arms use the same corrected on-demand fixture, every original assertion, and unchanged production scheduling. Companion native migration and XML contracts retain production triggers.",
+  "fixture_proof": {
+    "payload": "88a01c658fcbb75b16e4a85c6e529fb89aeaffac",
+    "tree": "127f9171c0f99e156391dc78fc4f92fd366e6b12",
+    "baseline": "b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc",
+    "records": [
+      {
+        "variant": "before",
+        "payload": "b67c9cb4a87ae20acf42c69fe5ae916d61ec01dc",
+        "pause_count": 1,
+        "idle_seconds": 65.596139,
+        "observed_state": 4,
+        "observed_instances": 1,
+        "observed_enabled": true,
+        "cleanup_verified": true,
+        "tests_run": 1,
+        "failures": 1,
+        "errors": 0,
+        "skips": 0,
+        "elapsed_seconds": 93.44375610000003
+      },
+      {
+        "variant": "after",
+        "payload": "88a01c658fcbb75b16e4a85c6e529fb89aeaffac",
+        "pause_count": 1,
+        "idle_seconds": 65.55346220000001,
+        "observed_state": 3,
+        "observed_instances": 0,
+        "observed_enabled": true,
+        "cleanup_verified": true,
+        "tests_run": 1,
+        "failures": 0,
+        "errors": 0,
+        "skips": 0,
+        "elapsed_seconds": 115.8323719
+      }
+    ],
+    "method": "Real Task Scheduler; 65-second idle window before first legitimate disable; 180-second children in both variants; no synthetic Task.Run",
+    "run_id": 40041814923,
+    "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/40041814923",
+    "harness_commit": "e77d02ebbfacaee9a14f58478bc8fd1549ad4fde"
+  },
+  "limits": [
+    "Three successful runs per arm are descriptive, not a reliability guarantee",
+    "Runner duration is allocated wall time, not CPU time or a billing amount",
+    "No line or branch coverage measurement",
+    "Hosted image builds, machine load and tool-cache state are uncontrolled; relevant recorded inputs must match",
+    "Aggregate differences include unrelated job and setup variation; they are not a pure causal estimate of worker concurrency",
+    "Uniform observer, source/environment capture and artifact costs are included",
+    "Raw diagnostic artifacts have 30-day retention"
+  ],
+  "common_verified_inputs": {
+    "installer-python39-0": {
+      "python": "3.9.25 (main, Nov  3 2025, 15:16:36) \n[GCC 13.3.0]",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "image_os": "ubuntu24",
+      "runner_os": "Linux",
+      "runner_arch": "X64",
+      "logical_cpus": 4,
+      "packages": [
+        [
+          "pip",
+          "26.0.1"
+        ],
+        [
+          "setuptools",
+          "79.0.1"
+        ]
+      ],
+      "tls": {
+        "openssl": "OpenSSL 3.0.13 30 Jan 2024",
+        "ca_bundle_sha256": "ecd9dc38bc3efb7dbd6431f57e29d2f8d6a0f0d211e1464b3fef2cbfe266fcd2",
+        "ca_certificates_sha256": "0b370c9c2cb14a0ff30684fe4a634319f47a0a117dc413eb399e01c0bf3a19b4",
+        "ca_certificate_count": 121
+      }
+    },
+    "changes-0": {
+      "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+      "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.43",
+      "image_os": "ubuntu26",
+      "runner_os": "Linux",
+      "runner_arch": "X64",
+      "logical_cpus": 4,
+      "packages": [
+        [
+          "Automat",
+          "25.4.16"
+        ],
+        [
+          "Jinja2",
+          "3.1.6"
+        ],
+        [
+          "MarkupSafe",
+          "3.0.3"
+        ],
+        [
+          "PyGObject",
+          "3.56.2"
+        ],
+        [
+          "PyHamcrest",
+          "2.1.0"
+        ],
+        [
+          "PyJWT",
+          "2.10.1"
+        ],
+        [
+          "PyYAML",
+          "6.0.3"
+        ],
+        [
+          "Pygments",
+          "2.19.2"
+        ],
+        [
+          "Twisted",
+          "25.5.0"
+        ],
+        [
+          "WALinuxAgent",
+          "2.15.0.1"
+        ],
+        [
+          "argcomplete",
+          "3.7.2"
+        ],
+        [
+          "attrs",
+          "25.4.0"
+        ],
+        [
+          "autocommand",
+          "2.2.2"
+        ],
+        [
+          "babel",
+          "2.17.0"
+        ],
+        [
+          "bcc",
+          "0.35.0"
+        ],
+        [
+          "bcrypt",
+          "5.0.0"
+        ],
+        [
+          "blinker",
+          "1.9.0"
+        ],
+        [
+          "boto3",
+          "1.40.72"
+        ],
+        [
+          "botocore",
+          "1.40.72"
+        ],
+        [
+          "certifi",
+          "2026.1.4"
+        ],
+        [
+          "chardet",
+          "5.2.0"
+        ],
+        [
+          "click",
+          "8.1.8"
+        ],
+        [
+          "command-not-found",
+          "0.3"
+        ],
+        [
+          "configobj",
+          "5.0.9"
+        ],
+        [
+          "constantly",
+          "23.10.4"
+        ],
+        [
+          "crit",
+          "4.2"
+        ],
+        [
+          "cryptography",
+          "46.0.5"
+        ],
+        [
+          "dbus-python",
+          "1.4.0"
+        ],
+        [
+          "distro",
+          "1.9.0"
+        ],
+        [
+          "distro-info",
+          "1.15"
+        ],
+        [
+          "filelock",
+          "4.1.1"
+        ],
+        [
+          "httplib2",
+          "0.22.0"
+        ],
+        [
+          "hyperlink",
+          "21.0.0"
+        ],
+        [
+          "idna",
+          "3.11"
+        ],
+        [
+          "incremental",
+          "24.7.2"
+        ],
+        [
+          "inflect",
+          "7.5.0"
+        ],
+        [
+          "jaraco.context",
+          "6.0.1"
+        ],
+        [
+          "jaraco.functools",
+          "4.1.0"
+        ],
+        [
+          "jaraco.text",
+          "4.0.0"
+        ],
+        [
+          "jmespath",
+          "1.0.1"
+        ],
+        [
+          "jsonpatch",
+          "1.32"
+        ],
+        [
+          "jsonpointer",
+          "2.4"
+        ],
+        [
+          "jsonschema",
+          "4.19.2"
+        ],
+        [
+          "jsonschema-specifications",
+          "2023.12.1"
+        ],
+        [
+          "launchpadlib",
+          "2.1.0"
+        ],
+        [
+          "lazr.restfulclient",
+          "0.14.6"
+        ],
+        [
+          "lazr.uri",
+          "1.0.6"
+        ],
+        [
+          "libpass",
+          "1.9.3"
+        ],
+        [
+          "linkify-it-py",
+          "2.0.3"
+        ],
+        [
+          "markdown-it-py",
+          "3.0.0"
+        ],
+        [
+          "mdurl",
+          "0.1.2"
+        ],
+        [
+          "more-itertools",
+          "10.8.0"
+        ],
+        [
+          "netaddr",
+          "1.3.0"
+        ],
+        [
+          "netifaces",
+          "0.11.0"
+        ],
+        [
+          "oauthlib",
+          "3.3.1"
+        ],
+        [
+          "packaging",
+          "26.0"
+        ],
+        [
+          "pexpect",
+          "4.9.0"
+        ],
+        [
+          "pip",
+          "25.1.1"
+        ],
+        [
+          "pipx",
+          "1.17.10"
+        ],
+        [
+          "platformdirs",
+          "4.13.0"
+        ],
+        [
+          "protobuf",
+          "4.21.12"
+        ],
+        [
+          "ptyprocess",
+          "0.7.0"
+        ],
+        [
+          "pyOpenSSL",
+          "25.3.0"
+        ],
+        [
+          "pyasn1",
+          "0.6.3"
+        ],
+        [
+          "pyasn1_modules",
+          "0.4.1"
+        ],
+        [
+          "pycriu",
+          "4.2"
+        ],
+        [
+          "pyparsing",
+          "3.3.2"
+        ],
+        [
+          "pyserial",
+          "3.5"
+        ],
+        [
+          "python-apt",
+          "3.1.0+ubuntu1.1"
+        ],
+        [
+          "python-dateutil",
+          "2.9.0"
+        ],
+        [
+          "python-debian",
+          "1.0.1+ubuntu2"
+        ],
+        [
+          "python-magic",
+          "0.4.27"
+        ],
+        [
+          "referencing",
+          "0.36.2"
+        ],
+        [
+          "requests",
+          "2.32.5"
+        ],
+        [
+          "rich",
+          "13.9.4"
+        ],
+        [
+          "rpds-py",
+          "0.27.1"
+        ],
+        [
+          "s3transfer",
+          "0.14.0"
+        ],
+        [
+          "service-identity",
+          "24.2.0"
+        ],
+        [
+          "setuptools",
+          "78.1.1"
+        ],
+        [
+          "six",
+          "1.17.0"
+        ],
+        [
+          "sos",
+          "4.11.2"
+        ],
+        [
+          "ssh-import-id",
+          "5.11"
+        ],
+        [
+          "systemd-python",
+          "235"
+        ],
+        [
+          "typeguard",
+          "4.4.4"
+        ],
+        [
+          "typing_extensions",
+          "4.15.0"
+        ],
+        [
+          "ubuntu-pro-client",
+          "8001"
+        ],
+        [
+          "uc-micro-py",
+          "1.0.3"
+        ],
+        [
+          "ufw",
+          "0.36.2"
+        ],
+        [
+          "urllib3",
+          "2.6.3"
+        ],
+        [
+          "userpath",
+          "1.9.2"
+        ],
+        [
+          "wadllib",
+          "2.0.0"
+        ],
+        [
+          "wheel",
+          "0.46.3"
+        ],
+        [
+          "zipp",
+          "3.23.0"
+        ],
+        [
+          "zope.interface",
+          "8.2"
+        ],
+        [
+          "zstandard",
+          "0.25.0"
+        ]
+      ],
+      "tls": {
+        "openssl": "OpenSSL 3.5.5 27 Jan 2026",
+        "ca_bundle_sha256": "7975117e54f05f0ed1e1e767efd1f6827d662d720282ad4a360eecc636958de8",
+        "ca_certificates_sha256": "0b370c9c2cb14a0ff30684fe4a634319f47a0a117dc413eb399e01c0bf3a19b4",
+        "ca_certificate_count": 121
+      }
+    },
+    "unit-suite-0": {
+      "python": "3.14.9 (main, Oct 21 2026, 14:48:41) [GCC 15.2.0]",
+      "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.43",
+      "image_os": "ubuntu26",
+      "runner_os": "Linux",
+      "runner_arch": "X64",
+      "logical_cpus": 4,
+      "packages": [
+        [
+          "pip",
+          "26.2.2"
+        ]
+      ],
+      "tls": {
+        "openssl": "OpenSSL 3.5.5 27 Jan 2026",
+        "ca_bundle_sha256": "7975117e54f05f0ed1e1e767efd1f6827d662d720282ad4a360eecc636958de8",
+        "ca_certificates_sha256": "0b370c9c2cb14a0ff30684fe4a634319f47a0a117dc413eb399e01c0bf3a19b4",
+        "ca_certificate_count": 121
+      }
+    },
+    "plugin-schedulers-1": {
+      "python": "3.14.9 (tags/v3.14.9:ead82c0, Oct 21 2026, 06:26:14) [MSC v.1944 64 bit (AMD64)]",
+      "platform": "Windows-2025Server-10.0.26100-SP0",
+      "image_os": "win25-vs2026",
+      "runner_os": "Windows",
+      "runner_arch": "X64",
+      "logical_cpus": 4,
+      "packages": [
+        [
+          "pip",
+          "26.2.2"
+        ]
+      ],
+      "tls": {
+        "openssl": "OpenSSL 3.5.9 29 Sep 2026",
+        "ca_bundle_sha256": null,
+        "ca_certificates_sha256": "c7c5679fb40a54df334af691f86274970aecb26745706eaac7181a29794157c4",
+        "ca_certificate_count": 417
+      }
+    },
+    "plugin-schedulers-0": {
+      "python": "3.14.9 (main, Oct 21 2026, 14:48:41) [GCC 15.2.0]",
+      "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.43",
+      "image_os": "ubuntu26",
+      "runner_os": "Linux",
+      "runner_arch": "X64",
+      "logical_cpus": 4,
+      "packages": [
+        [
+          "pip",
+          "26.2.2"
+        ]
+      ],
+      "tls": {
+        "openssl": "OpenSSL 3.5.5 27 Jan 2026",
+        "ca_bundle_sha256": "7975117e54f05f0ed1e1e767efd1f6827d662d720282ad4a360eecc636958de8",
+        "ca_certificates_sha256": "0b370c9c2cb14a0ff30684fe4a634319f47a0a117dc413eb399e01c0bf3a19b4",
+        "ca_certificate_count": 121
+      }
+    },
+    "installer-windows-0": {
+      "python": "3.14.9 (tags/v3.14.9:ead82c0, Oct 21 2026, 06:26:14) [MSC v.1944 64 bit (AMD64)]",
+      "platform": "Windows-2025Server-10.0.26100-SP0",
+      "image_os": "win25-vs2026",
+      "runner_os": "Windows",
+      "runner_arch": "X64",
+      "logical_cpus": 4,
+      "packages": [
+        [
+          "pip",
+          "26.2.2"
+        ]
+      ],
+      "tls": {
+        "openssl": "OpenSSL 3.5.9 29 Sep 2026",
+        "ca_bundle_sha256": null,
+        "ca_certificates_sha256": "c7c5679fb40a54df334af691f86274970aecb26745706eaac7181a29794157c4",
+        "ca_certificate_count": 417
+      }
+    },
+    "desktop-menus-0": {
+      "python": "3.14.9 (v3.14.9:ead82c07db1, Oct 20 2026, 23:27:28) [Clang 21.0.0 (clang-2100.1.1.101)]",
+      "platform": "macOS-15.7.9-arm64-arm-64bit-Mach-O",
+      "image_os": "macos15",
+      "runner_os": "macOS",
+      "runner_arch": "ARM64",
+      "logical_cpus": 3,
+      "packages": [
+        [
+          "certifi",
+          "2026.10.23"
+        ],
+        [
+          "pip",
+          "26.2.2"
+        ]
+      ],
+      "tls": {
+        "openssl": "OpenSSL 3.5.9 29 Sep 2026",
+        "ca_bundle_sha256": "2ef52ad56b4803e264045c915e55c236cbfa045b84b81efefc218a19eb44bd2b",
+        "ca_certificates_sha256": "dfdb33cbdc7566b6f1fa1827dc50924a338afbeba59374dd115f4e66ca66b74e",
+        "ca_certificate_count": 118
+      }
+    },
+    "desktop-menus-1": {
+      "python": "3.14.9 (v3.14.9:ead82c07db1, Oct 20 2026, 23:27:28) [Clang 21.0.0 (clang-2100.1.1.101)]",
+      "platform": "macOS-15.7.9-x86_64-i386-64bit-Mach-O",
+      "image_os": "macos15",
+      "runner_os": "macOS",
+      "runner_arch": "X64",
+      "logical_cpus": 4,
+      "packages": [
+        [
+          "certifi",
+          "2026.10.23"
+        ],
+        [
+          "pip",
+          "26.2.2"
+        ]
+      ],
+      "tls": {
+        "openssl": "OpenSSL 3.5.9 29 Sep 2026",
+        "ca_bundle_sha256": "2ef52ad56b4803e264045c915e55c236cbfa045b84b81efefc218a19eb44bd2b",
+        "ca_certificates_sha256": "dfdb33cbdc7566b6f1fa1827dc50924a338afbeba59374dd115f4e66ca66b74e",
+        "ca_certificate_count": 118
+      }
+    },
+    "installer-macos-0": {
+      "python": "3.14.9 (v3.14.9:ead82c07db1, Oct 20 2026, 23:27:28) [Clang 21.0.0 (clang-2100.1.1.101)]",
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "image_os": "macos26",
+      "runner_os": "macOS",
+      "runner_arch": "ARM64",
+      "logical_cpus": 3,
+      "packages": [
+        [
+          "certifi",
+          "2026.10.23"
+        ],
+        [
+          "pip",
+          "26.2.2"
+        ]
+      ],
+      "tls": {
+        "openssl": "OpenSSL 3.5.9 29 Sep 2026",
+        "ca_bundle_sha256": "2ef52ad56b4803e264045c915e55c236cbfa045b84b81efefc218a19eb44bd2b",
+        "ca_certificates_sha256": "dfdb33cbdc7566b6f1fa1827dc50924a338afbeba59374dd115f4e66ca66b74e",
+        "ca_certificate_count": 118
+      }
+    },
+    "hook-adapter-1": {
+      "python": "3.14.9 (tags/v3.14.9:ead82c0, Oct 21 2026, 06:26:14) [MSC v.1944 64 bit (AMD64)]",
+      "platform": "Windows-2025Server-10.0.26100-SP0",
+      "image_os": "win25-vs2026",
+      "runner_os": "Windows",
+      "runner_arch": "X64",
+      "logical_cpus": 4,
+      "packages": [
+        [
+          "pip",
+          "26.2.2"
+        ]
+      ],
+      "tls": {
+        "openssl": "OpenSSL 3.5.9 29 Sep 2026",
+        "ca_bundle_sha256": null,
+        "ca_certificates_sha256": "c7c5679fb40a54df334af691f86274970aecb26745706eaac7181a29794157c4",
+        "ca_certificate_count": 417
+      }
+    },
+    "hook-adapter-0": {
+      "python": "3.14.9 (main, Oct 21 2026, 14:48:41) [GCC 15.2.0]",
+      "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.43",
+      "image_os": "ubuntu26",
+      "runner_os": "Linux",
+      "runner_arch": "X64",
+      "logical_cpus": 4,
+      "packages": [
+        [
+          "pip",
+          "26.2.2"
+        ]
+      ],
+      "tls": {
+        "openssl": "OpenSSL 3.5.5 27 Jan 2026",
+        "ca_bundle_sha256": "7975117e54f05f0ed1e1e767efd1f6827d662d720282ad4a360eecc636958de8",
+        "ca_certificates_sha256": "0b370c9c2cb14a0ff30684fe4a634319f47a0a117dc413eb399e01c0bf3a19b4",
+        "ca_certificate_count": 121
+      }
+    },
+    "test-0": {
+      "python": "3.14.9 (main, Oct 21 2026, 14:48:41) [GCC 15.2.0]",
+      "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.43",
+      "image_os": "ubuntu26",
+      "runner_os": "Linux",
+      "runner_arch": "X64",
+      "logical_cpus": 4,
+      "packages": [
+        [
+          "pip",
+          "26.2.2"
+        ]
+      ],
+      "tls": {
+        "openssl": "OpenSSL 3.5.5 27 Jan 2026",
+        "ca_bundle_sha256": "7975117e54f05f0ed1e1e767efd1f6827d662d720282ad4a360eecc636958de8",
+        "ca_certificates_sha256": "0b370c9c2cb14a0ff30684fe4a634319f47a0a117dc413eb399e01c0bf3a19b4",
+        "ca_certificate_count": 121
+      }
+    },
+    "desktop-menus-3": {
+      "python": "3.14.9 (main, Oct 21 2026, 14:50:29) [GCC 13.3.0]",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "image_os": "ubuntu24",
+      "runner_os": "Linux",
+      "runner_arch": "X64",
+      "logical_cpus": 4,
+      "packages": [
+        [
+          "pip",
+          "26.2.2"
+        ]
+      ],
+      "tls": {
+        "openssl": "OpenSSL 3.0.13 30 Jan 2024",
+        "ca_bundle_sha256": "ecd9dc38bc3efb7dbd6431f57e29d2f8d6a0f0d211e1464b3fef2cbfe266fcd2",
+        "ca_certificates_sha256": "0b370c9c2cb14a0ff30684fe4a634319f47a0a117dc413eb399e01c0bf3a19b4",
+        "ca_certificate_count": 121
+      }
+    },
+    "desktop-menus-4": {
+      "python": "3.14.9 (main, Oct 21 2026, 14:53:03) [GCC 13.3.0]",
+      "platform": "Linux-6.17.0-1022-azure-aarch64-with-glibc2.39",
+      "image_os": "ubuntu24-arm64",
+      "runner_os": "Linux",
+      "runner_arch": "ARM64",
+      "logical_cpus": 4,
+      "packages": [
+        [
+          "pip",
+          "26.2.2"
+        ]
+      ],
+      "tls": {
+        "openssl": "OpenSSL 3.0.13 30 Jan 2024",
+        "ca_bundle_sha256": "ecd9dc38bc3efb7dbd6431f57e29d2f8d6a0f0d211e1464b3fef2cbfe266fcd2",
+        "ca_certificates_sha256": "0b370c9c2cb14a0ff30684fe4a634319f47a0a117dc413eb399e01c0bf3a19b4",
+        "ca_certificate_count": 121
+      }
+    },
+    "desktop-menus-2": {
+      "python": "3.14.9 (tags/v3.14.9:ead82c0, Oct 21 2026, 06:26:14) [MSC v.1944 64 bit (AMD64)]",
+      "platform": "Windows-2025Server-10.0.26100-SP0",
+      "image_os": "win25-vs2026",
+      "runner_os": "Windows",
+      "runner_arch": "X64",
+      "logical_cpus": 4,
+      "packages": [
+        [
+          "pip",
+          "26.2.2"
+        ]
+      ],
+      "tls": {
+        "openssl": "OpenSSL 3.5.9 29 Sep 2026",
+        "ca_bundle_sha256": null,
+        "ca_certificates_sha256": "c7c5679fb40a54df334af691f86274970aecb26745706eaac7181a29794157c4",
+        "ca_certificate_count": 417
+      }
+    }
+  },
+  "common_native_compilers": {
+    "Desktop menu (linux/x86_64)": [
+      "rustc 1.90.0 (1159e78c4 2025-09-14)",
+      "rustc 1.90.0 (1159e78c4 2025-09-14)",
+      "cargo 1.90.0 (840b83a10 2025-07-30)"
+    ],
+    "Desktop menu (darwin/arm64)": [
+      "Apple Swift version 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)"
+    ],
+    "Desktop menu (windows/x86_64)": [
+      "{\"compiler\": \"Framework64/csc.exe\", \"version\": \"4.8.9221.0 built by: NET481REL1LAST_25H2\", \"sha256\": \"46809206887326d2d24db1eff1f3064de972c3451abe766b49111450a5e08e00\"}"
+    ],
+    "Desktop menu (darwin/x86_64)": [
+      "Apple Swift version 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)"
+    ],
+    "Desktop menu (linux/arm64)": [
+      "rustc 1.90.0 (1159e78c4 2025-09-14)",
+      "rustc 1.90.0 (1159e78c4 2025-09-14)",
+      "cargo 1.90.0 (840b83a10 2025-07-30)"
+    ]
+  },
+  "common_native_test_results": {
+    "Desktop menu (linux/x86_64)": [
+      [
+        "tests::detects_actual_host_loss_and_recovers_registration",
+        "ok"
+      ]
+    ],
+    "Desktop menu (darwin/arm64)": [],
+    "Desktop menu (windows/x86_64)": [],
+    "Desktop menu (darwin/x86_64)": [],
+    "Desktop menu (linux/arm64)": [
+      [
+        "tests::detects_actual_host_loss_and_recovers_registration",
+        "ok"
+      ]
+    ]
+  },
+  "unit_and_other_job_medians": {
+    "control": {
+      "unit_step_seconds": 510.0,
+      "unit_job_seconds": 523.0,
+      "other_jobs_seconds": 1046.0
+    },
+    "candidate": {
+      "unit_step_seconds": 305.0,
+      "unit_job_seconds": 323.0,
+      "other_jobs_seconds": 1125.0
+    }
+  }
+}

@@ -1,0 +1,262 @@
+"""Answer refused ChatGPT helper turns from the external twin row.
+
+Codex desktop generates thread titles, descriptions, summaries and title
+reconsiderations in their own helper threads pinned to the subscription
+slug (currently the legacy `gpt-5.6-luna` id). Those turns carry
+`x-codex-turn-metadata: {"thread_source": "thread_title", ...}`; ordinary
+user turns carry no such source. When the ChatGPT allowance is exhausted,
+upstream answers 429 for every helper turn and the client stores a slice
+of the prompt as the title instead.
+
+Client 0.154 attaches the read-only app tool allowlist it derives from the
+installed apps and MCP servers to those helper turns, so a helper turn can
+carry tools. Tools do not disqualify a turn here: the twin is prepared from
+the client's own payload, tools included, the same way a directly requested
+external row is.
+
+The router answers those helper turns from the registry's external
+twin row (`openai/<slug>`), or the Luna twin when the requesting slug has
+no twin of its own, and relays that response. Ordinary turns keep today's
+refusal. The fallback requires `openai_helper_fallback: true`: it bills that
+provider's key and sends the helper prompt to it only after explicit opt-in.
+"""
+from . import (attempt_policy, codex_helpers, codex_route, errors, provider_defs, request_context,
+               subscription_roster, usage_episodes, wire_shape)
+from .image_items import has_images
+from .providers import ExternalResponsesProvider
+from .events import log_event
+
+HELPER_SOURCES = codex_helpers.HELPER_SOURCES
+MAX_METADATA_BYTES = codex_helpers.MAX_METADATA_BYTES
+TWIN_PREFIX = subscription_roster.TWIN_PREFIX
+LUNA_TWIN = codex_helpers.LUNA_TWIN
+helper_turn = codex_helpers.helper_turn
+
+
+def _twin_entry(rows, slug):
+    """External Responses twin entry for `slug`, else None."""
+    entry = rows.get(slug)
+    if entry is None or not provider_defs.is_external(entry.provider):
+        return None
+    defn = provider_defs.get(entry.provider)
+    return entry if defn.serves(provider_defs.RESPONSES) else None
+
+
+def twin_slug(model, catalogue=None):
+    """Registry slug of the external twin for a subscription slug, else None.
+
+    The same-model twin wins; the Luna twin answers slugs without one.
+    `catalogue` is the request's captured generation; None reads the live one."""
+    if not isinstance(model, str):
+        return None
+    successor = subscription_roster.SUCCESSORS.get(model, model)
+    rows = request_context.capture() if catalogue is None else catalogue
+    entry = (_twin_entry(rows, TWIN_PREFIX + successor)
+             or _twin_entry(rows, LUNA_TWIN))
+    return entry.slug if entry is not None else None
+
+
+class Plan:
+    """External twin prepared lazily, only once upstream actually refuses.
+
+    `target` is the refused request's own context retargeted to the twin
+    row: same request id, same registry generation, whatever a refresh
+    swapped in between the plan and the refusal."""
+
+    __slots__ = ('target', 'path', 'payload', 'raw_body', 'headers', 'credentials',
+                 'region')
+
+    def __init__(self, target, path, payload, raw_body, headers, credentials,
+                 region='global'):
+        self.target, self.path, self.payload = target, path, payload
+        self.raw_body, self.headers = raw_body, headers
+        self.credentials = credentials
+        self.region = region
+
+    def prepared(self):
+        """Prepared request for the twin row; raises exactly as prepare() does."""
+        target = self.target
+        payload = dict(self.payload, model=target.slug)
+        defn = provider_defs.get(target.row.provider)
+        return ExternalResponsesProvider(defn, self.region).prepare(
+            target.slug, self.path, payload, self.raw_body, self.headers,
+            self.credentials, context=target)
+
+
+def working_twin(state, context):
+    """The request's twin slug when this machine may route it, else None."""
+    slug = twin_slug(context.slug, context.catalogue)
+    # Plan 068: the twin is an external row, so the portco allowlist gates
+    # it exactly as it gates a directly requested external row.
+    allowed = state.get('allowed_models')
+    if slug is None or (allowed is not None and slug not in allowed):
+        return None
+    # Key-filtered availability gates the twin like a direct request: the
+    # fallback builds its adapter outright, so the owns() gate never runs.
+    from . import availability as _availability
+    return slug if _availability.permitted(slug) else None
+
+
+def plan(state, prepared, path, payload, raw_body, headers, credentials):
+    """Fallback plan for this turn, or None when it is not eligible.
+
+    Only Responses turns the subscription owns that a helper thread source
+    marks qualify; tools do not disqualify one.
+    """
+    if state.get('openai_helper_fallback') is not True or path != '/responses':
+        return None
+    if prepared.provider != provider_defs.OPENAI.id:
+        return None
+    if not helper_turn(headers):
+        return None
+    context = prepared.context or request_context.resolve(
+        payload.get('model'), request_context.capture())  # a direct call
+    slug = working_twin(state, context)
+    if slug is None:
+        return None
+    region = state.get('openrouter_region', 'global')
+    if not provider_defs.valid_region(region):
+        region = 'global'
+    return Plan(request_context.retarget(context, slug), path, payload, raw_body,
+                headers, credentials, region)
+
+
+def prepare(provider, model, path, payload, raw_body, headers, server, decoded_len=None,
+            context=None):
+    """provider.prepare plus the refused-turn fallback plan when eligible.
+
+    Only Responses adapters own these two paths, so every prepared Responses
+    body also passes the observe-only contract check. A ChatGPT request on
+    the switched Codex route is answered before anything is prepared.
+    """
+    if provider.name == provider_defs.OPENAI.id and codex_route.switched(headers):
+        codex_route.refuse(path, payload, context, working_twin(server.state, context))
+    prepared = provider.prepare(model, path, payload, raw_body, headers,
+                                server.credentials, decoded_len=decoded_len,
+                                context=context)
+    if path in ('/responses', '/responses/compact'):
+        _observe_contract(provider, prepared, model, path, payload, raw_body)
+    prepared.fallback = plan(server.state, prepared, path, payload, raw_body, headers,
+                             server.credentials)
+    return prepared
+
+
+def _observe_contract(provider, prepared, model, path, payload, raw_body):
+    """One `wire_contract` line of rule names and counts when a rule fires.
+
+    The body goes upstream unchanged whatever this finds. A passthrough body
+    is the client's payload, already parsed; only a rewritten one is parsed
+    again. A fault in the check is logged by its type and never fails a turn.
+    """
+    try:
+        wire = (payload if prepared.body is raw_body
+                else wire_shape.decode_wire(prepared.body))
+        row = getattr(prepared.context, 'row', None)
+        found = wire_shape.violations(provider.defn.dialect, wire,
+                                      getattr(row, 'observed_item_types', ()))
+    except Exception as exc:  # noqa: BLE001 - observation must never fail a turn
+        found = {'error_type': type(exc).__name__}
+    if any(found.values()):
+        log_event('wire_contract', provider=prepared.provider, model=model, path=path,
+                  **found)
+
+
+def refusal_message(prepared, metrics):
+    """Answer text for a refused turn: whose limit it is, and what to do.
+
+    Fixed wording from the provider's own definition, never upstream prose.
+    An external route names no subscription, so it keeps the neutral text.
+    """
+    defn = provider_defs.get(prepared.provider)
+    label = None if defn is None else defn.subscription_label
+    if label is None:
+        # An external route has no subscription to name: the catalogue's
+        # neutral rate-limit case owns that wording.
+        return errors.upstream_rate_limited().message
+    model = metrics.get('model')
+    model = model if isinstance(model, str) and model else 'This model'
+    return (f'{model} is rate limited on your {label}; the turn was not served. '
+            'Retry shortly, or select a routed model instead.')
+
+
+def _answer_refusal(handler, ledger, refusal, retry_after):
+    """Commit the refusal only after the client writer reports delivery."""
+    sent = handler.error(refusal, retry_after)
+    if sent is True or getattr(handler, 'response_committed', False):
+        ledger.mark_committed()
+    attempt_policy.settle_delivery(ledger, handler)
+
+
+def auth_refusal_message(prepared, metrics):
+    """Answer text for an auth-refused turn: whose login failed, and what to do.
+
+    Fixed wording from the provider's own definition, never upstream prose.
+    Used only when a helper turn's twin cannot be prepared; ordinary turns
+    keep the raw upstream answer so a sign-in problem stays visible.
+    """
+    defn = provider_defs.get(prepared.provider)
+    label = None if defn is None else defn.subscription_label
+    if label is None:
+        return errors.upstream_rate_limited().message
+    model = metrics.get('model')
+    model = model if isinstance(model, str) and model else 'This model'
+    return (f'{model} could not be authorised on your {label}; the turn was not served. '
+            'Sign in again shortly, or select a routed model instead.')
+
+
+def refused(handler, prepared, retry_after, metrics, started, admit=None, *, ledger,
+            body=None, auth=False):
+    """Answer a refused turn, else name the planned twin route that answers it.
+
+    Returns the twin's `attempt_policy.Route` once `ledger` has moved to it,
+    else None after sending the retryable 503. The ledger allows one route
+    change per request, so a twin can never fall back again. `admit` sizes the
+    twin with the refused body still held, before its send. `body` is the
+    429's own error body, read only for the usage-limit record. `auth` answers
+    the no-twin cases with the sign-in wording instead of the rate-limit wording.
+    """
+    usage_episodes.record(handler, prepared, body)
+    message = (auth_refusal_message(prepared, metrics) if auth
+               else refusal_message(prepared, metrics))
+    refusal = errors.upstream_rate_limited(message)
+    fallback = prepared.fallback
+    if fallback is None or not ledger.permits(attempt_policy.HELPER_FALLBACK):
+        ledger.decide(attempt_policy.HELPER_FALLBACK,
+                      'no_plan' if fallback is None else 'budget')
+        _answer_refusal(handler, ledger, refusal, retry_after)
+        return None
+    try:
+        twin = fallback.prepared()
+        if admit is not None:
+            admit(twin, prepared)
+    except (LookupError, ValueError, PermissionError, OSError, errors.OversizeBusy) as exc:
+        # Preserve the upstream refusal unless shutdown cancelled admission.
+        if isinstance(exc, errors.OversizeBusy) and exc.error.code == 'SERVER_DRAINING': raise
+        log_event('subscription_fallback_unavailable', model=metrics.get('model'),
+                  fallback_model=fallback.target.slug, reason=type(exc).__name__)
+        ledger.decide(attempt_policy.HELPER_FALLBACK, 'unavailable')
+        _answer_refusal(handler, ledger, refusal, retry_after)
+        return None
+    ledger.decide(attempt_policy.HELPER_FALLBACK)
+    log_event('subscription_fallback', model=metrics.get('model'),
+              fallback_model=fallback.target.slug, path=fallback.path)
+    fields = ('request_bytes', 'stream', 'reasoning_effort', 'tool_definitions',
+              'read_ms', 'prepare_ms', 'local_prepare_ms')
+    # Fresh metrics: attempt one's upstream timings belong to the 429.
+    # Protocol here is diagnostic; the ledger owns the route's wire facts.
+    # The twin's context is the refused request's, so its final record
+    # carries the same request id.
+    defn = provider_defs.get(twin.context.row.provider)
+    twin_metrics = {k: metrics[k] for k in fields if k in metrics}
+    twin_metrics.update(request_id=twin.context.request_id, provider=defn.id,
+                        model=twin.context.slug,
+                        path=fallback.path, helper_fallback=True,
+                        protocol=provider_defs.RESPONSES,
+                        # The twin's own cap, from its freshly prepared body.
+                        max_output_tokens=twin.output_cap)
+    # The request's in-flight slot and large-request lease still cover this
+    # hand-off; the twin route neither takes nor releases one of its own.
+    twin_provider = ExternalResponsesProvider(defn, fallback.region)
+    ledger.transition(twin_provider, provider_defs.RESPONSES, model=twin.context.slug)
+    return attempt_policy.Route(twin_provider, twin, twin_metrics,
+                                has_images(fallback.payload.get('input')))

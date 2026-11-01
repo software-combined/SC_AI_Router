@@ -1,0 +1,341 @@
+"""End-to-end coverage for the shared hook adapter's receipt gate.
+
+The gate, approve and status paths run on every platform; the harness isolates
+both HOME and USERPROFILE. Two scanner tests use a /bin/sh stub and stay
+POSIX-only; the portability module covers scanner contracts on both platforms.
+"""
+from __future__ import annotations
+
+import hashlib
+from contextlib import chdir
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+from types import SimpleNamespace
+from unittest import mock
+
+from test_gitleaks_pin_portability import load_helper_module
+
+
+HELPER = Path(__file__).resolve().parents[1] / "lib" / "scg_agent_git_hooks.py"
+LANE_ARGS = [
+    "--pass",
+    "correctness=model-c",
+    "--pass",
+    "quality=model-q",
+    "--pass",
+    "adversarial=model-a",
+    "--pass",
+    "security=model-s",
+]
+
+
+class ReviewGateTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.home = Path(self.temp.name) / "home"
+        self.repo = Path(self.temp.name) / "repo"
+        config_dir = self.home / ".config" / "scg-agent-git-hooks"
+        config_dir.mkdir(parents=True)
+        (config_dir / "config.json").write_text(
+            json.dumps(
+                {
+                    "review_state_ttl_seconds": 86400,
+                    "required_lanes": ["correctness", "quality", "adversarial", "security"],
+                }
+            )
+        )
+        self.repo.mkdir()
+        self.git("init", "-b", "main")
+        self.git("config", "user.name", "Test User")
+        self.git("config", "user.email", "test@example.invalid")
+        (self.repo / "file.txt").write_text("one\n")
+        self.git("add", "file.txt")
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    @property
+    def env(self) -> dict[str, str]:
+        # Path.home() reads USERPROFILE on Windows and HOME elsewhere.
+        return {**os.environ, "HOME": str(self.home), "USERPROFILE": str(self.home)}
+
+    def git(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", *args],
+            cwd=self.repo,
+            env=self.env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+
+    def helper(self, *args: str, env_extra: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(HELPER), *args],
+            cwd=self.repo,
+            env={**self.env, **(env_extra or {})},
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+
+    def tree(self) -> str:
+        return self.git("write-tree").stdout.strip()
+
+    def state_dir(self) -> Path:
+        repo_root = self.git("rev-parse", "--show-toplevel").stdout.strip()
+        repo_id = hashlib.sha256(repo_root.encode()).hexdigest()
+        return self.home / ".cache" / "scg-agent-git-hooks" / "reviews" / repo_id
+
+    def approve(self) -> subprocess.CompletedProcess[str]:
+        return self.helper("approve", "--decision", "ALL_CLEAR", *LANE_ARGS)
+
+    def test_pass_parsing_rejects_missing_duplicate_unknown_and_empty_models(self) -> None:
+        cases = [
+            (["--pass", "correctness=m", "--pass", "quality=m"], "Missing --pass"),
+            (
+                [*LANE_ARGS, "--pass", "correctness=other"],
+                "Duplicate --pass",
+            ),
+            (
+                [*LANE_ARGS, "--pass", "unknown=m"],
+                "Unknown review lane",
+            ),
+            (
+                [
+                    "--pass",
+                    "correctness=",
+                    "--pass",
+                    "quality=m",
+                    "--pass",
+                    "adversarial=m",
+                ],
+                "both be non-empty",
+            ),
+        ]
+        for args, expected in cases:
+            with self.subTest(expected=expected):
+                result = self.helper("approve", *args)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(expected, result.stderr)
+
+    def test_neutral_state_creation_records_chosen_models(self) -> None:
+        result = self.helper(
+            "approve",
+            "--decision",
+            "PROCEED_WITH_NOTES",
+            "--runner",
+            "local-cli",
+            "--agent",
+            "main-agent",
+            *LANE_ARGS,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        path = self.state_dir() / f"{self.tree()}.unborn.review.json"
+        self.assertTrue(path.exists())
+        state = json.loads(path.read_text())
+        self.assertEqual(state["version"], 3)
+        self.assertIsNone(state["base_commit"])
+        self.assertNotIn("surface", state)
+        self.assertEqual(
+            state["passes"],
+            {
+                "correctness": "model-c",
+                "quality": "model-q",
+                "adversarial": "model-a",
+                "security": "model-s",
+            },
+        )
+        self.assertEqual(state["runner"], "local-cli")
+        self.assertEqual(state["agent"], "main-agent")
+
+    def test_models_reads_local_choices_and_refuses_missing_or_invalid_preferences(self) -> None:
+        self.assertNotEqual(self.helper("models", "--client", "codex").returncode, 0)
+        path = self.home / ".config/scg-agent-git-hooks/config.json"
+        config = json.loads(path.read_text())
+        choices = {role: ["local/custom-model@unavailable", "vendor/other-model@high"]
+                   for role in ("simplification", "correctness", "quality", "adversarial", "security")}
+        other = {role: ["another-provider/reviewer@high"] for role in choices}
+        config["review_models"] = {"codex": choices, "claude-code": other}
+        path.write_text(json.dumps(config))
+        result = self.helper("models", "--client", "codex")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), choices)
+        self.assertEqual(json.loads(self.helper("models", "--client", "claude-code").stdout), other)
+        self.assertNotEqual(self.helper("models", "--client", "unconfigured").returncode, 0)
+        for invalid in ({}, {key: value for key, value in choices.items() if key != 'security'},
+                        {**choices, "extra": ["model@high"]},
+                        *({**choices, "quality": value} for value in
+                          ([], "model@high", [None], ["model"], ["model@"], ["model@high ::x"]))):
+            with self.subTest(invalid=invalid):
+                config["review_models"]["codex"] = invalid
+                path.write_text(json.dumps(config))
+                self.assertNotEqual(self.helper("models", "--client", "codex").returncode, 0)
+        self.assertEqual(json.loads(self.helper("models", "--client", "claude-code").stdout), other)
+
+    def test_old_surface_state_does_not_satisfy_gate(self) -> None:
+        root = self.state_dir()
+        root.mkdir(parents=True)
+        legacy = root / f"{self.tree()}.codex.json"
+        legacy.write_text(json.dumps({"version": 1, "approved": True}))
+        result = self.helper("pre-commit")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("SCG pre-commit hook blocked", result.stderr)
+
+    def test_three_lane_receipt_and_missing_security_pass_are_refused(self) -> None:
+        result = self.helper('approve', '--decision', 'ALL_CLEAR', *LANE_ARGS[:-2])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('security', result.stderr)
+        self.assertEqual(self.approve().returncode, 0)
+        path = self.state_dir() / f'{self.tree()}.unborn.review.json'
+        state = json.loads(path.read_text())
+        del state['passes']['security']
+        path.write_text(json.dumps(state))
+        result = self.helper('pre-commit')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('recorded review lanes do not match required lanes', result.stderr)
+
+    def test_staged_tree_change_rejects_previous_approval(self) -> None:
+        self.assertEqual(self.approve().returncode, 0)
+        (self.repo / "file.txt").write_text("two\n")
+        self.git("add", "file.txt")
+        result = self.helper("pre-commit")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("SCG pre-commit hook blocked", result.stderr)
+
+    def test_expired_state_is_rejected(self) -> None:
+        self.assertEqual(self.approve().returncode, 0)
+        path = self.state_dir() / f"{self.tree()}.unborn.review.json"
+        state = json.loads(path.read_text())
+        state["created_at_epoch"] = int(time.time()) - 86401
+        path.write_text(json.dumps(state))
+        result = self.helper("pre-commit")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("review state expired", result.stderr)
+
+    def test_pre_commit_accepts_valid_neutral_state(self) -> None:
+        approval = self.approve()
+        self.assertEqual(approval.returncode, 0, approval.stderr)
+        result = self.helper("pre-commit")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_windows_chaining_preserves_python_hook_and_rejection(self) -> None:
+        marker = self.home / "chained-hook.json"
+        hook = self.repo / ".git" / "hooks" / "pre-commit"
+        hook.write_text(
+            f"#!{Path(sys.executable).as_posix()}\n"
+            "import json, os, pathlib, sys\n"
+            f"pathlib.Path({str(marker)!r}).write_text(json.dumps("
+            "[sys.argv[1], os.environ.get('SCG_AGENT_GIT_HOOK_CHAINED')]))\n"
+            "sys.exit(7 if sys.argv[1] == 'reject' else 0)\n",
+            encoding="utf-8")
+        hook.chmod(0o755)
+        module = load_helper_module()
+        # Select the Windows adapter branch without changing pathlib's host OS.
+        windows_os = SimpleNamespace(name="nt", environ=self.env,
+                                     access=os.access, X_OK=os.X_OK)
+        with chdir(self.repo), mock.patch.object(module, "os", windows_os):
+            for argument in ("accepted value", "reject"):
+                with self.subTest(argument=argument):
+                    result = module.chain_local_hook("pre-commit", [argument])
+                    if argument == "reject":
+                        self.assertNotEqual(result, 0)
+                    else:
+                        self.assertEqual(result, 0)
+                    self.assertEqual(json.loads(marker.read_text()), [argument, "1"])
+
+    def write_fake_scanner(self, version: str = "9.9.9", exit_code: int = 0) -> Path:
+        scanner = self.home / "bin" / "fake-gitleaks"
+        scanner.parent.mkdir(parents=True, exist_ok=True)
+        scanner.write_text(
+            "#!/bin/sh\n"
+            f'if [ "$1" = "version" ]; then echo "{version}"; exit 0; fi\n'
+            'echo "fake scan $*"\n'
+            f"exit {exit_code}\n"
+        )
+        scanner.chmod(0o755)
+        return scanner
+
+    def pin_scanner(self, scanner: Path, *, version: str = "9.9.9", sha256: str | None = None) -> None:
+        config_path = self.home / ".config" / "scg-agent-git-hooks" / "config.json"
+        config = json.loads(config_path.read_text())
+        config["gitleaks"] = {
+            "binary": str(scanner),
+            "version": version,
+            "sha256": sha256 or hashlib.sha256(scanner.read_bytes()).hexdigest(),
+            "timeout_seconds": 10,
+        }
+        config_path.write_text(json.dumps(config))
+
+    @unittest.skipIf(os.name == "nt", "drives a /bin/sh scanner stub")
+    def test_scan_passes_with_pinned_clean_scanner(self) -> None:
+        scanner = self.write_fake_scanner()
+        self.pin_scanner(scanner)
+        result = self.helper("scan")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("SCG secret scan passed", result.stdout)
+        self.assertIn(self.tree(), result.stdout)
+
+    def test_scan_blocks_without_pin(self) -> None:
+        result = self.helper("scan")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must define a gitleaks pin", result.stderr)
+
+    @unittest.skipIf(os.name == "nt", "drives a /bin/sh scanner stub")
+    def test_scan_blocks_on_drift_external_config_and_leaks(self) -> None:
+        scanner = self.write_fake_scanner()
+        self.pin_scanner(scanner)
+        good_sha = hashlib.sha256(scanner.read_bytes()).hexdigest()
+
+        with self.subTest("sha mismatch"):
+            self.pin_scanner(scanner, sha256="0" * 64)
+            result = self.helper("scan")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("does not match the pinned", result.stderr)
+            self.pin_scanner(scanner, sha256=good_sha)
+
+        with self.subTest("version mismatch"):
+            self.pin_scanner(scanner, version="1.0.0", sha256=good_sha)
+            result = self.helper("scan")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("reports version", result.stderr)
+            self.pin_scanner(scanner, sha256=good_sha)
+
+        with self.subTest("env config"):
+            result = self.helper("scan", env_extra={"GITLEAKS_CONFIG": "/tmp/x.toml"})
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("GITLEAKS_CONFIG is set", result.stderr)
+
+        with self.subTest("repo config file"):
+            (self.repo / ".gitleaks.toml").write_text("[allowlist]\n")
+            result = self.helper("scan")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("repository supplies .gitleaks.toml", result.stderr)
+            (self.repo / ".gitleaks.toml").unlink()
+
+        with self.subTest("missing binary"):
+            self.pin_scanner(scanner, sha256=good_sha)
+            scanner.rename(scanner.with_name("moved"))
+            result = self.helper("scan")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing or not executable", result.stderr)
+            scanner.with_name("moved").rename(scanner)
+
+        with self.subTest("leak exit code"):
+            leaky = self.write_fake_scanner(exit_code=1)
+            self.pin_scanner(leaky)
+            result = self.helper("scan")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("found leaks or failed", result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()

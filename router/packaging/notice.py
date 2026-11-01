@@ -1,0 +1,494 @@
+"""Best-effort desktop notice after a healthy update (Python 3.9+).
+
+The picker loads at client startup, so the dialog offers Quit and reopen.
+It uses the macOS bundle, Windows Store identity or installed Linux app.
+Later is always available. Linux offers restart only for an installed app.
+Remember the spawned dialog PID so later notices join it rather than stack.
+A dialog that exits immediately, such as without a display, leaves the notice
+pending for a later graphical session. Failures never block or fail an update.
+"""
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+import importlib.util as _ilu
+
+
+def _load(name):
+    spec = _ilu.spec_from_file_location('router_notice_' + name,
+        Path(__file__).resolve().with_name(name + '.py'))
+    module = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_atomic_write, _text, _native = (_load(name) for name in ('atomic_write', 'notice_text', 'windows_native'))
+# Kept as a module name: the wording is pinned here by callers and tests.
+_message = _text.message
+dialog_names = _text.dialog_names  # the updater lists models the same way
+
+NOTICE_FILE = 'update-notice.json'
+CATALOGUE_FILE = 'mixed-models.json'
+PICKER_BASELINE_FILE = 'picker-baseline.json'
+TITLE = 'SCG Router'
+DISMISS = 'Later'
+REOPEN = 'Quit and reopen'
+OK = 'OK'
+CODEX_BUNDLE_ID = 'com.openai.codex'
+WINDOWS_PACKAGE = 'OpenAI.Codex'
+LINUX_APP = 'chatgpt'
+PROBE_TIMEOUT = 5
+# A dialog that cannot render exits within this grace (zenity without a
+# display, osascript without a GUI).
+# Long enough to catch that, short enough not to hold the updater.
+PROBE_GRACE_S = 1.0
+ICON = Path(__file__).resolve().parent / 'assets' / 'router-icon.png'
+ICON_NAME = 'router-icon.png'
+
+def _utcnow():
+    return datetime.now(timezone.utc).isoformat(timespec='seconds')
+
+
+def _home_icon(home):
+    """A copy of the bundled icon that outlives this process, or None.
+
+    The scheduled updater runs the installer from a temporary extraction
+    that is gone by the time the user clicks the dialog, and a dialog whose
+    icon file has vanished never appears at all. The router home persists,
+    so the dialog points there; when the copy fails the caller draws no
+    icon rather than a path that may disappear.
+    """
+    try:
+        target = Path(home) / ICON_NAME
+        target.write_bytes(ICON.read_bytes())
+        return str(target)
+    except OSError:
+        return None
+
+
+def _dialog_pid(doc):
+    """The pid of the dialog we spawned, when it is a sane positive int."""
+    if isinstance(doc, dict):
+        pid = doc.get('pid')
+        if isinstance(pid, int) and not isinstance(pid, bool) and pid > 0:
+            return pid
+    return None
+
+
+def _pid_alive(pid):
+    """True only for a live process that is one of our dialogs.
+
+    A recycled pid must never stand in for an open dialog, so the process
+    command line has to carry the dialog title. False when unsure: the
+    worst case is a second dialog, never a silently dropped notice. The
+    probe is bounded: the scheduled updater waits on this process, so a
+    wedged WMI or `ps` must not park a healthy install.
+    """
+    pid = _dialog_pid({'pid': pid})
+    if pid is None:
+        return False
+    try:
+        if sys.platform == 'win32':
+            query = ('(Get-CimInstance Win32_Process -Filter "ProcessId=%d")'
+                     '.CommandLine' % pid)
+            out = subprocess.run(['powershell', '-NoProfile', '-Command',
+                                  query], stdout=subprocess.PIPE,
+                                 stderr=subprocess.DEVNULL, text=True,
+                                 timeout=PROBE_TIMEOUT, creationflags=0x08000000)
+        else:
+            out = subprocess.run(['ps', '-p', str(pid), '-o', 'command='],
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.DEVNULL, text=True,
+                                 timeout=PROBE_TIMEOUT)
+        return TITLE in (out.stdout or '')
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return False
+
+
+def _picker_slugs(blob):
+    """Picker slugs in a merged-catalogue blob, or None when unusable."""
+    if not blob:
+        return None
+    try:
+        doc = json.loads(blob)
+        rows = doc.get('models') if isinstance(doc, dict) else None
+        if not isinstance(rows, list):
+            return None
+        return {str(row['slug']) for row in rows
+                if isinstance(row, dict) and row.get('slug')}
+    except (TypeError, ValueError):
+        return None
+
+
+def _read_blob(path):
+    try:
+        return Path(path).read_bytes()
+    except OSError:
+        return None
+
+
+def _picker_baseline(home):
+    """Slugs left by the last install that reached the notice, or None."""
+    try:
+        doc = json.loads((Path(home) / PICKER_BASELINE_FILE).read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(doc, list):
+        return None
+    return {str(slug) for slug in doc if isinstance(slug, str)}
+
+
+def _remember_picker(home, slugs):
+    """Record the picker this install leaves behind; best effort."""
+    if slugs is None:
+        return
+    try:
+        _atomic_write.replace_json(Path(home) / PICKER_BASELINE_FILE, sorted(slugs))
+    except OSError:
+        pass
+
+
+def record(home, previous, version, clients=None, names=None):
+    """Stage added models once, retaining pending notices across failed installs.
+
+    Compare the persisted picker baseline, not a possibly half-updated file.
+    Explicit names also stage same-version additions. Fresh installs stay quiet.
+    Preserve an existing dialog pid and the recorded client set.
+    """
+    try:
+        path = Path(home) / NOTICE_FILE
+        try:
+            existing = json.loads(path.read_text())
+        except (OSError, ValueError):
+            existing = None
+        picker = _picker_slugs(_read_blob(Path(home) / CATALOGUE_FILE))
+        baseline = _picker_baseline(home)
+        added = None if picker is None or baseline is None else picker - baseline
+        named = names is not None
+        if named:
+            names = [name for name in names if isinstance(name, str) and name]
+            if not names:
+                return False
+        if not previous or (previous == version and not named):
+            # Fresh installs and reinstalls prompt nothing; record what they
+            # leave behind so the next version compares against it.
+            if not added:
+                _remember_picker(home, picker)
+            return False
+        if isinstance(existing, dict) and existing.get('version') == version \
+                and existing.get('shown') \
+                and (not named or existing.get('names') == names):
+            _remember_picker(home, picker)
+            return False
+        pending = isinstance(existing, dict) and not existing.get('shown')
+        if pending and existing.get('version') == version \
+                and named and existing.get('names') == names:
+            return False
+        if not pending and not named and added is not None and not added:
+            _remember_picker(home, picker)
+            return False
+        if not clients:
+            # A scheduled update passes no --clients; the install recorded
+            # the attachment set in the router state.
+            try:
+                state = json.loads((Path(home) / 'mixed-router-state.json').read_text())
+                clients = state.get('clients')
+            except (OSError, ValueError, AttributeError):
+                clients = None
+        doc = {'version': version, 'at': _utcnow(),
+               'clients': _text.clients(clients) if clients
+               else (existing if isinstance(existing, dict) else {}).get('clients', 'codex')}
+        pid = _dialog_pid(existing)
+        if pid:
+            doc['pid'] = pid
+        if named:
+            doc['names'] = names
+        if isinstance(existing, dict) and existing.get('attachment'):
+            doc['attachment'] = existing['attachment']
+        _atomic_write.replace_json(path, doc)
+        # Only a staged notice marks rows as announced; a write that failed
+        # leaves the baseline alone so the next install retries.
+        _remember_picker(home, picker)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def record_attachment(home, version, event):
+    """One restart offer per verified attachment repair, even without new models."""
+    try:
+        path = Path(home) / NOTICE_FILE
+        try:
+            doc = json.loads(path.read_text())
+        except (OSError, ValueError):
+            doc = {}
+        doc = doc if isinstance(doc, dict) else {}
+        if doc.get('attachment') == event:
+            return False
+        doc.update(version=version, attachment=event, clients='codex', at=_utcnow())
+        doc.pop('shown', None)
+        _atomic_write.replace_json(path, doc)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def _darwin_script(message, icon, restart=True):
+    """AppleScript for the dialog, restarting Codex when asked.
+
+    The restart is the last thing the script does, so a failure to quit or
+    relaunch can never take the dialog down with it. Strings stay raw
+    UTF-8: AppleScript has no unicode escape, and the default json.dumps
+    escaping would emit one for any accented path. A Claude-only install has
+    no Codex app to reopen, so it gets the plain OK dialog.
+    """
+    quote = lambda text: json.dumps(text, ensure_ascii=False)  # noqa: E731
+    icon_clause = (' with icon (POSIX file %s)' % quote(icon)
+                   if icon else ' with icon note')
+    if not restart:
+        return ('display dialog %s buttons {"%s"} default button "%s" '
+                'with title "%s"%s'
+                % (quote(message), OK, OK, TITLE, icon_clause))
+    return '\n'.join([
+        'set answer to button returned of (display dialog %s with title "%s" '
+        'buttons {"%s", "%s"} default button "%s" cancel button "%s"%s)'
+        % (quote(message), TITLE, DISMISS, REOPEN, REOPEN, DISMISS,
+           icon_clause),
+        'if answer is "%s" then' % REOPEN,
+        '  try',
+        '    tell application id "%s" to quit' % CODEX_BUNDLE_ID,
+        '    repeat 25 times',
+        '      if application id "%s" is not running then exit repeat' % CODEX_BUNDLE_ID,
+        '      delay 0.2',
+        '    end repeat',
+        '  end try',
+        '  do shell script "open -b %s"' % CODEX_BUNDLE_ID,
+        'end if',
+    ])
+
+
+def _windows_restart():
+    """PowerShell that closes the Codex Store app and starts it again.
+
+    The app is an MSIX package, so it is started through its package
+    family identity rather than an executable path; `Get-StartApps` is the
+    documented fallback for the launch identity. The quit is scoped to
+    processes running out of that package: a host with only the Codex CLI
+    must not lose it, and without a resolved identity nothing is quit.
+    Everything is guarded: when the app cannot be found the dialog merely
+    closes.
+    """
+    return (
+        "try { "
+        "$pkg = Get-AppxPackage -Name '%s' -ErrorAction SilentlyContinue; "
+        "$aumid = $null; "
+        "if ($pkg) { "
+        "$entry = (Get-AppxPackageManifest $pkg).Package.Applications.Application "
+        "| Select-Object -First 1; "
+        "if ($entry) { $aumid = $pkg.PackageFamilyName + '!' + $entry.Id } }; "
+        "if (-not $aumid) { "
+        "$start = Get-StartApps | "
+        "Where-Object { $_.Name -match '^(Codex|ChatGPT)' } | Select-Object -First 1; "
+        "if ($start) { $aumid = $start.AppID } }; "
+        "if ($pkg) { "
+        "$root = $pkg.InstallLocation; "
+        "$procs = @(Get-Process -ErrorAction SilentlyContinue | "
+        "Where-Object { $_.Path -and $_.Path.StartsWith($root, 'OrdinalIgnoreCase') }); "
+        "foreach ($p in $procs) { try { [void]$p.CloseMainWindow() } catch { } }; "
+        "Start-Sleep -Seconds 3; "
+        "foreach ($p in $procs) { "
+        "try { if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force } } catch { } }; "
+        "if ($aumid) { Start-Process ('%s' + $aumid) } } "
+        "} catch { }" % (WINDOWS_PACKAGE, _native.APPS_FOLDER))
+
+
+def _linux_command(message, icon=None, app=None, restart=True):
+    """argv for the Linux dialog, quitting and relaunching the app.
+
+    zenity reports the choice through its exit status, so the restart runs
+    in the same detached shell the dialog is spawned from: the installer
+    still never waits for the user. The dialog argv travels as positional
+    parameters so no path or message is ever re-parsed by the shell.
+    Without the desktop app installed the dialog is informational, exactly
+    as before.
+    """
+    dialog = ['zenity', '--question' if app and restart else '--info',
+              '--title=' + TITLE]
+    if icon:
+        dialog.append('--window-icon=' + icon)
+    dialog.append('--text=' + message)
+    if not (app and restart):
+        return dialog + ['--ok-label=' + (DISMISS if restart else OK)]
+    dialog += ['--ok-label=' + REOPEN, '--cancel-label=' + DISMISS]
+    launch = ("if command -v setsid >/dev/null 2>&1; "
+              "then setsid -f %(app)s; "
+              "else nohup %(app)s >/dev/null 2>&1 & fi" % {'app': app})
+    script = ('if "$@" >/dev/null 2>&1; then '
+              'pkill -x %(app)s; sleep 2; %(launch)s; fi'
+              % {'app': app, 'launch': launch})
+    return ['sh', '-c', script, 'scg-router'] + dialog
+
+
+def _windows_script(message, icon=None, restart=True):
+    quoted = message.replace("'", "''")
+    picture = ''
+    if icon:
+        picture = (
+            "$p = New-Object System.Windows.Forms.PictureBox; "
+            "$p.Image = [System.Drawing.Image]::FromFile('%s'); "
+            "$p.SizeMode = 'StretchImage'; $p.Width = 64; $p.Height = 64; "
+            "$f.Controls.Add($p); " % icon.replace("'", "''"))
+    reopen = (
+        "$r = New-Object System.Windows.Forms.Button; "
+        "$r.Text = 'Quit and reopen'; $r.Dock = 'Bottom'; "
+        "$r.Add_Click({ $f.Tag = 'reopen'; $f.Close() }); ")
+    if restart:
+        restart_block = ("if ($f.Tag -eq 'reopen') { %s }" % _windows_restart())
+        buttons = ("$f.Controls.Add($l); $f.Controls.Add($b); $f.Controls.Add($r); ")
+        dismiss = DISMISS
+    else:
+        reopen, restart_block = '', ''
+        buttons = "$f.Controls.Add($l); $f.Controls.Add($b); "
+        dismiss = OK
+    return (
+        "Add-Type -AssemblyName System.Windows.Forms; "
+        "Add-Type -AssemblyName System.Drawing; "
+        "$f = New-Object System.Windows.Forms.Form; "
+        "$f.Text = '%s'; $f.TopMost = $true; "
+        "$f.StartPosition = 'CenterScreen'; $f.AutoSize = $true; "
+        "$l = New-Object System.Windows.Forms.Label; "
+        "$l.Text = '%s'; $l.AutoSize = $true; $l.Dock = 'Top'; "
+        "%s"
+        "$b = New-Object System.Windows.Forms.Button; "
+        "$b.Text = '%s'; $b.Dock = 'Bottom'; "
+        "$b.Add_Click({ $f.Close() }); "
+        "%s"
+        "%s"
+        "[void]$f.ShowDialog(); "
+        "%s" % (TITLE, quoted, picture, dismiss, reopen, buttons, restart_block)
+    )
+
+
+def dialog_command(version, platform_name=None, which=None, icon=None,
+                   clients='codex', names=(), attachment=False):
+    """argv for a one-shot dismissible restart dialog, or None.
+
+    None means the platform is unknown or its dialog tool is missing, so
+    the caller leaves the notice pending for a later GUI run. `which` and
+    `icon` are injectable so tests never probe the host; the icon defaults
+    to the bundled logo and is dropped when that asset is not installed.
+    `clients` names the attached client(s): only a Codex install gets the
+    app restart button, because that button relaunches the Codex app.
+    `names` are the added models the dialog may list.
+    """
+    if platform_name is None:
+        platform_name = sys.platform
+    if which is None:
+        which = shutil.which
+    if icon is None and ICON.is_file():
+        icon = str(ICON)
+    clients = _text.clients(clients)
+    restart = clients in ('codex', 'both')
+    message = _message(version, clients, names, attachment)
+    if platform_name == 'darwin':
+        if which('osascript') is None:
+            return None
+        return ['osascript', '-e', _darwin_script(message, icon, restart)]
+    if platform_name.startswith('linux'):
+        if which('zenity') is not None:
+            app = LINUX_APP if restart and which(LINUX_APP) is not None else None
+            return _linux_command(message, icon, app, restart)
+        return None
+    if platform_name == 'win32':
+        powershell = which('powershell') or which('powershell.exe')
+        if powershell is None:
+            return None
+        return [powershell, '-NoProfile', '-WindowStyle', 'Hidden',
+                '-Command', _windows_script(message, icon, restart)]
+    return None
+
+
+def _spawn(cmd):
+    """Launch the dialog detached and return its pid; never waits."""
+    if sys.platform == 'win32':
+        flags = (getattr(subprocess, 'DETACHED_PROCESS', 0)
+                 | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0) | 0x08000000)
+        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                                creationflags=flags)
+    else:
+        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                                close_fds=True, start_new_session=True)
+    return proc.pid
+
+
+def _dialog_up(pid, pid_alive):
+    """True when the spawned dialog is still running after a short grace."""
+    time.sleep(PROBE_GRACE_S)
+    return pid_alive(pid)
+
+
+def show_pending(home, spawn=None, pid_alive=None, names=None):
+    """Show once; missing tools and failed presentation leave the notice pending.
+    Fold model additions into an open dialog; attachment repairs wait their turn.
+    """
+    if os.environ.get('ROUTER_NO_NOTICE') == '1':
+        return False
+    if spawn is None:
+        spawn = _spawn
+    if pid_alive is None:
+        pid_alive = _pid_alive
+    try:
+        path = Path(home) / NOTICE_FILE
+        doc = json.loads(path.read_text())
+        if not isinstance(doc, dict):
+            return False
+        if doc.get('shown'):
+            if doc.get('names'):  # listed before, perhaps never marked seen
+                _text.acknowledge(home, doc['names'])
+            return False
+        version = doc.get('version')
+        if not isinstance(version, str) or not version:
+            return False
+        if names is None:
+            names = doc.get('names')
+        if not isinstance(names, list):
+            names = _text.pending_names(home)
+        names = [name for name in names if isinstance(name, str) and name]
+        attachment = bool(doc.get('attachment'))
+        if not names and not attachment:
+            return False
+        cmd = dialog_command(version, icon=_home_icon(home) or '',
+                             clients=doc.get('clients', 'codex'), names=names, attachment=attachment)
+        if cmd is None:
+            return False
+        shown = {'version': version, 'shown': True, 'at': _utcnow()}
+        if attachment:
+            shown['attachment'] = doc['attachment']
+        pid = _dialog_pid(doc)
+        if pid and pid_alive(pid):
+            if attachment:
+                return False  # Wait until the older dialog closes; this reason was not shown.
+            shown['pid'] = pid
+            _atomic_write.replace_json(path, shown)
+            return False
+        shown['names'] = names  # a folded notice leaves its models unlisted
+        pid = _dialog_pid({'pid': spawn(cmd)})
+        if pid:
+            if not _dialog_up(pid, pid_alive):
+                return False
+            shown['pid'] = pid
+        _atomic_write.replace_json(path, shown)
+        if names:
+            _text.acknowledge(home, names)
+        return True
+    except (OSError, ValueError):
+        return False

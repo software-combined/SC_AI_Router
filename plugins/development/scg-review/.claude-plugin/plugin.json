@@ -1,0 +1,9 @@
+{
+  "name": "scg-review",
+  "version": "0.7.3",
+  "description": "Simplification, secret scanning and four-lane review of the exact staged Git tree.",
+  "author": {
+    "name": "Software Combined"
+  },
+  "license": "Apache-2.0"
+}

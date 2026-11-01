@@ -1,0 +1,129 @@
+# Bounded failure/cancellation probes; these checks have no release authority.
+name: Windows acceptance safety
+
+on:
+  push:
+    branches: ['cyril/windows-ci-safety-*']
+
+permissions:
+  contents: read
+
+jobs:
+  windows-contracts:
+    defaults:
+      run:
+        working-directory: router
+    if: endsWith(github.ref_name, '-proof')
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python-version: '3.14.9'
+      - uses: ./.github/actions/diagnostic-powershell
+        id: pinned-shell
+      - name: Select verified step shell
+        shell: pwsh
+        env:
+          CI_PWSH: ${{ steps.pinned-shell.outputs.executable }}
+        run: Split-Path -Parent $env:CI_PWSH >> $env:GITHUB_PATH
+      - name: Verify actual step shell
+        shell: pwsh
+        env:
+          CI_PWSH: ${{ steps.pinned-shell.outputs.executable }}
+        run: |
+          if ((Get-Process -Id $PID).Path -ine $env:CI_PWSH -or $PSVersionTable.PSVersion.ToString() -cne '7.6.9') {
+            throw 'Proof step did not execute the verified shell.'
+          }
+      - name: Real standard-user launch, reports, failures and cleanup
+        if: ${{ !contains(github.ref_name, '-shortcut-only-') }}
+        env:
+          SCG_TEST_WINDOWS_SHELL: ${{ steps.pinned-shell.outputs.executable }}
+        run: python -m unittest tests.test_windows_standard_ci tests.test_windows_standard_suites -v
+      - name: Isolated native shortcut ownership and recovery
+        shell: pwsh
+        env:
+          CI_PWSH: ${{ steps.pinned-shell.outputs.executable }}
+        run: |
+          & $env:CI_PWSH -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ./tools/run_windows_standard.ps1 -Python (Get-Command python).Source -Suite native-shortcuts -EvidencePath "$env:RUNNER_TEMP/shortcut-proof.json"
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: shortcut-proof
+          path: ${{ runner.temp }}/shortcut-proof.json
+          if-no-files-found: error
+          retention-days: 7
+
+  shared-fixture:
+    if: ${{ !endsWith(github.ref_name, '-proof') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Synthetic common result
+        env:
+          FAIL: ${{ endsWith(github.ref_name, '-fail-common') }}
+        run: test "$FAIL" != true
+
+  control-fixture:
+    if: ${{ !endsWith(github.ref_name, '-proof') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Synthetic control result
+        env:
+          FAIL: ${{ endsWith(github.ref_name, '-fail-native') }}
+        run: test "$FAIL" != true
+
+  matrix-fixture:
+    if: ${{ !endsWith(github.ref_name, '-proof') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [native-runtime, native-shortcuts]
+    steps:
+      - name: Synthetic result for each matrix entry
+        env:
+          FAIL: ${{ endsWith(github.ref_name, format('fail-{0}', matrix.suite)) }}
+          WAIT: ${{ endsWith(github.ref_name, '-cancel') }}
+        run: |
+          if [ "$WAIT" = true ]; then sleep 60; fi
+          if [ "$FAIL" = true ]; then exit 1; fi
+
+  safety-gate:
+    name: Diagnostic safety gate
+    needs: matrix-fixture
+    if: ${{ !cancelled() && !endsWith(github.ref_name, '-proof') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Reject failed or cancelled matrix entries
+        if: needs.matrix-fixture.result != 'success'
+        run: exit 1
+
+  final-gate:
+    name: Diagnostic final safety gate
+    needs: [shared-fixture, matrix-fixture, safety-gate]
+    if: ${{ !cancelled() && !endsWith(github.ref_name, '-proof') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Reject incomplete native acceptance
+        if: needs.shared-fixture.result != 'success' || needs.matrix-fixture.result != 'success' || needs.safety-gate.result != 'success'
+        run: exit 1
+
+  control-gate:
+    name: Diagnostic control safety gate
+    needs: [shared-fixture, control-fixture]
+    if: ${{ !cancelled() && !endsWith(github.ref_name, '-proof') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Reject incomplete control acceptance
+        if: needs.shared-fixture.result != 'success' || needs.control-fixture.result != 'success'
+        run: exit 1

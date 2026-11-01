@@ -1,0 +1,113 @@
+{
+ "scenario": "s01_plain",
+ "targets": [
+  "subscription:gpt-6-astra",
+  "external:deepseek/deepseek-v4.1-flash-1017",
+  "external:meta/muse-spark-1.3-contributor",
+  "external:xiaomi/mimo-v2.6-pro",
+  "external:x-ai/grok-4.7",
+  "external:z-ai/glm-5.3-flash"
+ ],
+ "payload": {
+  "instructions": "You are the synthetic coding agent for the replay goldens.",
+  "input": [
+   {
+    "type": "message",
+    "role": "developer",
+    "content": [
+     {
+      "type": "input_text",
+      "text": "<permissions instructions>\nSynthetic sandbox: read-only; approvals are never requested.\n</permissions instructions>"
+     }
+    ]
+   },
+   {
+    "type": "message",
+    "role": "user",
+    "content": [
+     {
+      "type": "input_text",
+      "text": "List the files in the synthetic project."
+     }
+    ]
+   },
+   {
+    "type": "function_call",
+    "name": "exec_command",
+    "call_id": "call_s01_ls",
+    "arguments": "{\"cmd\": \"ls\"}"
+   },
+   {
+    "type": "function_call_output",
+    "call_id": "call_s01_ls",
+    "output": "README.md\nsrc"
+   },
+   {
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "The project holds README.md and src."
+     }
+    ]
+   },
+   {
+    "type": "message",
+    "role": "user",
+    "content": [
+     {
+      "type": "input_text",
+      "text": "Summarise README.md."
+     }
+    ]
+   }
+  ],
+  "tools": [
+   {
+    "type": "function",
+    "name": "exec_command",
+    "description": "Run a shell command in the synthetic workspace.",
+    "strict": false,
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "cmd": {
+       "type": "string",
+       "description": "The command to run."
+      }
+     },
+     "required": [
+      "cmd"
+     ],
+     "additionalProperties": false
+    }
+   },
+   {
+    "type": "custom",
+    "name": "apply_patch",
+    "description": "Edit files with a synthetic patch.",
+    "format": {
+     "type": "grammar",
+     "syntax": "lark",
+     "definition": "start: /(.|\\n)+/"
+    }
+   },
+   {
+    "type": "web_search"
+   }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true,
+  "reasoning": {
+   "effort": "low",
+   "summary": "auto"
+  },
+  "store": false,
+  "stream": true,
+  "include": [
+   "reasoning.encrypted_content"
+  ],
+  "prompt_cache_key": "replay-s01"
+ }
+}

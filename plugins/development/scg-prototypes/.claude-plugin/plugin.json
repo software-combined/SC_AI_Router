@@ -1,0 +1,9 @@
+{
+  "name": "scg-prototypes",
+  "version": "0.1.6",
+  "description": "Publish frontend prototypes to the SCG prototype channel and return shareable URLs.",
+  "author": {
+    "name": "Software Combined"
+  },
+  "license": "Apache-2.0"
+}

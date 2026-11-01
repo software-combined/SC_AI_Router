@@ -1,0 +1,93 @@
+{
+ "scenario": "s05_router_compaction",
+ "targets": [
+  "subscription:gpt-6-astra",
+  "external:deepseek/deepseek-v4.1-flash-1017"
+ ],
+ "payload": {
+  "instructions": "You are the synthetic coding agent for the replay goldens.",
+  "input": [
+   {
+    "type": "message",
+    "role": "developer",
+    "content": [
+     {
+      "type": "input_text",
+      "text": "<permissions instructions>\nSynthetic sandbox: read-only; approvals are never requested.\n</permissions instructions>"
+     }
+    ]
+   },
+   {
+    "type": "message",
+    "role": "user",
+    "content": [
+     {
+      "type": "input_text",
+      "text": "Add a greeting to the synthetic app."
+     }
+    ]
+   },
+   {
+    "type": "compaction",
+    "id": "cmp_s05",
+    "encrypted_content": "ocx1:U3ludGhldGljIHN1bW1hcnk6IHRoZSB1c2VyIGFza2VkIGZvciBhIGdyZWV0aW5nIGluIGhlbGxvLnR4dDsgaXQgd2FzIGFkZGVkIGFuZCB0aGUgdGVzdHMgcGFzcy4="
+   },
+   {
+    "type": "message",
+    "role": "user",
+    "content": [
+     {
+      "type": "input_text",
+      "text": "What did we change?"
+     }
+    ]
+   }
+  ],
+  "tools": [
+   {
+    "type": "function",
+    "name": "exec_command",
+    "description": "Run a shell command in the synthetic workspace.",
+    "strict": false,
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "cmd": {
+       "type": "string",
+       "description": "The command to run."
+      }
+     },
+     "required": [
+      "cmd"
+     ],
+     "additionalProperties": false
+    }
+   },
+   {
+    "type": "custom",
+    "name": "apply_patch",
+    "description": "Edit files with a synthetic patch.",
+    "format": {
+     "type": "grammar",
+     "syntax": "lark",
+     "definition": "start: /(.|\\n)+/"
+    }
+   },
+   {
+    "type": "web_search"
+   }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true,
+  "reasoning": {
+   "effort": "low",
+   "summary": "auto"
+  },
+  "store": false,
+  "stream": true,
+  "include": [
+   "reasoning.encrypted_content"
+  ],
+  "prompt_cache_key": "replay-s05"
+ }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "scg-agent-factory",
+  "version": "0.3.0",
+  "description": "Persistent project agents, temporary helpers and a plain-language HTML progress view.",
+  "author": {
+    "name": "Software Combined"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "AI Agent Factory Method",
+    "shortDescription": "Run project agents with a clear shared progress page.",
+    "longDescription": "Start, resume and evaluate persistent project owners with shared state, explicit authority, verification and recovery. Keep one plain-language progress page from the bundled template. The page also works with an existing team, without starting Factory roles.",
+    "developerName": "Software Combined",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Use the AI Agent Factory Method to establish this project's persistent orchestrator and role owners, record their titles and authority, and prove one verified cycle."
+  },
+  "repository": "https://github.com/software-combined/SC_AI"
+}

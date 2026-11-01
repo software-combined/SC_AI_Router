@@ -1,0 +1,231 @@
+"""Update origin, channel resolution and public download transport.
+
+Release signatures and checksums protect downloads, without account sign-in.
+An explicit `--feed` pin or a `feed` file is the manual path. Python 3.9+.
+Loaded via the installer's file-based import pattern, never
+`import packaging.feed`.
+"""
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location(
+    'router_feed_verify',
+    Path(__file__).resolve().parent / 'feed_verify.py')
+_feed_verify = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_feed_verify)
+_auth_spec = _ilu.spec_from_file_location(
+    'router_feed_download_auth', Path(__file__).with_name('download_auth.py'))
+_auth = _ilu.module_from_spec(_auth_spec)
+_auth_spec.loader.exec_module(_auth)
+SignInRequired = _auth.SignInRequired
+_home = None
+
+FEED_ORIGIN = 'https://dist.softwarecombined.com'
+FEED_URL = FEED_ORIGIN + '/stable/latest.json'
+
+
+def configure_home(home):
+    """Retain the older installer call contract; downloads use no credentials."""
+    global _home
+    _home = Path(home)
+
+
+def _request(url, headers=None):
+    return urllib.request.Request(url, headers=dict(headers or {}))
+
+
+def _denied(exc):
+    raise exc
+
+
+def _safe_url(url):
+    """URL safe to name in an error: no query string, bounded length."""
+    return str(url).split('?')[0][:200]
+
+
+def trusted_origin(url):
+    """True for feed/bundle URLs the installer may fetch unattended."""
+    if url.startswith('file://'):
+        return True
+    return url.startswith(FEED_ORIGIN + '/')
+
+
+def sibling_bundle(feed, url):
+    """Bundle beside a local feed document, else the document's own URL.
+
+    A handoff directory carries latest.json and the bundle together; the
+    document's `url` may still name the published asset, which the recipient
+    cannot fetch. The sibling is used only when it exists, and the
+    document's sha256 still verifies it.
+    """
+    if str(feed).startswith('file://'):
+        candidate = (_file_path(feed).parent
+                     / str(url).rsplit('/', 1)[-1])
+        if candidate.is_file():
+            return candidate.absolute().as_uri()
+    return url
+
+
+def channel_feed(home):
+    """Feed URL for this host: a pinned `feed` file, else its channel.
+
+    `channel` names beta for the pre-release document; anything else, or a
+    missing file, is stable. Both documents are public.
+    """
+    home = Path(home)
+    if (home / 'feed').exists():
+        return (home / 'feed').read_text().strip()
+    channel = (home / 'channel').read_text().strip() if (home / 'channel').exists() else 'stable'
+    if channel == 'beta':
+        return _feed_verify.beta_feed_url(FEED_URL)
+    return FEED_URL
+
+
+class _PinnedRedirects(urllib.request.HTTPRedirectHandler):
+    """Follow a redirect only when it stays on a trusted origin."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not trusted_origin(newurl) or newurl.startswith('file://'):
+            raise SystemExit('feed redirected off the trusted update origin; refusing')
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def opener():
+    """The one opener every unattended feed or bundle fetch goes through."""
+    return urllib.request.build_opener(_PinnedRedirects())
+
+
+def _get(url, headers, etag):
+    """One GET; keeps the caller's ETag when the response carries none."""
+    with opener().open(
+            _request(url, headers), timeout=30) as response:
+        return (response.status, response.read(),
+                response.headers.get('ETag', etag))
+
+
+def live_feed(url, etag, fetch):
+    """Default feed read: conditional GET with ETag from the public feed."""
+    headers = {'If-None-Match': etag} if etag else {}
+    if url.startswith('file://'):
+        return 200, fetch(url), etag
+    if not trusted_origin(url):
+        raise SystemExit('refusing untrusted feed URL: %s' % _safe_url(url))
+    try:
+        return _get(url, headers, etag)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 304:
+            return 304, b'', etag
+        _denied(exc)
+
+
+def live_signature(url, fetch):
+    """Detached `.sig` bytes beside a feed document; None when absent.
+
+    Same trusted-origin rule as the document read. The sidecar travels
+    through the caller's fetch seam (injected fakes included); only a
+    `file://` absence or fetch failure yields None. Never raises otherwise:
+    absence is decided by the caller.
+    """
+    sig_url = url + '.sig'
+    if not url.startswith('file://') and not trusted_origin(url):
+        raise SystemExit('refusing untrusted feed URL: %s' % _safe_url(url))
+    try:
+        return fetch(sig_url)
+    except OSError:
+        return None
+
+
+def feed_source(feed_url):
+    """Short feed name for update.log: cloudfront, local, or https."""
+    feed_url = str(feed_url)
+    if feed_url.startswith(FEED_ORIGIN + '/'):
+        return 'cloudfront'
+    if feed_url.startswith('file://'):
+        return 'local'
+    return 'https'
+
+
+def _file_path(url):
+    path = str(url)[len('file://'):]
+    if str(url).startswith('file:///'):
+        path = urllib.request.url2pathname(path)
+    return Path(path)
+
+
+def fetch(url):
+    """Single network entry point; tests inject a fake.
+
+    Only the public feed origin, or a local file for a manual install, is
+    accepted, so a compromised feed cannot redirect a host elsewhere. Moved
+    out of service.py (Plan 131); service re-exports it, so the installer's
+    seam and any `service.fetch` patch still resolve.
+    """
+    if url.startswith('file://'):
+        return _file_path(url).read_bytes()
+    if not trusted_origin(url):
+        raise SystemExit('refusing untrusted feed URL: %s' % _safe_url(url))
+    try:
+        with opener().open(_request(url), timeout=30) as response:
+            return response.read()
+    except urllib.error.HTTPError as exc:
+        _denied(exc)
+
+
+def feed_read(fetcher, url):
+    """Fetch one feed/bundle URL through the injected or default fetcher."""
+    if fetcher is fetch and not trusted_origin(url):
+        raise SystemExit('feed points off the trusted update origin; refusing')
+    return fetcher(url)
+
+
+def fetch_feed(url, etag, _fetch=None, _live_feed=None):
+    """Read a feed document, revalidating with a saved ETag.
+
+    Feed-channel owner (Plan 131): moved out of service.py; service keeps a
+    thin re-export so installer patches still resolve. Returns
+    (status, body, etag). Injected fakes keep their one-argument shape and
+    bypass the conditional-GET path. The default path calls back into
+    service.fetch through _live_feed so the installer's seam still applies.
+    """
+    live = _live_feed if _live_feed is not None else live_feed
+    if _fetch is None:
+        import sys as _sys
+        _svc_mod = _sys.modules.get('packaging.service')
+        _fetch = getattr(_svc_mod, 'fetch', None)
+        if _fetch is None:
+            raise SystemExit('service.fetch seam unavailable')
+        return live(url, etag, _fetch)
+    # An injected one-argument fake serves the document instead of the
+    # network on every scheme; only the default path does conditional GET.
+    return 200, _fetch(url), etag
+
+
+def feed_serial(home):
+    """Last accepted feed serial; 0 when no serialed release was installed."""
+    home = Path(home)
+    try:
+        return int((home / 'feed-serial').read_text().strip())
+    except FileNotFoundError:
+        return 0
+    except ValueError:
+        raise SystemExit('feed serial file is corrupt')
+
+
+def check_serial(home, latest, pinned=False):
+    """Refuse feeds older than the last accepted one (replay protection).
+
+    A pinned `--feed` is exempt on both sides: operator-supplied for this
+    one run, neither the unattended channel the guard protects nor recorded
+    afterwards.
+    """
+    if pinned:
+        return 0
+    serial = latest.get('serial', 0)
+    if type(serial) is not int:
+        raise SystemExit('feed has a bad serial')
+    stored = feed_serial(home)
+    if serial < stored:
+        raise SystemExit(f'stale feed serial {serial} is older than {stored}')
+    return serial

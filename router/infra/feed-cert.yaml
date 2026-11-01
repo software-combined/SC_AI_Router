@@ -1,0 +1,32 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Router update feed certificate. CloudFront reads viewer certificates from
+  us-east-1, so deploy this stack in that region; the distribution itself
+  lives in infra/feed.yaml (ap-southeast-2). The deploy stays in progress
+  until ACM validates the DNS record it creates in the hosted zone.
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: dist.softwarecombined.com
+    Description: Feed hostname the distribution will serve.
+  HostedZoneId:
+    Type: String
+    Description: Public hosted zone for softwarecombined.com.
+
+Resources:
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+
+Outputs:
+  CertificateArn:
+    Description: >-
+      Pass to infra/feed.yaml as CertificateArn once this stack reads
+      CREATE_COMPLETE, which means ACM issued the certificate.
+    Value: !Ref Certificate

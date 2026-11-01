@@ -1,0 +1,75 @@
+{
+  "cpython": "3.14.7",
+  "build": "20260814",
+  "source": "astral-sh/python-build-standalone",
+  "note": "Exact install-only/full archive bytes, native component notices and pinned source locations verified for this runtime inventory. See runtime-notices.json, runtime-components.json and docs/runtime-licenses.md; publish the source companion before redistributing the Linux runtimes; the Windows runtime follows the Visual C++ basis recorded in docs/runtime-licenses.md.",
+  "targets": [
+    {
+      "os": "darwin",
+      "cpu": "arm64",
+      "triple": "cpython-3.14.7+20260814-aarch64-apple-darwin-install_only.tar.gz",
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260814/cpython-3.14.7+20260814-aarch64-apple-darwin-install_only.tar.gz",
+      "mirror": "runtimes/cpython-3.14.7+20260814-aarch64-apple-darwin-install_only.tar.gz",
+      "format": "tar.gz",
+      "sha256": "eded2b762929116a4e68ad1128e55f0728f502e93c90454e3b5f79da7a2cda40",
+      "exec": "python/bin/python3.14",
+      "licences": [
+        "python/lib/python3.14/LICENSE.txt"
+      ]
+    },
+    {
+      "os": "darwin",
+      "cpu": "x86_64",
+      "triple": "cpython-3.14.7+20260814-x86_64-apple-darwin-install_only.tar.gz",
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260814/cpython-3.14.7+20260814-x86_64-apple-darwin-install_only.tar.gz",
+      "mirror": "runtimes/cpython-3.14.7+20260814-x86_64-apple-darwin-install_only.tar.gz",
+      "format": "tar.gz",
+      "sha256": "92d07a249a6bba96f4281f137c8657109e31c0df92c5512e469cb2bde1a0ea14",
+      "exec": "python/bin/python3.14",
+      "licences": [
+        "python/lib/python3.14/LICENSE.txt"
+      ]
+    },
+    {
+      "os": "linux",
+      "cpu": "x86_64",
+      "libc": "glibc",
+      "triple": "cpython-3.14.7+20260814-x86_64-unknown-linux-gnu-install_only.tar.gz",
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260814/cpython-3.14.7+20260814-x86_64-unknown-linux-gnu-install_only.tar.gz",
+      "mirror": "runtimes/cpython-3.14.7+20260814-x86_64-unknown-linux-gnu-install_only.tar.gz",
+      "format": "tar.gz",
+      "sha256": "490953e4a7e97a6ed64d0f0bd04f2d4d9a7bb45368890d3fa32ba05d0ff5c48f",
+      "exec": "python/bin/python3.14",
+      "licences": [
+        "python/lib/python3.14/LICENSE.txt"
+      ]
+    },
+    {
+      "os": "linux",
+      "cpu": "arm64",
+      "libc": "glibc",
+      "triple": "cpython-3.14.7+20260814-aarch64-unknown-linux-gnu-install_only.tar.gz",
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260814/cpython-3.14.7+20260814-aarch64-unknown-linux-gnu-install_only.tar.gz",
+      "mirror": "runtimes/cpython-3.14.7+20260814-aarch64-unknown-linux-gnu-install_only.tar.gz",
+      "format": "tar.gz",
+      "sha256": "5bad659dc6d686b430f60104d53abfecb1cd93de37b8aaa112f10f0cea2cb655",
+      "exec": "python/bin/python3.14",
+      "licences": [
+        "python/lib/python3.14/LICENSE.txt"
+      ]
+    },
+    {
+      "os": "windows",
+      "cpu": "x86_64",
+      "triple": "cpython-3.14.7+20260814-x86_64-pc-windows-msvc-install_only.tar.gz",
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260814/cpython-3.14.7+20260814-x86_64-pc-windows-msvc-install_only.tar.gz",
+      "mirror": "runtimes/cpython-3.14.7+20260814-x86_64-pc-windows-msvc-install_only.tar.gz",
+      "format": "tar.gz",
+      "sha256": "870e9199dff4aa993c852c0733f7d36c359d127a67947f08f0755765ecf4232c",
+      "exec": "python/python.exe",
+      "licences": [
+        "python/LICENSE.txt"
+      ]
+    }
+  ]
+}

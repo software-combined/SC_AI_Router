@@ -1,0 +1,4 @@
+interface:
+  display_name: "Optimise CI"
+  short_description: "Benchmark and safely shorten local and CI testing"
+  default_prompt: "Use $optimise-ci to measure this repository and safely improve local testing, CI and deployment verification."

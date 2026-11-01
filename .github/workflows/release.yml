@@ -1,0 +1,235 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-feed
+  cancel-in-progress: false
+  queue: max
+
+env:
+  AWS_REGION: ap-southeast-2
+  # Stack name only: it carries no account id, so it may stay a literal here.
+  FEED_STACK: scg-router-feed
+  # Private GitHub Actions secrets, not literals (Plan 160): an account id, a
+  # bucket name or a role ARN in the tree or logs is an identifier disclosure.
+  # A fork running the publisher must not inherit our target by default.
+  FEED_BUCKET: ${{ secrets.FEED_BUCKET }}
+  FEED_ROLE: ${{ secrets.FEED_ROLE }}
+  # ARN of the Secrets Manager secret holding the feed signing seed.
+  # Empty fails closed rather than shipping unsigned.
+  FEED_SIGNING_SEED_ARN: ${{ secrets.FEED_SIGNING_SEED_ARN }}
+  NATIVE_INSTALLERS_ACCEPTED: ${{ vars.NATIVE_INSTALLERS_ACCEPTED }}
+  NATIVE_INSTALLERS_MACOS_ARM64_ONLY: ${{ vars.NATIVE_INSTALLERS_MACOS_ARM64_ONLY }}
+  RELEASE_SERIAL_OFFSET: ${{ vars.RELEASE_SERIAL_OFFSET }}
+
+defaults:
+  run:
+    working-directory: router
+
+jobs:
+  release:
+    name: Build and publish
+    # Check both identities: reruns use the original actor's privileges.
+    # Main acceptance owns the long checks. Stable publishes only an exact main
+    # commit with a successful Check run; beta publishes a commit development or
+    # main moved to. Neither repeats that suite.
+    if: ${{ contains(fromJSON('["SC-Cyril", "BrentJMaxwell"]'), github.actor) && contains(fromJSON('["SC-Cyril", "BrentJMaxwell"]'), github.triggering_actor) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    steps:
+      - name: Require the private feed configuration
+        working-directory: .
+        # A fork or a misconfigured repository must fail here, before it tries
+        # to assume a role it cannot assume (Plan 160).
+        run: |
+          for name in FEED_BUCKET FEED_ROLE FEED_SIGNING_SEED_ARN; do
+            if [ -z "${!name}" ]; then
+              echo "private release configuration $name is empty; set the matching GitHub Actions secret (docs/operations.md)"; exit 1
+            fi
+          done
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require an accepted commit
+        # A beta must be a commit development or main moved to (their first-parent
+        # line). Only pull requests that pass the Test check move them, so a
+        # beta needs no main acceptance run.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$GITHUB_REF_NAME" in
+            *-beta|*-beta-express)
+              git rev-list --first-parent origin/development origin/main | grep -Fx "$GITHUB_SHA" >/dev/null || {
+                echo "beta tag must be on a commit development or main moved to"; exit 1;
+              }
+              exit 0 ;;
+          esac
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "release commit must be merged into main before publication"; exit 1;
+          }
+          ACCEPTANCE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/check.yml/runs?head_sha=$GITHUB_SHA&per_page=100" \
+            --jq '[.workflow_runs[] | select(.head_sha == env.GITHUB_SHA and .event == "push" and .head_branch == "main" and .status == "completed" and .conclusion == "success")] | length')
+          [ "$ACCEPTANCE" -ge 1 ] || {
+            echo "no successful Check workflow run found for $GITHUB_SHA on main"; exit 1;
+          }
+      - uses: ./.github/actions/setup
+      - name: Verify runtime pins
+        run: python tools/verify_runtime_pins.py
+      - name: Build bundle
+        run: |
+          if [ "$GITHUB_REPOSITORY" = software-combined/SC_AI ] && [ -z "$RELEASE_SERIAL_OFFSET" ]; then
+            echo "Set RELEASE_SERIAL_OFFSET to the last published serial before repository cutover."; exit 1
+          fi
+          python packaging/release.py --out dist --build "$GITHUB_RUN_NUMBER" --serial-offset "${RELEASE_SERIAL_OFFSET:-0}" --sha "$GITHUB_SHA" --tag "$GITHUB_REF_NAME" \
+            --url-base "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+          CHANNEL=$(python -c "import json;print(json.load(open('dist/latest.json'))['channel'])")
+          echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-bundle
+          path: router/dist/
+          if-no-files-found: error
+
+  native:
+    name: Native package (${{ matrix.target }})
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {target: darwin/arm64, runner: macos-15}
+          - {target: darwin/x86_64, runner: macos-15-intel}
+          - {target: windows/x86_64, runner: windows-2025}
+          - {target: linux/x86_64, runner: ubuntu-24.04}
+          - {target: linux/arm64, runner: ubuntu-24.04-arm}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-bundle
+          path: router/dist
+      - name: Linux graphical build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zenity libgdk-pixbuf2.0-bin
+      - name: Pinned Linux menu toolchain
+        if: runner.os == 'Linux'
+        run: rustup toolchain install 1.90.0 --profile minimal
+      - name: Native packaging contracts
+        run: python -m unittest tests.test_native_stage tests.test_native_packages tests.test_native_setup tests.test_native_readiness tests.test_native_menu_build
+      - name: Build native package
+        run: python tools/build_release_installer.py --target ${{ matrix.target }}
+      - name: Verify disk image
+        if: runner.os == 'macOS'
+        run: hdiutil verify native-artifacts/*.dmg
+      - name: Configure private build storage
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        with:
+          role-to-assume: ${{ env.FEED_ROLE }}
+          role-session-name: router-native-build
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+      - name: Retain packages in private build storage
+        run: aws s3 cp native-artifacts/ "s3://${{ env.FEED_BUCKET }}/native-builds/${{ github.sha }}/${{ github.run_id }}/" --recursive --only-show-errors
+
+  publish:
+    name: Publish verified release
+    needs: [release, native]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-bundle
+          path: router/dist
+      - name: Read release channel
+        run: |
+          CHANNEL=$(python -c 'import json;print(json.load(open("dist/latest.json"))["channel"])')
+          echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
+      - name: Configure feed publishing credentials
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        with:
+          role-to-assume: ${{ env.FEED_ROLE }}
+          role-session-name: router-feed-publish
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+      - name: Resolve the feed distribution
+        run: |
+          DIST_ID="$(aws cloudformation describe-stacks --stack-name "$FEED_STACK" \
+            --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" \
+            --output text)"
+          if [ -z "$DIST_ID" ] || [ "$DIST_ID" = "None" ]; then
+            echo "no DistributionId output on $FEED_STACK"; exit 1
+          fi
+          echo "::add-mask::$DIST_ID"
+          echo "FEED_DISTRIBUTION_ID=$DIST_ID" >> "$GITHUB_ENV"
+      - name: Read verified native builds
+        run: aws s3 cp "s3://$FEED_BUCKET/native-builds/$GITHUB_SHA/$GITHUB_RUN_ID/" native-artifacts/ --recursive --only-show-errors
+      - name: Publish to the update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG_SHA=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs%2Ftags%2F$GITHUB_REF_NAME" --jq .sha)
+          if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
+            echo "release tag changed; start a new release run"; exit 1
+          fi
+          SEED_FILE="$(mktemp)"
+          trap 'rm -f "$SEED_FILE"' EXIT
+          aws secretsmanager get-secret-value --secret-id "$FEED_SIGNING_SEED_ARN" \
+            --query SecretString --output text > "$SEED_FILE"
+          python tools/publish_feed.py --dist dist --channel "$CHANNEL" \
+            --bucket "$FEED_BUCKET" --distribution-id "$FEED_DISTRIBUTION_ID" \
+            --sign "$SEED_FILE" --native-resources native-artifacts
+          if [ "$CHANNEL" = stable ] && { [ "$NATIVE_INSTALLERS_ACCEPTED" = 'true' ] || [ "$NATIVE_INSTALLERS_MACOS_ARM64_ONLY" = 'true' ]; }; then
+            NATIVE_OPTIONS=()
+            if [ "$NATIVE_INSTALLERS_ACCEPTED" != 'true' ]; then
+              NATIVE_OPTIONS=(--macos-arm64-only)
+            fi
+            python tools/publish_native_installers.py --artifacts native-artifacts --channel "$CHANNEL" \
+              --bucket "$FEED_BUCKET" \
+              --distribution-id "$FEED_DISTRIBUTION_ID" --sign "$SEED_FILE" "${NATIVE_OPTIONS[@]}"
+          fi
+          rm -f "$SEED_FILE"
+          trap - EXIT
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A publish-job rerun can advertise the same verified Mac package
+          # after device acceptance. Keep the existing release and its assets.
+          if gh release view "$GITHUB_REF_NAME" --json tagName >/dev/null 2>&1; then
+            echo "Release already exists; verified feed publication is complete."
+            exit 0
+          fi
+          if [ "$CHANNEL" = stable ]; then
+            cp dist/release-latest.json dist/latest.json
+            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest.json dist/feed-latest.json.sig --verify-tag --title "$GITHUB_REF_NAME" --generate-notes --latest
+          else
+            cp dist/release-latest.json dist/latest-beta.json
+            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/latest-beta.json dist/feed-latest.json.sig --verify-tag --title "$GITHUB_REF_NAME" --prerelease --generate-notes
+          fi

@@ -1,0 +1,121 @@
+{
+ "contract": {
+  "unknown_top_level": [],
+  "violations": {},
+  "warnings": {}
+ },
+ "wire": {
+  "include": [
+   "reasoning.encrypted_content"
+  ],
+  "input": [
+   {
+    "content": [
+     {
+      "text": "<permissions instructions>\nSynthetic sandbox: read-only; approvals are never requested.\n</permissions instructions>",
+      "type": "input_text"
+     }
+    ],
+    "role": "developer",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "Delegate the synthetic review.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   },
+   {
+    "author": "/root/reviewer",
+    "content": [
+     {
+      "text": "Synthetic review done.",
+      "type": "input_text"
+     },
+     {
+      "encrypted_content": "gAAAAA-synthetic-child-reply",
+      "type": "encrypted_content"
+     }
+    ],
+    "recipient": "/root",
+    "type": "agent_message"
+   },
+   {
+    "name": "create_thread",
+    "namespace": "codex_app",
+    "output": "<codex_delegation>\n  <source_thread_id>00000000-0000-4000-8000-000000000001</source_thread_id>\n  <input>Synthetic follow-up task.</input>\n</codex_delegation>",
+    "type": "function_call_output"
+   },
+   {
+    "author": "/root/tester",
+    "content": [
+     {
+      "text": "Synthetic tests pass.",
+      "type": "input_text"
+     }
+    ],
+    "recipient": "/root",
+    "type": "agent_message"
+   },
+   {
+    "content": [
+     {
+      "text": "Summarise the results.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   }
+  ],
+  "instructions": "You are the synthetic coding agent for the replay goldens.",
+  "model": "gpt-6-astra",
+  "parallel_tool_calls": true,
+  "prompt_cache_key": "replay-s07",
+  "reasoning": {
+   "effort": "low",
+   "summary": "auto"
+  },
+  "store": false,
+  "stream": true,
+  "tool_choice": "auto",
+  "tools": [
+   {
+    "description": "Run a shell command in the synthetic workspace.",
+    "name": "exec_command",
+    "parameters": {
+     "additionalProperties": false,
+     "properties": {
+      "cmd": {
+       "description": "The command to run.",
+       "type": "string"
+      }
+     },
+     "required": [
+      "cmd"
+     ],
+     "type": "object"
+    },
+    "strict": false,
+    "type": "function"
+   },
+   {
+    "description": "Edit files with a synthetic patch.",
+    "format": {
+     "definition": "start: /(.|\\n)+/",
+     "syntax": "lark",
+     "type": "grammar"
+    },
+    "name": "apply_patch",
+    "type": "custom"
+   },
+   {
+    "type": "web_search"
+   }
+  ]
+ }
+}

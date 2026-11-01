@@ -1,0 +1,18 @@
+{
+  "name": "scg-ponytail",
+  "version": "0.1.4",
+  "description": "Choose the simplest complete, correct solution for coding tasks.",
+  "author": {"name": "Software Combined"},
+  "repository": "https://github.com/software-combined/SC_AI",
+  "license": "Apache-2.0 AND MIT",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "SCG Ponytail",
+    "shortDescription": "Build everything required and nothing extra.",
+    "longDescription": "Apply Ponytail to coding, debugging, design and review while preserving required behavior, safety and verification.",
+    "developerName": "Software Combined",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Use the Ponytail skill to find the simplest complete, correct solution."
+  }
+}

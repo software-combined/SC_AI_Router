@@ -1,0 +1,19 @@
+{
+  "name": "scg-subagents",
+  "version": "0.8.1",
+  "description": "Subagent coordination, model selection, router-model workers and evidence refresh.",
+  "author": {
+    "name": "Software Combined"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "SCG Subagents",
+    "shortDescription": "Choose the right model for each subagent.",
+    "longDescription": "Evidence-based model selection, parent and child tool guidance, router-model workers for clients without native router subagents, and repeatable cost-quality evaluation.",
+    "developerName": "Software Combined",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Use the optimal-subagents skill to choose and coordinate models for this task."
+  },
+  "repository": "https://github.com/software-combined/SC_AI"
+}

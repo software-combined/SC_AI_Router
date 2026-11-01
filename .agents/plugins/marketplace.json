@@ -1,0 +1,92 @@
+{
+  "name": "scg-agent-plugins",
+  "interface": {
+    "displayName": "Scg Agent Plugins"
+  },
+  "plugins": [
+    {
+      "name": "scg-review",
+      "source": {
+        "source": "local",
+        "path": "./plugins/development/scg-review"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "scg-agent-factory",
+      "source": {
+        "source": "local",
+        "path": "./plugins/agents/scg-agent-factory"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "scg-subagents",
+      "source": {
+        "source": "local",
+        "path": "./plugins/agents/scg-subagents"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "scg-prototypes",
+      "source": {
+        "source": "local",
+        "path": "./plugins/development/scg-prototypes"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "scg-finance",
+      "source": {
+        "source": "local",
+        "path": "./plugins/finance/scg-finance"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "scg-documentation",
+      "source": {
+        "source": "local",
+        "path": "./plugins/documentation/scg-documentation"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "scg-ponytail",
+      "source": {"source": "local", "path": "./plugins/development/scg-ponytail"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+      "category": "Productivity"
+    },
+    {
+      "name": "scg-optimise-ci",
+      "source": {"source": "local", "path": "./plugins/development/scg-optimise-ci"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "scg-agent-factory",
+  "version": "0.3.0",
+  "description": "Persistent project agents, temporary helpers and a plain-language HTML progress view.",
+  "author": {
+    "name": "Software Combined"
+  },
+  "license": "Apache-2.0"
+}

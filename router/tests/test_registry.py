@@ -1,0 +1,347 @@
+import json
+import re
+import unittest
+from ai_router.capabilities import CANONICAL_ORDER
+from ai_router.catalogue import ROW_TEMPLATE, external_entry
+from ai_router.registry import (FIELDS, MODELS, Model, by_slug, load, picker_key,
+                                external_slugs)
+from ai_router.clients import models_for, visible_for
+
+CATALOGUE_FIELDS = set(ROW_TEMPLATE) | {'slug', 'display_name', 'description',
+    'default_reasoning_level', 'supported_reasoning_levels', 'priority',
+    'context_window', 'max_context_window', 'input_modalities',
+    'supports_reasoning_summary_parameter'}
+
+class RegistryTests(unittest.TestCase):
+    def test_slugs_unique(self):
+        self.assertEqual(len({m.slug for m in MODELS}), len(MODELS))
+
+    def test_default_reasoning_is_supported(self):
+        for model in MODELS:
+            self.assertIn(model.default_reasoning, model.reasoning, model.slug)
+
+    def test_reasoning_in_canonical_order(self):
+        for model in MODELS:
+            self.assertEqual(list(model.reasoning),
+                [lv for lv in CANONICAL_ORDER if lv in model.reasoning], model.slug)
+
+    def test_excluded_efforts_not_in_reasoning(self):
+        for model in MODELS:
+            self.assertFalse(set(model.reasoning) & set(model.excluded_efforts), model.slug)
+
+    def test_provider_is_known(self):
+        for model in MODELS:
+            self.assertIn(model.provider, {'openrouter', 'openai', 'bedrock'}, model.slug)
+
+    def test_external_entry_has_every_catalogue_field(self):
+        for model in MODELS:
+            if model.provider == 'openrouter':
+                self.assertEqual(set(external_entry(model)), CATALOGUE_FIELDS, model.slug)
+
+    def test_bad_row_shape_is_refused(self):
+        good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
+            ['low'], 'low', ['text'], [], 'native', 'native', None, False, 1,
+            100, 32768, 'none', 'none', [], True, 'verified']))
+        for bad in ({k: v for k, v in good.items() if k != 'vendor'},
+                    {k: v for k, v in good.items() if k != 'web_search'},
+                    {**good, 'provider': 'other'},
+                    {**good, 'default_reasoning': 'max'},
+                    {**good, 'reasoning_summary': 'sometimes'},
+                    {**good, 'apply_patch': 'diff'},
+                    {**good, 'max_output_tokens': 0},
+                    {**good, 'max_output_tokens': 'many'},
+                    {**good, 'web_search': 'yes'},
+                    {**good, 'experimental_tools': ['ok', 7]},
+                    {**good, 'drop_images': 'yes'}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(SystemExit):
+                    load(json.dumps([bad]))
+
+    def test_tier_required_and_validated(self):
+        for model in MODELS:
+            self.assertIn(model.tier, ('verified', 'preview'), model.slug)
+        good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
+            ['low'], 'low', ['text'], [], 'native', 'native', None, False, 1,
+            100, 32768, 'none', 'none', [], True, 'verified']))
+        for bad in ({k: v for k, v in good.items() if k != 'tier'},
+                    {**good, 'tier': 'beta'}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(SystemExit):
+                    load(json.dumps([bad]))
+
+    def test_protocols_narrow_provider_protocols(self):
+        good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
+            ['low'], 'low', ['text'], [], 'native', 'native', None, False, 1,
+            100, 32768, 'none', 'none', [], True, 'verified']))
+        row = load(json.dumps([{**good, 'protocols': ['messages']}]))[0]
+        self.assertEqual(row.protocols, ('messages',))
+        from ai_router.registry import row_serves
+        self.assertTrue(row_serves(row, 'messages'))
+        self.assertFalse(row_serves(row, 'responses'))
+        plain = load(json.dumps([good]))[0]
+        self.assertEqual(plain.protocols, ())
+        self.assertTrue(row_serves(plain, 'responses'))
+        for bad in (['messages', 'messages'], ['bogus'], 'messages',
+                    ['responses', 'messages', 'responses']):
+            with self.subTest(bad=bad):
+                with self.assertRaises(SystemExit):
+                    load(json.dumps([{**good, 'protocols': bad}]))
+        # A bedrock row may not claim a protocol Bedrock does not serve.
+        with self.assertRaises(SystemExit):
+            load(json.dumps([{**good, 'provider': 'bedrock',
+                              'protocols': ['images']}]))
+
+    def test_listed_defaults_true_and_validates(self):
+        model = Model(slug='x/y', provider='openrouter', display_name='X',
+                      vendor='V', reasoning=('low',), default_reasoning='low')
+        self.assertTrue(model.listed)
+        good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
+            ['low'], 'low', ['text'], [], 'native', 'native', None, False, 1,
+            100, 32768, 'none', 'none', [], True, 'verified']))
+        self.assertTrue(load(json.dumps([{**good, 'listed': False}]))[0].listed is False)
+        with self.assertRaises(SystemExit):
+            load(json.dumps([{**good, 'listed': 'yes'}]))
+
+    def test_provider_prefs_absent_by_default_and_validated(self):
+        model = Model(slug='x/y', provider='openrouter', display_name='X',
+                      vendor='V', reasoning=('low',), default_reasoning='low')
+        self.assertIsNone(model.provider_prefs)
+        good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
+            ['low'], 'low', ['text'], [], 'native', 'native', None, False, 1,
+            100, 32768, 'none', 'none', [], True, 'verified']))
+        valid = dict(good, provider_prefs={'ignore': ['DeepSeek'],
+                                           'allow_fallbacks': True,
+                                           'require_parameters': True,
+                                           'sort': {'by': 'throughput',
+                                                      'partition': 'none'},
+                                           'data_collection': 'deny',
+                                           'zdr': True})
+        loaded = load(json.dumps([valid]))[0]
+        self.assertEqual(loaded.provider_prefs, valid['provider_prefs'])
+        for bad_prefs in ({'bogus': True},
+                          {'ignore': 'DeepSeek'},
+                          {'ignore': []},
+                          {'allow_fallbacks': 'yes'},
+                          {'sort': 'cheapest'},
+                          {'sort': {'by': 'cheapest'}},
+                          {'sort': {'by': 'price', 'partition': 'bogus'}},
+                          {'zdr': 'allow'},
+                          {'data_collection': True},
+                          {'zdr': 1},
+                          'ignore',
+                          {}):
+            with self.subTest(prefs=bad_prefs):
+                with self.assertRaises(SystemExit):
+                    load(json.dumps([dict(good, provider_prefs=bad_prefs)]))
+
+    def test_preview_row_without_listed_key_loads_as_listed(self):
+        # Grandfathered shape: every row shipped before the flag keeps
+        # working and stays visible without a file rewrite.
+        good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
+            ['low'], 'low', ['text'], [], 'native', 'native', None, False, 1,
+            100, 32768, 'none', 'none', [], True, 'verified']))
+        old = dict(good)
+        old['tier'] = 'preview'
+        self.assertNotIn('listed', old)
+        self.assertTrue(load(json.dumps([old]))[0].listed)
+
+    def test_listed_preview_row_is_refused(self):
+        good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
+            ['low'], 'low', ['text'], [], 'native', 'native', None, False, 1,
+            100, 32768, 'none', 'none', [], True, 'verified']))
+        bad = dict(good, tier='preview', listed=True)
+        with self.assertRaises(SystemExit):
+            load(json.dumps([bad]))
+        ok = dict(good, tier='preview', listed=False)
+        self.assertFalse(load(json.dumps([ok]))[0].listed)
+
+    def test_unlisted_row_is_hidden_from_both_pickers(self):
+        hidden = Model(slug='x/y', provider='openrouter', display_name='X',
+                       vendor='V', reasoning=('low',), default_reasoning='low',
+                       listed=False)
+        self.assertFalse(visible_for(hidden, 'codex'))
+        self.assertFalse(visible_for(hidden, 'claude'))
+        self.assertNotIn(hidden, models_for((hidden,), 'codex'))
+        self.assertEqual(models_for((hidden,), 'codex'), ())
+        listed = Model(slug='x/y', provider='openrouter', display_name='X',
+                       vendor='V', reasoning=('low',), default_reasoning='low')
+        self.assertIn(listed, models_for((listed,), 'codex'))
+
+    def test_history_mode_defaults_native_and_validates(self):
+        model = Model(slug='x/y', provider='openrouter', display_name='X',
+                      vendor='V', reasoning=('low',), default_reasoning='low')
+        self.assertEqual(model.history_mode, 'native')
+        good = dict(zip(FIELDS, ['x/y', 'openrouter', 'X', 'V',
+            ['low'], 'low', ['text'], [], 'native', 'portable', None, False, 1,
+            100, 32768, 'none', 'none', [], True, 'verified']))
+        self.assertEqual(load(json.dumps([good]))[0].history_mode, 'portable')
+        for bad in ({k: v for k, v in good.items() if k != 'history_mode'},
+                    {**good, 'history_mode': 'sometimes'}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(SystemExit):
+                    load(json.dumps([bad]))
+
+    def test_muse_contributor_is_the_only_portable_row(self):
+        self.assertEqual(by_slug('meta/muse-spark-1.3-contributor').history_mode,
+                         'portable')
+        self.assertEqual(by_slug('meta/muse-spark-1.3').history_mode, 'native')
+        portable = [m.slug for m in MODELS if m.history_mode == 'portable']
+        self.assertEqual(portable, ['meta/muse-spark-1.3-contributor'])
+        self.assertEqual([by_slug(s).schema_mode for s in
+                          ('meta/muse-spark-1.3',
+                           'meta/muse-spark-1.3-contributor')],
+                         ['json_text', 'json_text'])
+
+    def test_capability_flags_default_conservative(self):
+        model = Model(slug='x/y', provider='openrouter', display_name='X',
+                      vendor='V', reasoning=('low',), default_reasoning='low')
+        self.assertEqual(model.max_output_tokens, 32768)
+        self.assertEqual(model.reasoning_summary, 'none')
+        self.assertEqual(model.apply_patch, 'none')
+        self.assertEqual(model.experimental_tools, ())
+        self.assertTrue(model.web_search)
+
+    def test_merge_preserves_replaces_appends_without_dupes(self):
+        from ai_router.catalogue import merge
+        native = {'slug': 'gpt-6-astra', 'display_name': 'Native'}
+        stale = {'slug': 'moonshotai/kimi-k3.1-pro', 'display_name': 'Stale',
+                 'priority': 1, 'context_window': 1, 'max_context_window': 1,
+                 'input_modalities': ['text'], 'default_reasoning_level': 'low',
+                 'supported_reasoning_levels': [], 'description': 'stale'}
+        catalog = {'models': [native, stale]}
+        out = merge(catalog)
+        slugs = [m['slug'] for m in out['models']]
+        self.assertEqual(slugs[0], 'gpt-6-astra')
+        self.assertEqual({key: out['models'][0][key] for key in native}, native)
+        self.assertTrue(CATALOGUE_FIELDS <= out['models'][0].keys())
+        kimi = out['models'][slugs.index('moonshotai/kimi-k3.1-pro')]
+        self.assertEqual(kimi['display_name'], 'MoonshotAI: Kimi K3.1 Pro · OpenRouter')
+        self.assertEqual(kimi['priority'], by_slug('moonshotai/kimi-k3.1-pro').priority)
+        self.assertEqual(len(slugs), len(set(slugs)))
+        self.assertEqual(len(slugs), 1 + len(models_for(MODELS, 'codex')))
+
+    def test_registry_priorities_follow_picker_order(self):
+        # Codex lists the picker by ascending priority, so the numbers must
+        # keep each vendor's rows together: vendor A-Z, verified before
+        # preview, label A-Z inside a tier.
+        ordered = sorted(MODELS, key=lambda m: picker_key(
+            m.vendor, m.tier, m.display_name, m.slug))
+        priorities = [m.priority for m in ordered]
+        self.assertEqual(priorities, sorted(priorities))
+        self.assertEqual(len(set(priorities)), len(priorities))
+        vendors = [m.vendor.casefold() for m in ordered]
+        self.assertEqual(vendors, sorted(vendors))
+
+    def test_catalog_name_vendor_prefix_rule(self):
+        from ai_router.catalogue import catalog_name
+        deepseek = by_slug('deepseek/deepseek-v4-pro-0813')
+        self.assertEqual(catalog_name(deepseek), 'DeepSeek: V4 Pro 0813')
+        muse = by_slug('meta/muse-spark-1.3')
+        self.assertEqual(catalog_name(muse), 'Meta: Muse Spark 1.3')
+        self.assertEqual(catalog_name(by_slug('xiaomi/mimo-v2.6-flash')),
+                         'Xiaomi: MiMo V2.6 Flash')
+        self.assertEqual(catalog_name(by_slug('xiaomi/mimo-v2.6-pro')),
+                         'Xiaomi: MiMo V2.6 Pro')
+
+    def test_display_names_follow_qualified_naming_convention(self):
+        # Picker labels must read '<Vendor>: <Model> <Version?>'; the vendor
+        # prefix always equals the row's vendor field, pinned rows keep any
+        # version/snapshot token verbatim, and a tilde alias row (none in the
+        # roster today) tracks with 'Latest' instead of a pinned snapshot
+        # (AGENTS.md section 8).
+        for model in MODELS:
+            if model.provider != 'openrouter':
+                continue
+            with self.subTest(slug=model.slug):
+                short = model.display_name.removesuffix(' · OpenRouter')
+                self.assertTrue(model.display_name.endswith(' · OpenRouter'))
+                self.assertTrue(short.startswith(model.vendor + ': '),
+                                f'{model.slug}: prefix must equal vendor')
+                if re.search(r'\d{4}', short):
+                    self.assertNotRegex(short, r'^\S+: \d{4}$',
+                                        f'{model.slug}: snapshots keep model context')
+        alias_labels = {m.slug: m.display_name for m in MODELS
+                        if m.slug.startswith('~')}
+        for slug, label in alias_labels.items():
+            with self.subTest(slug=slug):
+                self.assertIn('Latest', label)
+        pinned = {m.slug: m.display_name for m in MODELS
+                  if not m.slug.startswith('~')}
+        self.assertTrue(any(re.search(r'\(0902\)|0423|0813', label)
+                            for label in pinned.values()))
+
+    def test_by_slug_and_external_slugs(self):
+        self.assertEqual(by_slug('moonshotai/kimi-k3.1-pro').vendor, 'MoonshotAI')
+        self.assertIsNone(by_slug('unknown/model'))
+        self.assertEqual(external_slugs(),
+                         {m.slug for m in MODELS
+                          if m.provider in ('openrouter', 'bedrock')})
+
+    def test_visibility_hides_only_the_claude_same_billing_rows(self):
+        unlisted = {m.slug for m in MODELS if m.provider == 'openrouter' and not m.listed}
+        self.assertEqual({m.slug for m in MODELS if m.provider == 'openrouter' and
+                          not visible_for(m, 'codex')}, unlisted)
+        self.assertEqual({m.slug for m in MODELS if m.provider == 'openrouter' and
+                          not visible_for(m, 'claude')}, unlisted | {'anthropic/claude-sonnet-5.5', 'anthropic/claude-fable-5.1', 'anthropic/claude-haiku-5.5', 'anthropic/claude-opus-5.5'})
+
+    def test_visibility_keeps_subscription_and_other_vendor_rows(self):
+        openai_sub = Model(slug='gpt-6-astra', provider='openai', display_name='G',
+                           vendor='OpenAI', reasoning=('low',), default_reasoning='low')
+        self.assertTrue(visible_for(openai_sub, 'codex'))
+        self.assertTrue(visible_for(openai_sub, 'claude'))
+        self.assertTrue(visible_for(by_slug('moonshotai/kimi-k3.1-pro'), 'codex'))
+        self.assertTrue(visible_for(by_slug('moonshotai/kimi-k3.1-pro'), 'claude'))
+        self.assertTrue(visible_for(by_slug('openai/gpt-6-astra'), 'claude'))
+        self.assertTrue(visible_for(by_slug('anthropic/claude-sonnet-5.5'), 'codex'))
+
+    def test_visibility_tilde_and_plain_prefixes_both_hide(self):
+        # The roster pins exact ids; the tilde normalization branch is kept
+        # for any future alias row, so exercise it with a synthetic one.
+        alias = Model(slug='~anthropic/claude-sonnet-5', provider='openrouter',
+                      display_name='X', vendor='Anthropic', reasoning=('low',),
+                      default_reasoning='low')
+        self.assertFalse(visible_for(alias, 'claude'))
+        self.assertTrue(visible_for(alias, 'codex'))
+        plain = Model(slug='anthropic/claude-sonnet-5', provider='openrouter',
+                      display_name='X', vendor='Anthropic', reasoning=('low',),
+                      default_reasoning='low')
+        self.assertFalse(visible_for(plain, 'claude'))
+        self.assertTrue(visible_for(plain, 'codex'))
+        self.assertTrue(visible_for(by_slug('openai/gpt-6-astra'), 'codex'))
+
+    def test_near_miss_offers_bare_tilde_alias_only(self):
+        # No registry row is an alias today, so the mechanism is exercised
+        # against a synthetic tilde row; the real roster must not match.
+        from unittest import mock
+        from ai_router import registry as registry_mod
+        from ai_router.registry import near_miss
+        alias = Model(slug='~x-ai/grok-latest', provider='openrouter',
+                      display_name='X', vendor='SpaceXAI', reasoning=('low',),
+                      default_reasoning='low')
+        with mock.patch.dict(registry_mod.BY_SLUG, {alias.slug: alias}):
+            self.assertEqual(near_miss('x-ai/grok-latest'), '~x-ai/grok-latest')
+            self.assertIsNone(near_miss('~x-ai/grok-latest'))
+        self.assertIsNone(near_miss('anthropic/claude-opus-latest'))
+        self.assertIsNone(near_miss('nobody/none'))
+        self.assertIsNone(near_miss('z-ai/glm-5.3'))
+        self.assertIsNone(near_miss(None))
+        self.assertIsNone(near_miss(''))
+
+    def test_models_for_matches_visibility_and_rejects_unknown_client(self):
+        for client in ('codex', 'claude'):
+            self.assertEqual({m.slug for m in models_for(MODELS, client)},
+                             {m.slug for m in MODELS if visible_for(m, client)})
+        with self.assertRaises(ValueError):
+            models_for(MODELS, 'other')
+        with self.assertRaises(ValueError):
+            visible_for(by_slug('moonshotai/kimi-k3.1-pro'), 'other')
+
+    def test_codex_picker_lists_openai_twins_without_include_twins(self):
+        twins = {m.slug for m in models_for(MODELS, 'codex')
+                 if m.slug.startswith('openai/')}
+        self.assertEqual(twins, {'openai/gpt-6-astra', 'openai/gpt-6.1-sol',
+                                 'openai/gpt-6.1-terra',
+                                 'openai/gpt-6-luna'})
+
+if __name__ == '__main__':
+    unittest.main()

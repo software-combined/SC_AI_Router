@@ -1,0 +1,1066 @@
+{
+  "retrieved": "2026-09-12",
+  "aa_methodology": "Intelligence Index v4.3; Terminal-Bench v4.0; GDPval-AA v2; AA-LCR v1.1",
+  "price_basis": "Comparable published reference prices, independent of subscription or account billing arrangements. Advertised prices are not actual invoices.",
+  "models": [
+    {
+      "id": "anthropic/claude-fable-5.1",
+      "effort": "max",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/claude-fable-5-1",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 53.3737509623252,
+        "terminal": 0.52020202020202,
+        "scicode": 0.630787037037037,
+        "lcr": 0.853333333333333,
+        "gdpval": 1763.64,
+        "pdf": 0.262,
+        "automation": 0.5937591715646424,
+        "vision": null,
+        "omniscience": 43.45,
+        "briefcase": 1661.82
+      },
+      "aa_task_usd": 7.629706364004841,
+      "briefcase_ci95": {
+        "elo": 1661.82,
+        "lower95ci": 1652.55,
+        "upper95ci": 1671.71
+      },
+      "prices_usd_per_million": {
+        "input": 10.0,
+        "output": 50.0,
+        "cache_read": 0.25
+      },
+      "webdev": {
+        "score": 1758,
+        "ci95_plus_minus": 14,
+        "votes": 3036,
+        "effort": "max",
+        "source": "https://arena.ai/leaderboard/code",
+        "published": "2026-09-11",
+        "preliminary": false
+      },
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1000000,
+      "pricing_conditions": [],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "anthropic/claude-haiku-4.5",
+      "effort": "none",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/claude-4-5-haiku",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 15.410949885381,
+        "terminal": null,
+        "scicode": null,
+        "lcr": 0.496666666666667,
+        "gdpval": null,
+        "pdf": null,
+        "automation": null,
+        "vision": 0.551445086705202,
+        "omniscience": -7.56666666666667,
+        "briefcase": null
+      },
+      "aa_task_usd": null,
+      "briefcase_ci95": null,
+      "prices_usd_per_million": {
+        "input": 1.0,
+        "output": 5.0,
+        "cache_read": 0.09999999999999999
+      },
+      "webdev": null,
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 200000,
+      "pricing_conditions": [],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": true
+    },
+    {
+      "id": "anthropic/claude-opus-5",
+      "effort": "max",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/claude-opus-5",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 50.7001865797629,
+        "terminal": 0.48989898989899,
+        "scicode": 0.563657407407407,
+        "lcr": 0.793333333333333,
+        "gdpval": 1735.09,
+        "pdf": 0.216,
+        "automation": 0.565735557649325,
+        "vision": 0.847398843930636,
+        "omniscience": 37.0666666666667,
+        "briefcase": 1644.9
+      },
+      "aa_task_usd": 5.858396237036018,
+      "briefcase_ci95": {
+        "elo": 1644.9,
+        "lower95ci": 1638.09,
+        "upper95ci": 1652.49
+      },
+      "prices_usd_per_million": {
+        "input": 5.0,
+        "output": 25.0,
+        "cache_read": 0.5
+      },
+      "webdev": {
+        "score": 1687,
+        "ci95_plus_minus": 7,
+        "votes": 12087,
+        "effort": "max",
+        "source": "https://arena.ai/leaderboard/code",
+        "published": "2026-09-11",
+        "preliminary": false
+      },
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1000000,
+      "pricing_conditions": [],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "anthropic/claude-sonnet-5",
+      "effort": "max",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/claude-sonnet-5",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 38.3576962882576,
+        "terminal": 0.141414141414141,
+        "scicode": 0.542824074074074,
+        "lcr": 0.82,
+        "gdpval": 1500.86,
+        "pdf": 0.132,
+        "automation": 0.36512675717036386,
+        "vision": 0.772832369942197,
+        "omniscience": 16.45,
+        "briefcase": 1355.19
+      },
+      "aa_task_usd": 5.091163584815694,
+      "briefcase_ci95": {
+        "elo": 1355.19,
+        "lower95ci": 1349.09,
+        "upper95ci": 1361.66
+      },
+      "prices_usd_per_million": {
+        "input": 2.0,
+        "output": 10.0,
+        "cache_read": 0.19999999999999998
+      },
+      "webdev": null,
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1000000,
+      "pricing_conditions": [],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "deepseek/deepseek-v4-pro-0813",
+      "effort": "max",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/deepseek-v4-pro",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 36.2828791278402,
+        "terminal": 0.141414141414141,
+        "scicode": 0.510416666666667,
+        "lcr": 0.803333333333333,
+        "gdpval": 1493.31,
+        "pdf": 0.114,
+        "automation": 0.5671165546344002,
+        "vision": null,
+        "omniscience": 0.833333333333333,
+        "briefcase": 1264.67
+      },
+      "aa_task_usd": 0.6740219040435134,
+      "briefcase_ci95": {
+        "elo": 1264.67,
+        "lower95ci": 1258.2,
+        "upper95ci": 1272.12
+      },
+      "prices_usd_per_million": {
+        "input": 0.57816,
+        "output": 1.73448,
+        "cache_read": 0.018396000000000003
+      },
+      "webdev": null,
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1048576,
+      "pricing_conditions": [],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "deepseek/deepseek-v4.1-flash",
+      "effort": "max",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/deepseek-v4-1-flash",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 39.545442472527,
+        "terminal": 0.267676767676768,
+        "scicode": 0.518518518518518,
+        "lcr": 0.84,
+        "gdpval": 1632.06,
+        "pdf": 0.128,
+        "automation": 0.6889097769674057,
+        "vision": 0.769942196531792,
+        "omniscience": -5.3,
+        "briefcase": 1423.72
+      },
+      "aa_task_usd": 0.26522527009606844,
+      "briefcase_ci95": {
+        "elo": 1423.72,
+        "lower95ci": 1414.08,
+        "upper95ci": 1433.7
+      },
+      "prices_usd_per_million": {
+        "input": 0.15,
+        "output": 0.6,
+        "cache_read": 0.003
+      },
+      "webdev": {
+        "score": 1614,
+        "ci95_plus_minus": 17,
+        "votes": 1361,
+        "effort": "max",
+        "source": "https://arena.ai/leaderboard/code",
+        "published": "2026-09-11",
+        "preliminary": false
+      },
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1048576,
+      "pricing_conditions": [
+        {
+          "utc_days": [
+            "saturday",
+            "sunday"
+          ],
+          "prompt": "0.00000015",
+          "completion": "0.0000006",
+          "input_cache_read": "0.000000003"
+        },
+        {
+          "utc_days": [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday"
+          ],
+          "utc_start": 0,
+          "utc_end": 100,
+          "prompt": "0.00000015",
+          "completion": "0.0000006",
+          "input_cache_read": "0.000000003"
+        },
+        {
+          "utc_days": [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday"
+          ],
+          "utc_start": 100,
+          "utc_end": 400,
+          "prompt": "0.0000003",
+          "completion": "0.0000012",
+          "input_cache_read": "0.000000006"
+        },
+        {
+          "utc_days": [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday"
+          ],
+          "utc_start": 400,
+          "utc_end": 600,
+          "prompt": "0.00000015",
+          "completion": "0.0000006",
+          "input_cache_read": "0.000000003"
+        },
+        {
+          "utc_days": [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday"
+          ],
+          "utc_start": 600,
+          "utc_end": 1000,
+          "prompt": "0.0000003",
+          "completion": "0.0000012",
+          "input_cache_read": "0.000000006"
+        },
+        {
+          "utc_days": [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday"
+          ],
+          "utc_start": 1000,
+          "utc_end": 0,
+          "prompt": "0.00000015",
+          "completion": "0.0000006",
+          "input_cache_read": "0.000000003"
+        }
+      ],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "google/gemini-3.1-pro-preview",
+      "effort": "not specified",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/gemini-3-1-pro-preview",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 30.3596656132261,
+        "terminal": 0.0404040404040404,
+        "scicode": 0.586805555555556,
+        "lcr": 0.82,
+        "gdpval": 903.94,
+        "pdf": 0.178,
+        "automation": 0.3542771839809836,
+        "vision": 0.824277456647399,
+        "omniscience": 31.8833333333333,
+        "briefcase": 458.83
+      },
+      "aa_task_usd": 0.6747317275695374,
+      "briefcase_ci95": {
+        "elo": 458.83,
+        "lower95ci": 450.45,
+        "upper95ci": 466.66
+      },
+      "prices_usd_per_million": {
+        "input": 2.0,
+        "output": 12.0,
+        "cache_read": 0.19999999999999998
+      },
+      "webdev": null,
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1048576,
+      "pricing_conditions": [
+        {
+          "min_prompt_tokens": 200000,
+          "prompt": "0.000004",
+          "completion": "0.000018",
+          "audio": "0.000004",
+          "input_audio_cache": "0.0000004",
+          "input_cache_read": "0.0000004"
+        }
+      ],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "google/gemini-3.8-flash",
+      "effort": "high",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/gemini-3-8-flash",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 41.1863571765904,
+        "terminal": 0.196969696969697,
+        "scicode": 0.565972222222222,
+        "lcr": 0.813333333333333,
+        "gdpval": 1463.81,
+        "pdf": 0.21,
+        "automation": 0.5993009432118243,
+        "vision": 0.85606936416185,
+        "omniscience": 29.55,
+        "briefcase": 1201.59
+      },
+      "aa_task_usd": 1.2427947606950427,
+      "briefcase_ci95": {
+        "elo": 1201.59,
+        "lower95ci": 1193.68,
+        "upper95ci": 1210.26
+      },
+      "prices_usd_per_million": {
+        "input": 0.75,
+        "output": 3.75,
+        "cache_read": 0.075
+      },
+      "webdev": {
+        "score": 1568,
+        "ci95_plus_minus": 12,
+        "votes": 2732,
+        "effort": "high",
+        "source": "https://arena.ai/leaderboard/code",
+        "published": "2026-09-11",
+        "preliminary": true
+      },
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1048576,
+      "pricing_conditions": [],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "meta/muse-spark-1.3-contributor",
+      "effort": "not specified",
+      "aa_identity": "missing",
+      "aa_source": null,
+      "aa_eligible": false,
+      "scores": {
+        "intelligence": null,
+        "terminal": null,
+        "scicode": null,
+        "lcr": null,
+        "gdpval": null,
+        "pdf": null,
+        "automation": null,
+        "vision": null,
+        "omniscience": null,
+        "briefcase": null
+      },
+      "aa_task_usd": null,
+      "briefcase_ci95": null,
+      "prices_usd_per_million": {
+        "input": 0.09999999999999999,
+        "output": 0.19999999999999998,
+        "cache_read": 0.002
+      },
+      "webdev": null,
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1048576,
+      "pricing_conditions": [],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "meta/muse-spark-1.3",
+      "effort": "max",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/muse-spark-1-3",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 48.1690107719685,
+        "terminal": 0.333333333333333,
+        "scicode": 0.587962962962963,
+        "lcr": 0.83,
+        "gdpval": 1703.34,
+        "pdf": 0.266,
+        "automation": 0.5785343786538614,
+        "vision": null,
+        "omniscience": 25,
+        "briefcase": 1589.18
+      },
+      "aa_task_usd": 1.6048932100125866,
+      "briefcase_ci95": {
+        "elo": 1589.18,
+        "lower95ci": 1578.27,
+        "upper95ci": 1600.32
+      },
+      "prices_usd_per_million": {
+        "input": 1.25,
+        "output": 4.25,
+        "cache_read": 0.15
+      },
+      "webdev": {
+        "score": 1652,
+        "ci95_plus_minus": 12,
+        "votes": 2972,
+        "effort": "max",
+        "source": "https://arena.ai/leaderboard/code",
+        "published": "2026-09-11",
+        "preliminary": false
+      },
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1048576,
+      "pricing_conditions": [],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "moonshotai/kimi-k3",
+      "effort": "max",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/kimi-k3",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 43.7841729518782,
+        "terminal": 0.126262626262626,
+        "scicode": 0.594907407407407,
+        "lcr": 0.886666666666667,
+        "gdpval": 1569.47,
+        "pdf": 0.22,
+        "automation": 0.5827297780015204,
+        "vision": 0.805202312138728,
+        "omniscience": 19.7,
+        "briefcase": 1492.58
+      },
+      "aa_task_usd": 2.0001323004425493,
+      "briefcase_ci95": {
+        "elo": 1492.58,
+        "lower95ci": 1487.27,
+        "upper95ci": 1498.97
+      },
+      "prices_usd_per_million": {
+        "input": 2.30272875,
+        "output": 11.550195,
+        "cache_read": 0.26316900000000004
+      },
+      "webdev": {
+        "score": 1674,
+        "ci95_plus_minus": 11,
+        "votes": 4547,
+        "effort": "max",
+        "source": "https://arena.ai/leaderboard/code",
+        "published": "2026-09-11",
+        "preliminary": false
+      },
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1048576,
+      "pricing_conditions": [],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "openai/gpt-5.6-luna",
+      "effort": "max",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/gpt-5-6-luna",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 37.5048489690841,
+        "terminal": 0.116161616161616,
+        "scicode": 0.53587962962963,
+        "lcr": 0.836666666666667,
+        "gdpval": 1489.33,
+        "pdf": 0.24,
+        "automation": 0.5020861763756194,
+        "vision": 0.785549132947977,
+        "omniscience": -10.2833333333333,
+        "briefcase": 1339.38
+      },
+      "aa_task_usd": 0.17829726152289094,
+      "briefcase_ci95": {
+        "elo": 1339.38,
+        "lower95ci": 1332.76,
+        "upper95ci": 1346.54
+      },
+      "prices_usd_per_million": {
+        "input": 0.19999999999999998,
+        "output": 1.2,
+        "cache_read": 0.02
+      },
+      "webdev": null,
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1050000,
+      "pricing_conditions": [
+        {
+          "min_prompt_tokens": 272000,
+          "prompt": "0.0000004",
+          "completion": "0.0000018",
+          "input_cache_read": "0.00000004",
+          "input_cache_write": "0.0000005"
+        }
+      ],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "openai/gpt-5.6-sol",
+      "effort": "max",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/gpt-5-6-sol",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 47.0613568915036,
+        "terminal": 0.398989898989899,
+        "scicode": 0.570601851851852,
+        "lcr": 0.84,
+        "gdpval": 1624.11,
+        "pdf": 0.272,
+        "automation": 0.6008114996276329,
+        "vision": 0.834104046242775,
+        "omniscience": 21.9666666666667,
+        "briefcase": 1475
+      },
+      "aa_task_usd": 1.98845538085375,
+      "briefcase_ci95": {
+        "elo": 1475,
+        "lower95ci": 1467.79,
+        "upper95ci": 1483.49
+      },
+      "prices_usd_per_million": {
+        "input": 2.0,
+        "output": 10.0,
+        "cache_read": 0.19999999999999998
+      },
+      "webdev": null,
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1050000,
+      "pricing_conditions": [
+        {
+          "min_prompt_tokens": 272000,
+          "prompt": "0.000004",
+          "completion": "0.000015",
+          "input_cache_read": "0.0000004",
+          "input_cache_write": "0.000005"
+        }
+      ],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "openai/gpt-6-astra",
+      "effort": "max",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/gpt-6-astra",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 52.814069395513,
+        "terminal": 0.590909090909091,
+        "scicode": 0.564814814814815,
+        "lcr": 0.806666666666667,
+        "gdpval": 1580.2,
+        "pdf": 0.31,
+        "automation": 0.6849174806688876,
+        "vision": 0.86878612716763,
+        "omniscience": 43.4,
+        "briefcase": 1562.01
+      },
+      "aa_task_usd": 3.2575003134834164,
+      "briefcase_ci95": {
+        "elo": 1562.01,
+        "lower95ci": 1553.49,
+        "upper95ci": 1571.75
+      },
+      "prices_usd_per_million": {
+        "input": 10.0,
+        "output": 50.0,
+        "cache_read": 1.0
+      },
+      "webdev": {
+        "score": 1800,
+        "ci95_plus_minus": 16,
+        "votes": 2281,
+        "effort": "max",
+        "source": "https://arena.ai/leaderboard/code",
+        "published": "2026-09-11",
+        "preliminary": false
+      },
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1050000,
+      "pricing_conditions": [
+        {
+          "min_prompt_tokens": 272000,
+          "prompt": "0.00002",
+          "completion": "0.000075",
+          "input_cache_read": "0.000002",
+          "input_cache_write": "0.000025"
+        }
+      ],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "openai/gpt-6.1-sol",
+      "effort": "not specified",
+      "aa_identity": "missing",
+      "aa_source": null,
+      "aa_eligible": false,
+      "scores": {
+        "intelligence": null,
+        "terminal": null,
+        "scicode": null,
+        "lcr": null,
+        "gdpval": null,
+        "pdf": null,
+        "automation": null,
+        "vision": null,
+        "omniscience": null,
+        "briefcase": null
+      },
+      "aa_task_usd": null,
+      "briefcase_ci95": null,
+      "prices_usd_per_million": null,
+      "webdev": null,
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "qwen/qwen3.8-max-0902",
+      "effort": "not specified",
+      "aa_identity": "proxy: undated Qwen3.8 Max; not 0902",
+      "aa_source": "https://artificialanalysis.ai/models/qwen3-8-max",
+      "aa_eligible": false,
+      "scores": {
+        "intelligence": 40.3048623585941,
+        "terminal": 0.186868686868687,
+        "scicode": 0.532407407407407,
+        "lcr": 0.783333333333333,
+        "gdpval": 1630.39,
+        "pdf": 0.202,
+        "automation": 0.4923210407553669,
+        "vision": 0.823121387283237,
+        "omniscience": 3.4,
+        "briefcase": 1387.89
+      },
+      "aa_task_usd": 2.6699848505343478,
+      "briefcase_ci95": {
+        "elo": 1387.89,
+        "lower95ci": 1381.72,
+        "upper95ci": 1394.93
+      },
+      "prices_usd_per_million": {
+        "input": 2.0,
+        "output": 6.0,
+        "cache_read": 0.25
+      },
+      "webdev": {
+        "score": 1681,
+        "ci95_plus_minus": 15,
+        "votes": 2262,
+        "effort": "not specified",
+        "source": "https://arena.ai/leaderboard/code",
+        "published": "2026-09-11",
+        "preliminary": true
+      },
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1000000,
+      "pricing_conditions": [],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "x-ai/grok-4.7",
+      "effort": "xhigh",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/grok-4-7",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 46.4465506302286,
+        "terminal": 0.257575757575758,
+        "scicode": 0.574074074074074,
+        "lcr": 0.766666666666667,
+        "gdpval": 1695.21,
+        "pdf": 0.2,
+        "automation": 0.6555835148969458,
+        "vision": null,
+        "omniscience": 32.03333333333333,
+        "briefcase": null
+      },
+      "aa_task_usd": 3.738325952106939,
+      "briefcase_ci95": null,
+      "prices_usd_per_million": {
+        "input": 1.6,
+        "output": 4.8,
+        "cache_read": 0.4
+      },
+      "webdev": null,
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 500000,
+      "pricing_conditions": [
+        {
+          "min_prompt_tokens": 200000,
+          "prompt": "0.0000032",
+          "completion": "0.0000096",
+          "input_cache_read": "0.0000008"
+        }
+      ],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "z-ai/glm-5.3-flash",
+      "effort": "max",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/glm-5-3-flash",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 41.907366113455,
+        "terminal": 0.328282828282828,
+        "scicode": 0.516203703703704,
+        "lcr": 0.8,
+        "gdpval": 1655.63,
+        "pdf": 0.154,
+        "automation": 0.6036862782167782,
+        "vision": null,
+        "omniscience": 7.46666666666667,
+        "briefcase": 1449.23
+      },
+      "aa_task_usd": 0.2532595604307378,
+      "briefcase_ci95": {
+        "elo": 1449.23,
+        "lower95ci": 1440.62,
+        "upper95ci": 1457.98
+      },
+      "prices_usd_per_million": {
+        "input": 0.075,
+        "output": 0.25,
+        "cache_read": 0.015
+      },
+      "webdev": {
+        "score": 1607,
+        "ci95_plus_minus": 12,
+        "votes": 2925,
+        "effort": "not specified",
+        "source": "https://arena.ai/leaderboard/code",
+        "published": "2026-09-11",
+        "preliminary": false
+      },
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1310720,
+      "pricing_conditions": [],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "z-ai/glm-5.3",
+      "effort": "max",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/glm-5-3",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 44.855717385614,
+        "terminal": 0.419191919191919,
+        "scicode": 0.590277777777778,
+        "lcr": 0.796666666666667,
+        "gdpval": 1667.27,
+        "pdf": 0.112,
+        "automation": 0.622028649962642,
+        "vision": null,
+        "omniscience": 14.3,
+        "briefcase": 1512.51
+      },
+      "aa_task_usd": 2.0056375150449584,
+      "briefcase_ci95": {
+        "elo": 1512.51,
+        "lower95ci": 1503.57,
+        "upper95ci": 1521.72
+      },
+      "prices_usd_per_million": {
+        "input": 1.4,
+        "output": 4.4,
+        "cache_read": 0.26
+      },
+      "webdev": {
+        "score": 1614,
+        "ci95_plus_minus": 11,
+        "votes": 3725,
+        "effort": "max",
+        "source": "https://arena.ai/leaderboard/code",
+        "published": "2026-09-11",
+        "preliminary": false
+      },
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1310720,
+      "pricing_conditions": [],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "meta/muse-spark-1.3",
+      "effort": "xhigh",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/muse-spark-1-3-xhigh",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 45.1612216922226,
+        "terminal": 0.166666666666667,
+        "scicode": 0.597222222222222,
+        "lcr": 0.83,
+        "gdpval": 1662.34,
+        "pdf": 0.242,
+        "automation": 0.5683609003249621,
+        "vision": 0.820231213872832,
+        "omniscience": 23.1166666666667,
+        "briefcase": 1483.22
+      },
+      "aa_task_usd": 1.3677936514692752,
+      "briefcase_ci95": {
+        "elo": 1483.22,
+        "lower95ci": 1473.51,
+        "upper95ci": 1493.73
+      },
+      "prices_usd_per_million": {
+        "input": 1.25,
+        "output": 4.25,
+        "cache_read": 0.15
+      },
+      "webdev": {
+        "score": 1623,
+        "ci95_plus_minus": 14,
+        "votes": 2123,
+        "effort": "xhigh",
+        "source": "https://arena.ai/leaderboard/code",
+        "published": "2026-09-11",
+        "preliminary": false
+      },
+      "price_source": "https://openrouter.ai/api/v1/models",
+      "context_tokens": 1048576,
+      "pricing_conditions": [],
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "gpt-5.5",
+      "effort": "xhigh",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/gpt-5-5",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 38.6291937590607,
+        "terminal": 0.146464646464646,
+        "scicode": 0.55787037037037,
+        "lcr": 0.843333333333333,
+        "gdpval": 1395.85,
+        "pdf": 0.212,
+        "automation": 0.4730056587293313,
+        "vision": 0.798843930635838,
+        "omniscience": 20.5166666666667,
+        "briefcase": 1135.79
+      },
+      "aa_task_usd": 2.6339796841243297,
+      "briefcase_ci95": {
+        "elo": 1135.79,
+        "lower95ci": 1129.47,
+        "upper95ci": 1142.29
+      },
+      "prices_usd_per_million": {
+        "input": 5,
+        "output": 30,
+        "cache_read": 0.5
+      },
+      "webdev": null,
+      "catalogue_origin": "Codex",
+      "price_source": "https://artificialanalysis.ai/models/gpt-5-5",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "gpt-5.4-mini",
+      "effort": "xhigh",
+      "aa_identity": "matched model; harness transfer unverified",
+      "aa_source": "https://artificialanalysis.ai/models/gpt-5-4-mini",
+      "aa_eligible": true,
+      "scores": {
+        "intelligence": 24.5789419231964,
+        "terminal": 0.0202020202020202,
+        "scicode": 0.520833333333333,
+        "lcr": 0.77,
+        "gdpval": 1094.54,
+        "pdf": 0.134,
+        "automation": 0.26204887225711754,
+        "vision": 0.732947976878613,
+        "omniscience": -18.9166666666667,
+        "briefcase": 719.24
+      },
+      "aa_task_usd": 0.40970114992092954,
+      "briefcase_ci95": {
+        "elo": 719.24,
+        "lower95ci": 712.17,
+        "upper95ci": 726.09
+      },
+      "prices_usd_per_million": {
+        "input": 0.75,
+        "output": 4.5,
+        "cache_read": 0.075
+      },
+      "webdev": null,
+      "catalogue_origin": "Codex",
+      "price_source": "https://artificialanalysis.ai/models/gpt-5-4-mini",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "gpt-5.3-codex-spark",
+      "effort": "not specified",
+      "aa_identity": "missing",
+      "aa_source": null,
+      "aa_eligible": false,
+      "scores": {
+        "intelligence": null,
+        "terminal": null,
+        "scicode": null,
+        "lcr": null,
+        "gdpval": null,
+        "pdf": null,
+        "automation": null,
+        "vision": null,
+        "omniscience": null,
+        "briefcase": null
+      },
+      "aa_task_usd": null,
+      "briefcase_ci95": null,
+      "prices_usd_per_million": null,
+      "webdev": null,
+      "catalogue_origin": "Codex",
+      "intelligence_estimated": false
+    },
+    {
+      "id": "xiaomi/mimo-v2.6-pro",
+      "effort": "not specified",
+      "aa_identity": "missing",
+      "aa_source": null,
+      "aa_eligible": false,
+      "scores": {
+        "intelligence": null,
+        "terminal": null,
+        "scicode": null,
+        "lcr": null,
+        "gdpval": null,
+        "pdf": null,
+        "automation": null,
+        "vision": null,
+        "omniscience": null,
+        "briefcase": null
+      },
+      "aa_task_usd": null,
+      "briefcase_ci95": null,
+      "prices_usd_per_million": null,
+      "webdev": null,
+      "catalogue_origin": "OpenRouter",
+      "intelligence_estimated": false
+    }
+  ],
+  "excluded_system_rows": [
+    "codex-auto-review"
+  ],
+  "runtime_aliases": {
+    "gpt-6-astra": "openai/gpt-6-astra",
+    "gpt-5.6-sol": "openai/gpt-5.6-sol",
+    "gpt-5.6-luna": "openai/gpt-5.6-luna",
+    "gpt-5.5": "gpt-5.5",
+    "gpt-5.4-mini": "gpt-5.4-mini",
+    "gpt-5.3-codex-spark": "gpt-5.3-codex-spark"
+  },
+  "prescribed_efforts": {
+    "anthropic/claude-fable-5.1": "max",
+    "anthropic/claude-haiku-4.5": "none",
+    "anthropic/claude-opus-5": "max",
+    "anthropic/claude-sonnet-5": "max",
+    "deepseek/deepseek-v4-pro-0813": "max",
+    "deepseek/deepseek-v4.1-flash": "max",
+    "google/gemini-3.1-pro-preview": "high",
+    "google/gemini-3.8-flash": "high",
+    "meta/muse-spark-1.3-contributor": "xhigh",
+    "meta/muse-spark-1.3": "max",
+    "moonshotai/kimi-k3": "max",
+    "openai/gpt-5.6-luna": "max",
+    "openai/gpt-5.6-sol": "max",
+    "openai/gpt-6-astra": "max",
+    "openai/gpt-6.1-sol": "high",
+    "qwen/qwen3.8-max-0902": "xhigh",
+    "x-ai/grok-4.7": "xhigh",
+    "z-ai/glm-5.3-flash": "max",
+    "z-ai/glm-5.3": "max",
+    "gpt-5.5": "xhigh",
+    "gpt-5.4-mini": "xhigh",
+    "gpt-5.3-codex-spark": "xhigh",
+    "xiaomi/mimo-v2.6-pro": "xhigh"
+  }
+}

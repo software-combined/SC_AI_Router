@@ -1,0 +1,207 @@
+{
+ "contract": {
+  "unknown_top_level": [],
+  "violations": {},
+  "warnings": {
+   "item.unverified_type": 4
+  }
+ },
+ "wire": {
+  "include": [
+   "reasoning.encrypted_content"
+  ],
+  "input": [
+   {
+    "content": [
+     {
+      "text": "<permissions instructions>\nSynthetic sandbox: read-only; approvals are never requested.\n</permissions instructions>",
+      "type": "input_text"
+     }
+    ],
+    "role": "developer",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "Add a greeting to the synthetic app.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "[reasoning summary from the previous model] Find the greeting helper first.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "[tool search result replayed as declared tools; the search call itself is omitted on this model]",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   },
+   {
+    "arguments": "{\"input\": \"*** Begin Patch\\n*** Add File: hello.txt\\n+hello\\n*** End Patch\\n\"}",
+    "call_id": "ct_s02_declared",
+    "name": "apply_patch",
+    "status": "completed",
+    "type": "function_call"
+   },
+   {
+    "call_id": "ct_s02_declared",
+    "output": "Success. Updated hello.txt.",
+    "type": "function_call_output"
+   },
+   {
+    "call_id": "ct_s02_undeclared",
+    "input": "print(\"synthetic\")",
+    "name": "exec",
+    "status": "completed",
+    "type": "custom_tool_call"
+   },
+   {
+    "call_id": "ct_s02_undeclared",
+    "output": "synthetic",
+    "type": "custom_tool_call_output"
+   },
+   {
+    "call_id": "ap_s02",
+    "operation": {
+     "diff": "@@\n-hello\n+hello, world\n",
+     "path": "hello.txt",
+     "type": "update_file"
+    },
+    "status": "completed",
+    "type": "apply_patch_call"
+   },
+   {
+    "call_id": "ap_s02",
+    "output": "Done.",
+    "status": "completed",
+    "type": "apply_patch_call_output"
+   },
+   {
+    "content": [
+     {
+      "text": "<model_switch>\nThe user was previously using a different model.\n</model_switch>",
+      "type": "input_text"
+     }
+    ],
+    "role": "developer",
+    "type": "message"
+   },
+   {
+    "content": [
+     {
+      "text": "Carry on with the greeting.",
+      "type": "input_text"
+     }
+    ],
+    "role": "user",
+    "type": "message"
+   }
+  ],
+  "instructions": "You are the synthetic coding agent for the replay goldens.",
+  "max_output_tokens": 64000,
+  "model": "deepseek/deepseek-v4.1-flash-1017",
+  "parallel_tool_calls": true,
+  "prompt_cache_key": "replay-s02",
+  "reasoning": {
+   "effort": "low",
+   "summary": "auto"
+  },
+  "store": false,
+  "stream": true,
+  "tool_choice": "auto",
+  "tools": [
+   {
+    "description": "Run a shell command in the synthetic workspace.",
+    "name": "exec_command",
+    "parameters": {
+     "additionalProperties": false,
+     "properties": {
+      "cmd": {
+       "description": "The command to run.",
+       "type": "string"
+      }
+     },
+     "required": [
+      "cmd"
+     ],
+     "type": "object"
+    },
+    "strict": false,
+    "type": "function"
+   },
+   {
+    "description": "Edit files with a synthetic patch.",
+    "name": "apply_patch",
+    "parameters": {
+     "additionalProperties": false,
+     "properties": {
+      "input": {
+       "description": "The complete raw tool input.",
+       "type": "string"
+      }
+     },
+     "required": [
+      "input"
+     ],
+     "type": "object"
+    },
+    "strict": true,
+    "type": "function"
+   },
+   {
+    "description": "Search the deferred synthetic tools by keyword.\nSearch using short keywords or an unqualified tool name, not a dotted namespace path. If there are no matches, retry with a shorter query.",
+    "name": "codex_client_tool_search",
+    "parameters": {
+     "additionalProperties": false,
+     "properties": {
+      "limit": {
+       "minimum": 1,
+       "type": "integer"
+      },
+      "query": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "query"
+     ],
+     "type": "object"
+    },
+    "strict": false,
+    "type": "function"
+   },
+   {
+    "description": "mcp__synthetic_docs.lookup: Look up one synthetic document.",
+    "name": "mcp__synthetic_docs__lookup",
+    "parameters": {
+     "additionalProperties": false,
+     "properties": {
+      "topic": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "topic"
+     ],
+     "type": "object"
+    },
+    "type": "function"
+   }
+  ]
+ }
+}

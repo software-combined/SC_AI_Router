@@ -1,0 +1,93 @@
+{
+ "scenario": "s07b_opaque_assignment",
+ "targets": [
+  "subscription:gpt-6-astra",
+  "external:deepseek/deepseek-v4.1-flash-1017"
+ ],
+ "payload": {
+  "instructions": "You are the synthetic coding agent for the replay goldens.",
+  "input": [
+   {
+    "type": "message",
+    "role": "developer",
+    "content": [
+     {
+      "type": "input_text",
+      "text": "<permissions instructions>\nSynthetic sandbox: read-only; approvals are never requested.\n</permissions instructions>"
+     }
+    ]
+   },
+   {
+    "type": "agent_message",
+    "author": "/root",
+    "recipient": "/root/worker",
+    "content": [
+     {
+      "type": "input_text",
+      "text": "Synthetic assignment follows."
+     },
+     {
+      "type": "encrypted_content",
+      "encrypted_content": "gAAAAA-synthetic-assignment"
+     }
+    ]
+   },
+   {
+    "type": "message",
+    "role": "user",
+    "content": [
+     {
+      "type": "input_text",
+      "text": "Start the assignment."
+     }
+    ]
+   }
+  ],
+  "tools": [
+   {
+    "type": "function",
+    "name": "exec_command",
+    "description": "Run a shell command in the synthetic workspace.",
+    "strict": false,
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "cmd": {
+       "type": "string",
+       "description": "The command to run."
+      }
+     },
+     "required": [
+      "cmd"
+     ],
+     "additionalProperties": false
+    }
+   },
+   {
+    "type": "custom",
+    "name": "apply_patch",
+    "description": "Edit files with a synthetic patch.",
+    "format": {
+     "type": "grammar",
+     "syntax": "lark",
+     "definition": "start: /(.|\\n)+/"
+    }
+   },
+   {
+    "type": "web_search"
+   }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true,
+  "reasoning": {
+   "effort": "low",
+   "summary": "auto"
+  },
+  "store": false,
+  "stream": true,
+  "include": [
+   "reasoning.encrypted_content"
+  ],
+  "prompt_cache_key": "replay-s07b"
+ }
+}

@@ -1,0 +1,330 @@
+name: Check
+
+on:
+  pull_request:
+    branches: [main, development]
+    # edited reruns the checks when a pull request changes its base branch,
+    # which decides whether main acceptance runs. GitHub sends the same event
+    # for a title or body edit (a text edit), and every job below skips that.
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main, development]
+
+permissions:
+  contents: read
+
+concurrency:
+  # A text edit gets a group of its own: in the shared group it would cancel
+  # the running checks as soon as it queued, before any job `if` could skip
+  # it. A base change stays shared and replaces the run for the old base.
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'edited' && !github.event.changes.base && format('-text-edit-{0}', github.run_id) || '' }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: router
+
+jobs:
+  changes:
+    name: Change scope
+    # Native installer jobs are part of main acceptance. Develop runs skip
+    # them (Plan 156, narrowed 2026-09-15), and so does a text edit.
+    if: (github.event.action != 'edited' || github.event.changes.base) && ((github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      installer: ${{ steps.scope.outputs.installer }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          # The diff needs the base branch, so fetch full history.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Installer scope
+        id: scope
+        # One owner for the path list and the native test list
+        # (tools/ci_scope.py), so the workflows and the tool cannot drift.
+        # pipefail keeps a failed diff from reading as "no installer files
+        # changed" and silently skipping the native checks.
+        run: |
+          set -o pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            git diff --name-only "origin/${{ github.base_ref }}...HEAD"
+          elif [ "${{ github.event.before }}" = 0000000000000000000000000000000000000000 ]; then
+            # A new branch has no before commit. Inspect the whole candidate.
+            git ls-tree --full-tree -r --name-only "${{ github.sha }}"
+          else
+            git diff --name-only "${{ github.event.before }}...${{ github.sha }}"
+          fi | python3 tools/ci_scope.py --installer >> "$GITHUB_OUTPUT"
+
+  installer-macos:
+    name: Installer (macOS)
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Native installer tests
+        shell: bash
+        run: python -m unittest $(python tools/ci_scope.py --installer-tests)
+
+  installer-windows:
+    name: Installer (Windows)
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Native installer tests
+        shell: bash
+        run: python -m unittest $(python tools/ci_scope.py --installer-tests)
+      - name: Native packaging contracts (PowerShell)
+        shell: pwsh
+        run: python -m unittest tests.test_native_stage tests.test_native_packages tests.test_native_setup tests.test_native_readiness tests.test_native_menu_build
+      - name: Failed standard-user launch cleans up its account
+        shell: pwsh
+        run: python -m unittest tests.test_windows_standard_ci.StandardUserLaunchFailureTests
+      - name: Native ACL contract (PowerShell)
+        shell: pwsh
+        run: python -m unittest tests.test_windows_acl_native
+
+  installer-python39:
+    name: Installer (Python 3.9)
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
+    # Pinned: actions/python-versions publishes no 3.9 build for Ubuntu 26.04,
+    # which ubuntu-latest now resolves to; 24.04 still has 3.9.25.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python-version: "3.9"
+      - name: Installer surface imports on 3.9
+        run: python tools/check_installer_python39.py
+
+  windows-standard:
+    name: Windows standard user (${{ matrix.suite }})
+    needs: changes
+    if: needs.changes.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [core-first, core-second, native-runtime, native-shortcuts]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Core and native contracts without administrator rights
+        shell: pwsh
+        run: ./tools/run_windows_standard.ps1 -Python (Get-Command python).Source -Suite ${{ matrix.suite }}
+
+  unit-suite:
+    name: Offline unit suite
+    # Independent of native acceptance. Starting both together avoids paying
+    # for their durations in series; Test still requires every result.
+    if: (github.event.action != 'edited' || github.event.changes.base) && ((github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Unit suite (offline)
+        env:
+          SCG_RUN_INSTALLER_TESTS: '1'
+          VERIFICATION_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: python tools/plugin_verification.py --base "$VERIFICATION_BASE" --run --workers 2 --report "$RUNNER_TEMP/unit-results.json"
+
+  test:
+    # The rulesets require a check named Test. A skipped job reports success
+    # and the newest check of a name is the one that counts, so a skipped
+    # Test from a text edit would clear a failed one. Only a run that checks
+    # the code carries the name. GitHub currently shows a skipped job's name
+    # as this raw expression, which is not Test either.
+    name: ${{ (github.event.action != 'edited' || github.event.changes.base) && 'Test' || 'Skipped for a title or body edit' }}
+    # The required gate fails when a prerequisite fails or is cancelled.
+    # Installer jobs may be skipped when scope finds no installer paths;
+    # release-only prerequisites are skipped on development runs.
+    # !cancelled() lets the failure guard run after a failed prerequisite.
+    needs: [changes, installer-macos, installer-windows, installer-python39, desktop-menus, plugin-schedulers, hook-adapter, unit-suite, windows-standard]
+    if: ${{ !cancelled() && (github.event.action != 'edited' || github.event.changes.base) }}
+    # Development keeps the fast static checks. Main acceptance waits for
+    # the selected offline suite and native checks running in parallel.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Required jobs
+        # Failed or cancelled prerequisites must fail this required check,
+        # not disappear behind a green gate.
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "a required job did not succeed: ${{ join(needs.*.result, ', ') }}"
+          exit 1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          # This job is the one place that downloads wheels (ruff, cfn-lint).
+          # Key it on the hashed lint requirements and on this workflow, so
+          # changing cfn-lint's inline pin below also re-warms the cache.
+          cache: pip
+          cache-dependency-path: |
+            .github/requirements-lint.txt
+            .github/workflows/check.yml
+      - name: Shell syntax
+        shell: bash
+        # The bootstrap and installer shells ship to every host; a syntax
+        # error should fail here, not on a recipient's machine.
+        run: |
+          for f in packaging/*.sh; do
+            sh -n "$f" || { echo "$f failed sh -n"; exit 1; }
+          done
+      - name: PowerShell parse
+        shell: pwsh
+        # Real parser validation, not a lint pass: a .ps1 syntax error is
+        # otherwise only discovered on a Windows host.
+        run: |
+          foreach ($f in Get-Item packaging/*.ps1, tools/run_windows_standard.ps1) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $f.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Host "::error file=$($f.Name)::$($_.Message)" }
+              exit 1
+            }
+          }
+      - run: python -m compileall -q ai_router tools tests packaging
+      - name: Lint (F401/F811)
+        # python -m ruff: the script location differs by platform, the module
+        # import does not. Version + wheel hash pinned (repo convention for
+        # CI inputs); both Ubuntu and macOS wheels are listed so the same pin
+        # works for manual runs.
+        run: |
+          python -m pip install --user --require-hashes --only-binary :all: \
+            -r ../.github/requirements-lint.txt
+          # Explicit --select, not just pyproject: CI pins the enforced rule
+          # set so loosening the local config cannot widen this gate.
+          python -m ruff check --select F401,F811 ai_router packaging tools tests
+      - run: python tools/check_source_limits.py
+      - name: CloudFormation lint
+        # The feed stack is the fleet's code-execution path; lint it on the
+        # same runner that would deploy it. Pinned: lint results change with
+        # the rule set, and an unpinned rule would fail unrelated PRs.
+        run: |
+          python -m pip install --disable-pip-version-check cfn-lint==1.56.3
+          cfn-lint infra/*.yaml
+      - name: Model registry check (offline)
+        # Live-model check needs network; offline mode pins the registry
+        # shape deterministically on every runner.
+        run: python -m ai_router.models check --offline
+      - name: Catalogue merge check
+        run: |
+          python -m ai_router.catalogue --merge ./ci-catalogue.json
+          python -m ai_router.catalogue --check ./ci-catalogue.json
+      - name: Policy scans
+        # Single owner (Plan 134): tools/check_policy_scans.py implements the
+        # request-cap and secrets greps, so the same scan runs locally and in
+        # CI. Behaviour and failure messages match the inline steps it
+        # replaces.
+        run: python tools/check_policy_scans.py
+
+  desktop-menus:
+    name: Desktop menu (${{ matrix.target }})
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {target: darwin/arm64, runner: macos-15}
+          - {target: darwin/x86_64, runner: macos-15-intel}
+          - {target: windows/x86_64, runner: windows-2025}
+          - {target: linux/x86_64, runner: ubuntu-24.04}
+          - {target: linux/arm64, runner: ubuntu-24.04-arm}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Pinned Linux menu toolchain
+        if: runner.os == 'Linux'
+        run: rustup toolchain install 1.90.0 --profile minimal
+      - name: Compile native helper
+        run: python tools/check_native_menu_build.py --target ${{ matrix.target }}
+
+  plugin-schedulers:
+    name: Plugin schedulers
+    # Native plugin schedules and Router recovery use real service managers
+    # on disposable runners. Run for main acceptance; development stays lightweight.
+    if: (github.event.action != 'edited' || github.event.changes.base) && ((github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Start the disposable Linux user manager
+        if: runner.os == 'Linux'
+        run: |
+          scheduler_uid="$(id -u)"
+          sudo systemctl start "user@${scheduler_uid}.service"
+          echo "XDG_RUNTIME_DIR=/run/user/${scheduler_uid}" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${scheduler_uid}/bus" >> "$GITHUB_ENV"
+      - name: Native scheduler migration
+        run: python -m unittest tests.test_scheduling_native -v
+        env:
+          SCG_TEST_NATIVE_SCHEDULER: '1'
+
+      - name: Native Router update recovery
+        if: runner.os == 'Linux'
+        run: python -m unittest tests.test_router_scheduler_native -v
+        env:
+          SCG_TEST_NATIVE_ROUTER_SCHEDULER: '1'
+
+  hook-adapter:
+    name: Hook adapter portability
+    # The SCG hook adapter ships to every host and claims native Windows
+    # support for the receipt gate, the shims and the scanner. No other job
+    # runs its tests, so this is their only executor: without the matrix, the
+    # Windows claim would be asserted rather than exercised. Main acceptance
+    # only, like the scheduler job above.
+    if: (github.event.action != 'edited' || github.event.changes.base) && ((github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Hook adapter tests
+        # The receipt gate, the interpreter selection and the shims run on
+        # both platforms. Tests needing a POSIX scanner stub stay
+        # POSIX-only; the portability module covers the scanner here.
+        run: python -m unittest discover -s "${{ github.workspace }}/plugins/development/scg-review/support/git-hooks/tests" -v

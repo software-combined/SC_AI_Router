@@ -1,0 +1,3 @@
+# Preserve the bytes verified by the runtime component inventory on every OS.
+router/packaging/RUNTIME-NOTICES.txt text eol=lf
+plugins/development/scg-review/support/git-hooks/** text eol=lf

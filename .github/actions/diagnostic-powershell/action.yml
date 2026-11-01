@@ -1,0 +1,31 @@
+name: Diagnostic PowerShell
+description: Verify and locate the frozen native diagnostic shell.
+outputs:
+  executable:
+    description: Absolute path to the verified PowerShell executable.
+    value: ${{ steps.install.outputs.executable }}
+runs:
+  using: composite
+  steps:
+    - id: install
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $ProgressPreference = 'SilentlyContinue'
+        # Official self-contained release, verified before extracting or executing.
+        $expected = 'CE7484804C0F0AD4DDA10C958E71ACDAF7EEBFB22505C1B480F89E0E9F1DA94D'
+        $archive = Join-Path $env:RUNNER_TEMP 'PowerShell-7.6.9-win-x64.zip'
+        $folder = Join-Path $env:RUNNER_TEMP 'scg-diagnostic-powershell'
+        Invoke-WebRequest -UseBasicParsing -OutFile $archive -Uri 'https://github.com/PowerShell/PowerShell/releases/download/v7.6.9/PowerShell-7.6.9-win-x64.zip'
+        if ((Get-FileHash -Algorithm SHA256 $archive).Hash -cne $expected) {
+          throw 'Diagnostic PowerShell archive hash mismatch.'
+        }
+        Unblock-File -LiteralPath $archive
+        Expand-Archive -LiteralPath $archive -DestinationPath $folder
+        $executable = Join-Path $folder 'pwsh.exe'
+        $version = & $executable -NoProfile -NonInteractive -Command '$PSVersionTable.PSVersion.ToString()'
+        if ($LASTEXITCODE -ne 0 -or $version.Trim() -cne '7.6.9') {
+          throw 'Diagnostic PowerShell version mismatch.'
+        }
+        "executable=$executable" >> $env:GITHUB_OUTPUT
+        Write-Host "Diagnostic PowerShell 7.6.9 archive_sha256=$expected"

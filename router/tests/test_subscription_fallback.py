@@ -1,0 +1,376 @@
+"""Refused ChatGPT helper turns: plan, scope, and the twin-row fallback.
+
+Protects the title contract: desktop titles come from helper turns on a
+subscription slug, so an exhausted allowance must either keep the existing
+503 (flag absent or false) or be answered by the registry's OpenRouter
+twin (flag explicitly on), and nothing else may be redirected.
+"""
+import dataclasses
+import json
+import os
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
+
+from ai_router import subscription_fallback
+from ai_router.registry import by_slug
+from ai_router.runtime import load_state
+from tests.fakes import FakeUpstream, install_fake
+from tests.harness import (
+    auth_file as _auth_file,
+    post as _post,
+    start_server as _start_server,
+    test_state as _test_state,
+)
+
+HELPER = 'gpt-5.6-luna'; HEADERS = {'x-codex-turn-metadata': json.dumps({'thread_source': 'thread_title'})}
+
+
+def _sequence(*responses):
+    """One FakeUpstream per upstream call; the last response repeats."""
+    pending = list(responses)
+
+    def responder():
+        return FakeUpstream(*(pending.pop(0) if len(pending) > 1 else pending[0]))
+
+    return responder
+
+
+class HelperTurnTests(unittest.TestCase):
+    def test_every_helper_source_is_recognised_regardless_of_header_case(self):
+        for source in sorted(subscription_fallback.HELPER_SOURCES):
+            with self.subTest(source=source):
+                headers = {'X-Codex-Turn-Metadata': json.dumps({'thread_source': source})}
+                self.assertTrue(subscription_fallback.helper_turn(headers))
+
+    def test_user_turns_and_unreadable_metadata_are_never_helpers(self):
+        cases = [
+            {},
+            {'x-codex-turn-metadata': json.dumps({'thread_source': 'user'})},
+            {'x-codex-turn-metadata': json.dumps({'turn_trigger': 'thread_title'})},
+            {'x-codex-turn-metadata': 'not json'},
+            {'x-codex-turn-metadata': json.dumps(['thread_title'])},
+            {'x-codex-turn-metadata': json.dumps({'thread_source': ['thread_title']})},
+            {'x-codex-turn-metadata': json.dumps({'thread_source': {'name': 'thread_title'}})},
+            {'x-codex-turn-metadata': 'x' * (subscription_fallback.MAX_METADATA_BYTES + 1)},
+        ]
+        for headers in cases:
+            with self.subTest(headers=headers):
+                self.assertFalse(subscription_fallback.helper_turn(headers))
+
+    def test_twin_is_the_openrouter_row_only(self):
+        self.assertEqual(by_slug('openai/gpt-6-luna').provider, 'openrouter')
+        self.assertEqual(subscription_fallback.twin_slug(HELPER), 'openai/gpt-6-luna')
+        self.assertEqual(subscription_fallback.twin_slug('gpt-6-luna'), 'openai/gpt-6-luna')
+        # The Luna twin is its own fallback target; plan() never routes an
+        # already-external slug here, since it requires the subscription row.
+        self.assertEqual(subscription_fallback.twin_slug('openai/gpt-6-luna'),
+                         'openai/gpt-6-luna')
+        self.assertIsNone(subscription_fallback.twin_slug(None))
+
+    def test_twinless_slugs_fall_back_to_the_luna_twin(self):
+        for model in ('gpt-5.5', 'gpt-5.3-codex-spark', 'gpt-5.6-terra', 'gpt-6-sol'):
+            with self.subTest(model=model):
+                self.assertEqual(subscription_fallback.twin_slug(model), 'openai/gpt-6-luna')
+
+    def test_only_enabled_helper_turns_with_a_twin_get_a_plan(self):
+        base = dict(state={'openai_helper_fallback': True},
+                    prepared=SimpleNamespace(provider='openai', context=None),
+                    path='/responses', payload={'model': HELPER},
+                    raw_body=b'{}', headers=HEADERS, credentials=object())
+        self.assertIsNotNone(subscription_fallback.plan(**base))
+        # Client 0.154 puts its read-only app tool allowlist on helper turns.
+        tools = [{'type': 'function', 'name': 'read_file'}]
+        self.assertIsNotNone(
+            subscription_fallback.plan(**dict(base, payload={'model': HELPER, 'tools': tools})))
+        # A missing flag keeps paid fallback off.
+        self.assertIsNone(subscription_fallback.plan(**dict(base, state={})))
+        twinless = subscription_fallback.plan(
+            **dict(base, payload={'model': 'gpt-5.5'}))
+        self.assertIsNotNone(twinless)
+        self.assertEqual(twinless.target.slug, 'openai/gpt-6-luna')
+        disqualified = (('state', {'openai_helper_fallback': False}),
+                        ('path', '/alpha/search'),
+                        ('prepared', SimpleNamespace(provider='openrouter')),
+                        ('headers', {}))
+        # Plan 068: a provisioned portco list gates the redispatch too.
+        allowed_twin = {'openai_helper_fallback': True,
+                        'allowed_models': ['openai/gpt-6-luna']}
+        self.assertIsNotNone(subscription_fallback.plan(**dict(base, state=allowed_twin)))
+        for policy in ({'openai_helper_fallback': True, 'allowed_models': []},
+                       {'openai_helper_fallback': True, 'allowed_models': ['z-ai/glm-5.3']}):
+            with self.subTest(policy=policy):
+                self.assertIsNone(subscription_fallback.plan(**dict(base, state=policy)))
+        for field, value in disqualified:
+            with self.subTest(field=field, value=value):
+                self.assertIsNone(subscription_fallback.plan(**dict(base, **{field: value})))
+
+
+class RefusedHelperTurnTests(unittest.TestCase):
+    def _server(self, **overrides):
+        credentials = overrides.pop('credentials', None)
+        state = _test_state(_auth_file(self))
+        state['openai_models'] = ['gpt-6-luna', 'gpt-5.5']
+        state.update(overrides)
+        server = _start_server(state, credentials=credentials)
+        self.addCleanup(server.shutdown)
+        return server
+
+    def _turn(self, server, headers=None, payload=None):
+        body = {'model': HELPER, 'input': []}
+        body.update(payload or {})
+        return _post(server.server_port, '/test-token/responses', body, headers)
+
+    def _refusal(self):
+        return _sequence((429, b'{}', []),
+                         (200, b'{"output": [], "model": "openai/gpt-6-luna"}',
+                          [('Content-Type', 'application/json')]))
+
+    def _auth_refusal(self):
+        return _sequence((401, b'{"Detail": "Unauthorized"}', []),
+                         (200, b'{"output": [], "model": "openai/gpt-6-luna"}',
+                          [('Content-Type', 'application/json')]))
+
+    def _snapshot(self, models):
+        from ai_router import availability
+        saved = dict(availability._SNAPSHOTS)
+        availability._SNAPSHOTS['openrouter'] = {
+            'provider': 'openrouter', 'key': 'k', 'region': 'global',
+            'models': frozenset(models), 'fetched_at': 0}
+        self.addCleanup(availability._SNAPSHOTS.update, saved)
+        self.addCleanup(availability._SNAPSHOTS.clear)
+
+    def test_missing_flag_keeps_the_subscription_refusal(self):
+        recorded = install_fake(self, self._refusal())
+        server = self._server()
+        response = self._turn(server, HEADERS)
+        self.assertEqual(response.status, 503)
+        self.assertEqual(json.loads(response.read())['error']['code'], 'UPSTREAM_RATE_LIMITED')
+        self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
+
+    def test_explicit_opt_out_keeps_the_existing_503(self):
+        recorded = install_fake(self, self._refusal())
+        server = self._server(openai_helper_fallback=False)
+        response = self._turn(server, HEADERS)
+        self.assertEqual(response.status, 503)
+        body = json.loads(response.read())
+        self.assertEqual(body['error']['code'], 'UPSTREAM_RATE_LIMITED')
+        # The refusal names the model and the subscription that refused it,
+        # and the opaque text it replaced is gone.
+        self.assertIn(HELPER, body['error']['message'])
+        self.assertIn('ChatGPT subscription', body['error']['message'])
+        self.assertIn('select a routed model instead', body['error']['message'])
+        self.assertNotIn('Upstream rate limited', body['error']['message'])
+        self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
+
+    def test_unreadable_refusal_body_never_reaches_the_message(self):
+        # The wording is fixed: a 429 body the router cannot read must not
+        # change the answer, and none of it may be echoed back.
+        install_fake(self, lambda: FakeUpstream(429, b'<html>slow down</html>', []))
+        server = self._server()
+        response = self._turn(server)
+        self.assertEqual(response.status, 503)
+        message = json.loads(response.read())['error']['message']
+        self.assertIn('ChatGPT subscription', message)
+        self.assertNotIn('slow down', message)
+        self.assertNotIn('html', message)
+
+    def test_enabled_flag_answers_the_helper_turn_from_the_twin_row(self):
+        # Client 0.154 sends the read-only app tool allowlist with the helper
+        # turn, and the twin answers the client's own payload, tools included.
+        tool_turn = {'tools': [{'type': 'function', 'name': 'read_file'}]}
+        for payload, tools in ((None, []), (tool_turn, ['read_file'])):
+            with self.subTest(payload=payload):
+                recorded = install_fake(self, self._refusal())
+                server = self._server(openai_helper_fallback=True)
+                response = self._turn(server, HEADERS, payload)
+                self.assertEqual(response.status, 200)
+                self.assertEqual(json.loads(response.read())['model'], 'openai/gpt-6-luna')
+                self.assertEqual([call[0] for call in recorded], ['chatgpt.com', 'openrouter.ai'])
+                _host, method, path, body, headers = recorded[1]
+                self.assertEqual((method, path), ('POST', '/api/v1/responses'))
+                sent = json.loads(body)
+                self.assertEqual(sent['model'], 'openai/gpt-6-luna')
+                self.assertEqual([t['name'] for t in sent.get('tools', [])], tools)
+                self.assertEqual(headers['Authorization'], 'Bearer test-key')
+                self.assertEqual(server.inflight, 0)
+
+    def test_auth_refused_helper_turn_answers_from_the_twin_row(self):
+        # An exhausted subscription answers 401 as well as 429; the twin
+        # answers those too, with the same gates as the 429 path.
+        recorded = install_fake(self, self._auth_refusal())
+        server = self._server(openai_helper_fallback=True)
+        response = self._turn(server, HEADERS)
+        self.assertEqual(response.status, 200)
+        self.assertEqual(json.loads(response.read())['model'], 'openai/gpt-6-luna')
+        self.assertEqual([call[0] for call in recorded], ['chatgpt.com', 'openrouter.ai'])
+
+    def test_auth_refused_ordinary_turn_keeps_the_raw_answer(self):
+        # Ordinary turns fall through to today's raw upstream answer, so a
+        # sign-in problem stays visible instead of being masked by a twin.
+        recorded = install_fake(self, self._auth_refusal())
+        server = self._server(openai_helper_fallback=True)
+        response = self._turn(server)
+        self.assertEqual(response.status, 401)
+        self.assertIn('Unauthorized', response.read().decode())
+        self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
+
+    def test_auth_refused_helper_turn_without_a_twin_names_the_login(self):
+        # The twin cannot be prepared (no key): the helper turn keeps a 503
+        # with the sign-in wording, never the rate-limit wording and never
+        # upstream prose.
+        class _NoKey:
+            def key_for(self, provider_id=None):
+                raise LookupError('no key')
+
+        recorded = install_fake(self, self._auth_refusal())
+        server = self._server(openai_helper_fallback=True, credentials=_NoKey())
+        with self.assertLogs('codex_router', level='INFO') as logs:
+            response = self._turn(server, HEADERS)
+        self.assertEqual(response.status, 503)
+        body = json.loads(response.read())
+        self.assertEqual(body['error']['code'], 'UPSTREAM_RATE_LIMITED')
+        self.assertIn(HELPER, body['error']['message'])
+        self.assertIn('could not be authorised', body['error']['message'])
+        self.assertIn('Sign in again shortly', body['error']['message'])
+        self.assertNotIn('rate limited', body['error']['message'])
+        self.assertNotIn('Detail', body['error']['message'])
+        self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
+        events = [json.loads(record.getMessage()) for record in logs.records]
+        self.assertIn('subscription_fallback_unavailable',
+                      [event.get('event') for event in events])
+
+    def test_ordinary_turns_keep_the_refusal(self):
+        for payload in (None, {'tools': [{'type': 'custom', 'name': 'exec'}]}):
+            with self.subTest(payload=payload):
+                recorded = install_fake(self, self._refusal())
+                server = self._server(openai_helper_fallback=True)
+                response = self._turn(server, None, payload)
+                self.assertEqual(response.status, 503)
+                response.read()
+                self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
+
+    def test_missing_key_falls_back_to_the_refusal(self):
+        class _NoKey:
+            def key_for(self, provider_id=None):
+                raise LookupError('no key')
+
+        recorded = install_fake(self, self._refusal())
+        server = self._server(openai_helper_fallback=True, credentials=_NoKey())
+        with self.assertLogs('codex_router', level='INFO') as logs:
+            response = self._turn(server, HEADERS)
+        self.assertEqual(response.status, 503)
+        response.read()
+        self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
+        events = [json.loads(record.getMessage()) for record in logs.records]
+        self.assertIn('subscription_fallback_unavailable',
+                      [event.get('event') for event in events])
+
+    def test_twin_fallback_carries_the_responses_protocol_in_its_metrics(self):
+        # Plan 141: transport.emit_terminal_failure keys on metrics['protocol'],
+        # so the twin hand-off must carry it or a mid-stream failure on the
+        # fallback loses its terminal frame (it emitted one before the move).
+        install_fake(self, self._refusal())
+        server = self._server(openai_helper_fallback=True)
+        with self.assertLogs('codex_router', level='INFO') as logs:
+            response = self._turn(server, HEADERS)
+            self.assertEqual(response.status, 200)
+            response.read()
+        events = [json.loads(record.getMessage()) for record in logs.records]
+        twin = [e for e in events if e.get('event') == 'request_completed']
+        self.assertEqual(len(twin), 1, events)
+        self.assertTrue(twin[0].get('helper_fallback'))
+        self.assertEqual(twin[0].get('protocol'), 'responses')
+        self.assertEqual(twin[0].get('model'), 'openai/gpt-6-luna')
+
+    def test_policy_excluded_twin_keeps_the_refusal(self):
+        # Plan 068: the provisioned portco list gates the redispatch, so an
+        # excluded twin must never be billed through the helper path.
+        recorded = install_fake(self, self._refusal())
+        server = self._server(openai_helper_fallback=True, allowed_models=['z-ai/glm-5.3'])
+        response = self._turn(server, HEADERS)
+        self.assertEqual(response.status, 503)
+        self.assertEqual(json.loads(response.read())['error']['code'],
+                         'UPSTREAM_RATE_LIMITED')
+        self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
+
+    def test_snapshot_excluded_twin_keeps_the_refusal(self):
+        # Key-filtered availability gates the twin like a direct request,
+        # so a twin outside the `/models/user` snapshot must never bill.
+        self._snapshot({'z-ai/glm-5.3'})
+        recorded = install_fake(self, self._refusal())
+        server = self._server(openai_helper_fallback=True)
+        response = self._turn(server, HEADERS)
+        self.assertEqual(response.status, 503)
+        self.assertEqual(json.loads(response.read())['error']['code'],
+                         'UPSTREAM_RATE_LIMITED')
+        self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
+
+    def test_snapshot_included_twin_answers_the_helper_turn(self):
+        self._snapshot({'openai/gpt-6-luna'})
+        recorded = install_fake(self, self._refusal())
+        server = self._server(openai_helper_fallback=True)
+        response = self._turn(server, HEADERS)
+        self.assertEqual(response.status, 200)
+        self.assertEqual([call[0] for call in recorded],
+                         ['chatgpt.com', 'openrouter.ai'])
+
+    def test_snapshot_excluded_twin_gets_no_plan(self):
+        self._snapshot({'z-ai/glm-5.3'})
+        base = dict(state={'openai_helper_fallback': True},
+                    prepared=SimpleNamespace(provider='openai', context=None),
+                    path='/responses', payload={'model': HELPER},
+                    raw_body=b'{}', headers=HEADERS, credentials=object())
+        self.assertIsNone(subscription_fallback.plan(**base))
+
+    def test_subscription_slug_without_a_twin_answers_from_the_luna_twin(self):
+        recorded = install_fake(self, self._refusal())
+        server = self._server(openai_helper_fallback=True)
+        response = self._turn(server, HEADERS, payload={'model': 'gpt-5.5'})
+        self.assertEqual(response.status, 200)
+        self.assertEqual(json.loads(response.read())['model'], 'openai/gpt-6-luna')
+        self.assertEqual([call[0] for call in recorded], ['chatgpt.com', 'openrouter.ai'])
+
+    def test_missing_luna_twin_keeps_the_refusal(self):
+        from ai_router import registry
+        rows = dict(registry.BY_SLUG)
+        rows.pop('openai/gpt-6-luna')
+        recorded = install_fake(self, self._refusal())
+        with mock.patch.dict('ai_router.registry.BY_SLUG', rows, clear=True):
+            server = self._server(openai_helper_fallback=True)
+            response = self._turn(server, HEADERS, payload={'model': 'gpt-5.5'})
+        self.assertEqual(response.status, 503)
+        self.assertEqual(json.loads(response.read())['error']['code'],
+                         'UPSTREAM_RATE_LIMITED')
+        self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
+
+    def test_unpreparable_twin_keeps_the_refusal_and_its_retry_after(self):
+        # The twin row rejects the carried effort, so prepare raises first.
+        recorded = install_fake(self, self._refusal())
+        server = self._server(openai_helper_fallback=True)
+        twin = dataclasses.replace(by_slug('openai/gpt-6-luna'), reasoning=('low',))
+        with mock.patch.dict('ai_router.registry.BY_SLUG', {twin.slug: twin}):
+            with self.assertLogs('codex_router', level='INFO') as logs:
+                response = self._turn(server, HEADERS, payload={'reasoning': {'effort': 'max'}})
+        self.assertEqual(response.status, 503)
+        self.assertEqual(response.getheader('Retry-After'), '2')
+        response.read()
+        self.assertEqual([call[0] for call in recorded], ['chatgpt.com'])
+        events = [json.loads(record.getMessage()) for record in logs.records]
+        self.assertIn('subscription_fallback_unavailable',
+                      [event.get('event') for event in events])
+
+
+class StateValidationTests(unittest.TestCase):
+    def test_flag_must_be_boolean(self):
+        state = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False)
+        json.dump({'port': 1, 'token': 't' * 32, 'openai_models': [],
+                   'openai_helper_fallback': 'yes'}, state)
+        state.close()
+        self.addCleanup(Path(state.name).unlink)
+        with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'sk-or'}):
+            with self.assertRaises(SystemExit) as ctx:
+                load_state(Path(state.name))
+        self.assertIn('openai_helper_fallback', str(ctx.exception))

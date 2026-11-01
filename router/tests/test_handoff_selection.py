@@ -1,0 +1,92 @@
+"""The parent selects a child explicitly; every handoff uses the canonical tools."""
+from copy import deepcopy
+from pathlib import Path
+import re
+import tempfile
+import tomllib
+import unittest
+from unittest.mock import patch
+
+from ai_router import agent_handoffs, atomic_write
+from tests.test_agent_handoffs import native_tools
+from tests.test_codex_preferences import codex_config
+from tests.test_lite_handoffs import lite
+from tests.test_plugin_router_workers import worker
+
+ROOT = Path(__file__).resolve().parents[1]
+SUBAGENTS = ROOT.parent / 'plugins/agents/scg-subagents/skills/optimal-subagents'
+CODEX_GUIDANCE = (ROOT.parent / 'plugins/development/scg-review/skills/pre-commit-review/SKILL.md',
+                  ROOT.parent / 'plugins/development/scg-review/references/reviews.md',
+                  SUBAGENTS / 'SKILL.md', SUBAGENTS / 'references/tool-guide.md')
+OFFERED_TOOLS_RULE = (
+    '`collaboration_plaintext` handoff tools are offered, use them for every subagent '
+    'assignment, message and follow-up, whatever the recipient. Otherwise use the '
+    '`collaboration` tools.')
+
+
+class SelectionGuidanceTests(unittest.TestCase):
+    def test_both_wire_shapes_explain_explicit_selection_without_a_choice_of_tools(self):
+        for payload in ({'tools': native_tools('spawn_agent', 'send_message', 'followup_task')}, lite()):
+            original = deepcopy(payload)
+            prepared, _ = agent_handoffs.native_handoffs(payload, True)
+            self.assertEqual(payload, original)
+            (namespace,) = prepared.get('tools', prepared.get('input', [{}])[0].get('tools'))
+            self.assertEqual(namespace['name'], 'collaboration_plaintext')
+            for tool in namespace['tools']:
+                description = tool['description']
+                if tool['name'] == 'spawn_agent':
+                    self.assertIn('model and reasoning_effort explicitly', description)
+                    self.assertIn('fork_turns="none"', description)
+                else:
+                    self.assertEqual(description, 'Native operation.')
+
+    def test_codex_guidance_picks_handoff_tools_by_what_is_offered(self):
+        # Native GPT parents may see only the plaintext tools and older routers offer
+        # both, so no document may pick tools by the recipient or retry next turn.
+        for path in CODEX_GUIDANCE:
+            with self.subTest(path=str(path.relative_to(ROOT.parent))):
+                prose = ' '.join(path.read_text(encoding='utf-8').split())
+                self.assertIn(OFFERED_TOOLS_RULE, prose)
+                self.assertNotRegex(
+                    prose, r"externally billed recipient|recipient's provider route|next user turn")
+
+    def test_claude_code_parents_get_their_own_section_and_listing_ids(self):
+        guide = (SUBAGENTS / 'references/tool-guide.md').read_text(encoding='utf-8')
+        section = re.search(r'^## Claude Code\n(.*?)(?=^## |\Z)', guide, re.S | re.M).group(1)
+        section = ' '.join(section.split())
+        for needed in ('SendMessage', '`run_in_background: false`', '`model: inherit`',
+                       'router_worker.py --list', '../../router-workers/SKILL.md', 'unverified'):
+            self.assertIn(needed, section)
+        # Codex tool shapes mean nothing to Claude Code.
+        self.assertNotRegex(section, r'collaboration\w*\.|spawn_agent|fork_turns|reasoning_effort')
+        entry = ' '.join((SUBAGENTS / 'SKILL.md').read_text(encoding='utf-8').split())
+        self.assertIn('Claude Code reads the Claude Code section', entry)
+        # The guide sends attached sessions to --list for the id a definition's model: takes.
+        with tempfile.TemporaryDirectory() as home, patch.object(worker, 'ROUTER_HOME', Path(home)):
+            (row,) = worker.list_models([{'id': 'claude/scg/abc', 'display_name': 'Z.ai: GLM'}])
+        self.assertEqual(row['id'], 'claude/scg/abc')
+
+
+class InstallerSelectionTests(unittest.TestCase):
+    def test_install_and_update_leave_subagent_defaults_to_the_owner(self):
+        initial = ('', '[agents]\ndefault_subagent_reasoning_effort = "max"\n',
+                   '[agents]\ndefault_subagent_model = "z-ai/glm-5.3-flash"\n'
+                   'default_subagent_reasoning_effort = "max"\n')
+        for mode in ('subscription', 'none'):
+            for text in initial:
+                with self.subTest(mode=mode, initial=text), tempfile.TemporaryDirectory() as tmp:
+                    config = Path(tmp) / 'config.toml'
+                    config.write_text(text)
+                    expected = tomllib.loads(text).get('agents', {})
+                    previous = None
+                    with patch.object(codex_config, '_atomic_write', atomic_write):
+                        for version in ('1.0.0', '1.0.1'):
+                            block = codex_config.build_block(Path(tmp) / version,
+                                {'port': 1234, 'token': 'synthetic'}, mode, static_catalogue=True)
+                            block, _, desktop, reviewer = codex_config.attach_config(config, block, previous)
+                            previous = {'inserted_block': block, 'desktop': desktop, 'reviewer': reviewer}
+                            self.assertEqual(tomllib.loads(config.read_text(encoding='utf-8')).get('agents', {}), expected)
+
+
+if __name__ == '__main__':
+    unittest.main()

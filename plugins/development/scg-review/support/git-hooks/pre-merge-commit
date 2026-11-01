@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Use the same interpreter selection as the commit hook and state helper.
+config="$HOME/.config/scg-agent-git-hooks/config.json"
+interpreter=python3
+if [ -f "$config" ]; then
+  configured=$(sed -n 's/.*"interpreter"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$config" | head -n 1)
+  configured=$(printf '%s' "$configured" | sed 's/\\\\/\\/g')
+  if [ -n "$configured" ]; then
+    interpreter=$configured
+  fi
+fi
+
+exec "$interpreter" "$HOME/.config/scg-agent-git-hooks/lib/scg_agent_git_hooks.py" pre-merge-commit "$@"

@@ -1,0 +1,870 @@
+{
+ "requests": [
+  {
+   "path": "/responses",
+   "payload": {
+    "client_metadata": {
+     "root_turn_id": "<id-1>",
+     "session_id": "<id-2>",
+     "thread_id": "<id-2>",
+     "turn_id": "<id-1>",
+     "x-codex-installation-id": "<id-3>",
+     "x-codex-turn-metadata": "{\"installation_id\":\"<id-3>\",\"session_id\":\"<id-2>\",\"thread_id\":\"<id-2>\",\"agent_name\":\"/root\",\"turn_id\":\"<id-1>\",\"window_id\":\"<id-2>:0\",\"window_number\":0,\"context_window_id\":\"<id-4>\",\"request_kind\":\"turn\",\"root_turn_id\":\"<id-1>\",\"sandbox\":\"seatbelt\",\"sandbox_mode\":\"read-only\",\"auto_review_enabled\":false,\"node_repl_auto_review_required\":false,\"node_repl_disabled\":false,\"turn_started_at_unix_ms\":0,\"analytics_enabled\":false,\"model\":\"deepseek/deepseek-v4.1-flash\",\"reasoning_effort\":\"low\"}",
+     "x-codex-window-id": "<id-2>:0"
+    },
+    "include": [
+     "reasoning.encrypted_content"
+    ],
+    "input": [
+     {
+      "content": [
+       {
+        "text": "<skills_instructions>Use the synthetic workspace fixtures for this replay.</skills_instructions>",
+        "type": "input_text"
+       },
+       {
+        "text": "<permissions instructions>\nFilesystem sandboxing defines which files can be read or written. `sandbox_mode` is `read-only`: The sandbox only permits reading files. Network access is restricted.\nApproval policy is currently never. Do not provide the `sandbox_permissions` for any reason, commands will be rejected.\n</permissions instructions>",
+        "type": "input_text"
+       }
+      ],
+      "id": "msg_<id-5>",
+      "internal_chat_message_metadata_passthrough": {
+       "content_item_kinds": [
+        "host_skills.instructions",
+        "permissions.instructions"
+       ],
+       "create_time": 0,
+       "turn_id": "<id-1>"
+      },
+      "role": "developer",
+      "type": "message"
+     },
+     {
+      "content": [
+       {
+        "text": "<environment_context>\n  <cwd><work></cwd>\n  <shell>zsh</shell>\n  <current_date>2026-09-24</current_date>\n  <timezone>GMT</timezone>\n  <filesystem><workspace_roots><root><work></root></workspace_roots><permission_profile type=\"managed\"><file_system type=\"restricted\"><entry access=\"read\"><special>:root</special></entry></file_system></permission_profile></filesystem>\n</environment_context>",
+        "type": "input_text"
+       }
+      ],
+      "id": "msg_<id-6>",
+      "internal_chat_message_metadata_passthrough": {
+       "content_item_kinds": [
+        "environments.environment_context"
+       ],
+       "create_time": 0,
+       "turn_id": "<id-1>"
+      },
+      "role": "user",
+      "type": "message"
+     },
+     {
+      "content": [
+       {
+        "text": "Reply with one synthetic word.",
+        "type": "input_text"
+       }
+      ],
+      "id": "msg_<id-7>",
+      "internal_chat_message_metadata_passthrough": {
+       "content_item_kinds": [
+        "user.text"
+       ],
+       "create_time": 0,
+       "turn_id": "<id-1>"
+      },
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "<instructions sha256=100dc5791344800493f83275026847746ad260b718c9a3c2d1254e892d51f46c>",
+    "model": "deepseek/deepseek-v4.1-flash",
+    "parallel_tool_calls": true,
+    "prompt_cache_key": "<prompt_cache_key>",
+    "reasoning": {
+     "effort": "low"
+    },
+    "store": false,
+    "stream": true,
+    "tool_choice": "auto",
+    "tools": [
+     {
+      "description": "Request user input for one to three short questions and wait for the response. T",
+      "name": "request_user_input",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {
+        "questions": {
+         "description": "Questions to show the user. Prefer 1 and do not exceed 3",
+         "items": {
+          "additionalProperties": false,
+          "properties": {
+           "header": {
+            "description": "Short header label shown in the UI (12 or fewer chars).",
+            "type": "string"
+           },
+           "id": {
+            "description": "Stable identifier for mapping answers (snake_case).",
+            "type": "string"
+           },
+           "options": {
+            "description": "Provide 2-3 mutually exclusive choices. Put the recommended option first and suf",
+            "items": {
+             "additionalProperties": false,
+             "properties": {
+              "description": {
+               "description": "One short sentence explaining impact/tradeoff if selected.",
+               "type": "string"
+              },
+              "label": {
+               "description": "User-facing label (1-5 words).",
+               "type": "string"
+              }
+             },
+             "required": [
+              "label",
+              "description"
+             ],
+             "type": "object"
+            },
+            "type": "array"
+           },
+           "question": {
+            "description": "Single-sentence prompt shown to the user.",
+            "type": "string"
+           }
+          },
+          "required": [
+           "id",
+           "header",
+           "question",
+           "options"
+          ],
+          "type": "object"
+         },
+         "type": "array"
+        }
+       },
+       "required": [
+        "questions"
+       ],
+       "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+     },
+     {
+      "description": "The `apply_patch` tool can be used to edit files. This is a FREEFORM tool, so do",
+      "format": {
+       "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\n\nhunk: add_hunk | delete_hunk | update_hunk\nadd_hunk: \"*** Add File: \" filename LF add_line+\ndelete_hunk: \"*** Delete File: \" filename LF\nupdate_hunk: \"*** Update File: \" filename LF change_move? change?\n\nfilename: /(.+)/\nadd_line: \"+\" /(.*)/ LF -> line\n\nchange_move: \"*** Move to: \" filename LF\nchange: (change_context | change_line)+ eof_line?\nchange_context: (\"@@\" | \"@@ \" /(.+)/) LF\nchange_line: (\"+\" | \"-\" | \" \") /(.*)/ LF\neof_line: \"*** End of File\" LF\n\n%import common.LF\n",
+       "syntax": "lark",
+       "type": "grammar"
+      },
+      "name": "apply_patch",
+      "type": "custom"
+     },
+     {
+      "description": "View a local image file from the filesystem when visual inspection is needed. Us",
+      "name": "view_image",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {
+        "detail": {
+         "description": "Image detail level. Defaults to `high`; use `original` to preserve exact resolut",
+         "enum": [
+          "high",
+          "original"
+         ],
+         "type": "string"
+        },
+        "path": {
+         "description": "Local filesystem path to an image file.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "path"
+       ],
+       "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+     },
+     {
+      "description": "Get the current goal for this thread, including status, budgets, token and elaps",
+      "name": "get_goal",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {},
+       "required": [],
+       "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+     },
+     {
+      "description": "Create a goal only when explicitly requested by the user or system/developer ins",
+      "name": "create_goal",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {
+        "objective": {
+         "description": "Required. The concrete objective to start pursuing. This starts a new active goa",
+         "type": "string"
+        },
+        "token_budget": {
+         "description": "Positive token budget for the new goal. Omit unless explicitly requested.",
+         "type": "integer"
+        }
+       },
+       "required": [
+        "objective"
+       ],
+       "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+     },
+     {
+      "description": "Update the existing goal.\nSet status to `paused` only at the user's explicit req",
+      "name": "update_goal",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {
+        "status": {
+         "description": "Required. `paused` requires an explicit user request. Set to `complete` only whe",
+         "enum": [
+          "complete",
+          "blocked",
+          "paused"
+         ],
+         "type": "string"
+        }
+       },
+       "required": [
+        "status"
+       ],
+       "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+     },
+     {
+      "description": "# Tool discovery\n\nSearches over deferred tool metadata with BM25 and exposes mat",
+      "execution": "client",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {
+        "limit": {
+         "description": "Maximum number of tools to return. Defaults to 8.",
+         "type": "number"
+        },
+        "query": {
+         "description": "Search query for deferred tools.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "query"
+       ],
+       "type": "object"
+      },
+      "type": "tool_search"
+     }
+    ]
+   },
+   "via": "prepare"
+  },
+  {
+   "path": "/responses",
+   "payload": {
+    "client_metadata": {
+     "root_turn_id": "<id-1>",
+     "session_id": "<id-2>",
+     "thread_id": "<id-2>",
+     "turn_id": "<id-1>",
+     "x-codex-installation-id": "<id-3>",
+     "x-codex-turn-metadata": "{\"installation_id\":\"<id-3>\",\"session_id\":\"<id-2>\",\"thread_id\":\"<id-2>\",\"agent_name\":\"/root\",\"turn_id\":\"<id-1>\",\"window_id\":\"<id-2>:0\",\"window_number\":0,\"context_window_id\":\"<id-4>\",\"request_kind\":\"compaction\",\"root_turn_id\":\"<id-1>\",\"sandbox\":\"seatbelt\",\"sandbox_mode\":\"read-only\",\"auto_review_enabled\":false,\"node_repl_auto_review_required\":false,\"node_repl_disabled\":false,\"turn_started_at_unix_ms\":0,\"analytics_enabled\":false,\"compaction\":{\"trigger\":\"auto\",\"reason\":\"context_limit\",\"implementation\":\"responses_compaction_v2\",\"phase\":\"pre_turn\",\"strategy\":\"memento\"}}",
+     "x-codex-window-id": "<id-2>:0"
+    },
+    "include": [
+     "reasoning.encrypted_content"
+    ],
+    "input": [
+     {
+      "content": [
+       {
+        "text": "<skills_instructions>Use the synthetic workspace fixtures for this replay.</skills_instructions>",
+        "type": "input_text"
+       },
+       {
+        "text": "<permissions instructions>\nFilesystem sandboxing defines which files can be read or written. `sandbox_mode` is `read-only`: The sandbox only permits reading files. Network access is restricted.\nApproval policy is currently never. Do not provide the `sandbox_permissions` for any reason, commands will be rejected.\n</permissions instructions>",
+        "type": "input_text"
+       }
+      ],
+      "id": "msg_<id-5>",
+      "internal_chat_message_metadata_passthrough": {
+       "content_item_kinds": [
+        "host_skills.instructions",
+        "permissions.instructions"
+       ],
+       "create_time": 0,
+       "turn_id": "<id-6>"
+      },
+      "role": "developer",
+      "type": "message"
+     },
+     {
+      "content": [
+       {
+        "text": "<environment_context>\n  <cwd><work></cwd>\n  <shell>zsh</shell>\n  <current_date>2026-09-24</current_date>\n  <timezone>GMT</timezone>\n  <filesystem><workspace_roots><root><work></root></workspace_roots><permission_profile type=\"managed\"><file_system type=\"restricted\"><entry access=\"read\"><special>:root</special></entry></file_system></permission_profile></filesystem>\n</environment_context>",
+        "type": "input_text"
+       }
+      ],
+      "id": "msg_<id-7>",
+      "internal_chat_message_metadata_passthrough": {
+       "content_item_kinds": [
+        "environments.environment_context"
+       ],
+       "create_time": 0,
+       "turn_id": "<id-6>"
+      },
+      "role": "user",
+      "type": "message"
+     },
+     {
+      "content": [
+       {
+        "text": "Reply with one synthetic word.",
+        "type": "input_text"
+       }
+      ],
+      "id": "msg_<id-8>",
+      "internal_chat_message_metadata_passthrough": {
+       "content_item_kinds": [
+        "user.text"
+       ],
+       "create_time": 0,
+       "turn_id": "<id-6>"
+      },
+      "role": "user",
+      "type": "message"
+     },
+     {
+      "content": [
+       {
+        "text": "Synthetic reply.",
+        "type": "output_text"
+       }
+      ],
+      "id": "msg_probe",
+      "internal_chat_message_metadata_passthrough": {
+       "content_item_kinds": [
+        "unknown"
+       ],
+       "turn_id": "<id-6>"
+      },
+      "role": "assistant",
+      "type": "message"
+     },
+     {
+      "type": "compaction_trigger"
+     }
+    ],
+    "instructions": "<instructions sha256=100dc5791344800493f83275026847746ad260b718c9a3c2d1254e892d51f46c>",
+    "model": "deepseek/deepseek-v4.1-flash",
+    "parallel_tool_calls": true,
+    "prompt_cache_key": "<prompt_cache_key>",
+    "reasoning": {
+     "effort": "low"
+    },
+    "store": false,
+    "stream": true,
+    "tool_choice": "auto",
+    "tools": [
+     {
+      "description": "Request user input for one to three short questions and wait for the response. T",
+      "name": "request_user_input",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {
+        "questions": {
+         "description": "Questions to show the user. Prefer 1 and do not exceed 3",
+         "items": {
+          "additionalProperties": false,
+          "properties": {
+           "header": {
+            "description": "Short header label shown in the UI (12 or fewer chars).",
+            "type": "string"
+           },
+           "id": {
+            "description": "Stable identifier for mapping answers (snake_case).",
+            "type": "string"
+           },
+           "options": {
+            "description": "Provide 2-3 mutually exclusive choices. Put the recommended option first and suf",
+            "items": {
+             "additionalProperties": false,
+             "properties": {
+              "description": {
+               "description": "One short sentence explaining impact/tradeoff if selected.",
+               "type": "string"
+              },
+              "label": {
+               "description": "User-facing label (1-5 words).",
+               "type": "string"
+              }
+             },
+             "required": [
+              "label",
+              "description"
+             ],
+             "type": "object"
+            },
+            "type": "array"
+           },
+           "question": {
+            "description": "Single-sentence prompt shown to the user.",
+            "type": "string"
+           }
+          },
+          "required": [
+           "id",
+           "header",
+           "question",
+           "options"
+          ],
+          "type": "object"
+         },
+         "type": "array"
+        }
+       },
+       "required": [
+        "questions"
+       ],
+       "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+     },
+     {
+      "description": "The `apply_patch` tool can be used to edit files. This is a FREEFORM tool, so do",
+      "format": {
+       "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\n\nhunk: add_hunk | delete_hunk | update_hunk\nadd_hunk: \"*** Add File: \" filename LF add_line+\ndelete_hunk: \"*** Delete File: \" filename LF\nupdate_hunk: \"*** Update File: \" filename LF change_move? change?\n\nfilename: /(.+)/\nadd_line: \"+\" /(.*)/ LF -> line\n\nchange_move: \"*** Move to: \" filename LF\nchange: (change_context | change_line)+ eof_line?\nchange_context: (\"@@\" | \"@@ \" /(.+)/) LF\nchange_line: (\"+\" | \"-\" | \" \") /(.*)/ LF\neof_line: \"*** End of File\" LF\n\n%import common.LF\n",
+       "syntax": "lark",
+       "type": "grammar"
+      },
+      "name": "apply_patch",
+      "type": "custom"
+     },
+     {
+      "description": "View a local image file from the filesystem when visual inspection is needed. Us",
+      "name": "view_image",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {
+        "detail": {
+         "description": "Image detail level. Defaults to `high`; use `original` to preserve exact resolut",
+         "enum": [
+          "high",
+          "original"
+         ],
+         "type": "string"
+        },
+        "path": {
+         "description": "Local filesystem path to an image file.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "path"
+       ],
+       "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+     },
+     {
+      "description": "Get the current goal for this thread, including status, budgets, token and elaps",
+      "name": "get_goal",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {},
+       "required": [],
+       "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+     },
+     {
+      "description": "Create a goal only when explicitly requested by the user or system/developer ins",
+      "name": "create_goal",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {
+        "objective": {
+         "description": "Required. The concrete objective to start pursuing. This starts a new active goa",
+         "type": "string"
+        },
+        "token_budget": {
+         "description": "Positive token budget for the new goal. Omit unless explicitly requested.",
+         "type": "integer"
+        }
+       },
+       "required": [
+        "objective"
+       ],
+       "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+     },
+     {
+      "description": "Update the existing goal.\nSet status to `paused` only at the user's explicit req",
+      "name": "update_goal",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {
+        "status": {
+         "description": "Required. `paused` requires an explicit user request. Set to `complete` only whe",
+         "enum": [
+          "complete",
+          "blocked",
+          "paused"
+         ],
+         "type": "string"
+        }
+       },
+       "required": [
+        "status"
+       ],
+       "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+     },
+     {
+      "description": "# Tool discovery\n\nSearches over deferred tool metadata with BM25 and exposes mat",
+      "execution": "client",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {
+        "limit": {
+         "description": "Maximum number of tools to return. Defaults to 8.",
+         "type": "number"
+        },
+        "query": {
+         "description": "Search query for deferred tools.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "query"
+       ],
+       "type": "object"
+      },
+      "type": "tool_search"
+     }
+    ]
+   },
+   "via": "compact_trigger"
+  },
+  {
+   "path": "/responses",
+   "payload": {
+    "client_metadata": {
+     "root_turn_id": "<id-1>",
+     "session_id": "<id-2>",
+     "thread_id": "<id-2>",
+     "turn_id": "<id-1>",
+     "x-codex-installation-id": "<id-3>",
+     "x-codex-turn-metadata": "{\"installation_id\":\"<id-3>\",\"session_id\":\"<id-2>\",\"thread_id\":\"<id-2>\",\"agent_name\":\"/root\",\"turn_id\":\"<id-1>\",\"window_id\":\"<id-2>:1\",\"window_number\":1,\"context_window_id\":\"<id-4>\",\"request_kind\":\"turn\",\"root_turn_id\":\"<id-1>\",\"sandbox\":\"seatbelt\",\"sandbox_mode\":\"read-only\",\"auto_review_enabled\":false,\"node_repl_auto_review_required\":false,\"node_repl_disabled\":false,\"turn_started_at_unix_ms\":0,\"analytics_enabled\":false,\"model\":\"deepseek/deepseek-v4.1-flash\",\"reasoning_effort\":\"low\"}",
+     "x-codex-window-id": "<id-2>:1"
+    },
+    "include": [
+     "reasoning.encrypted_content"
+    ],
+    "input": [
+     {
+      "content": [
+       {
+        "text": "Reply with one synthetic word.",
+        "type": "input_text"
+       }
+      ],
+      "id": "msg_<id-5>",
+      "internal_chat_message_metadata_passthrough": {
+       "content_item_kinds": [
+        "user.text"
+       ],
+       "create_time": 0,
+       "turn_id": "<id-6>"
+      },
+      "role": "user",
+      "type": "message"
+     },
+     {
+      "encrypted_content": "ocx1:U3ludGhldGljIHN1bW1hcnku",
+      "id": "cmp_<id-7>",
+      "type": "compaction"
+     },
+     {
+      "content": [
+       {
+        "text": "<skills_instructions>Use the synthetic workspace fixtures for this replay.</skills_instructions>",
+        "type": "input_text"
+       },
+       {
+        "text": "<permissions instructions>\nFilesystem sandboxing defines which files can be read or written. `sandbox_mode` is `read-only`: The sandbox only permits reading files. Network access is restricted.\nApproval policy is currently never. Do not provide the `sandbox_permissions` for any reason, commands will be rejected.\n</permissions instructions>",
+        "type": "input_text"
+       }
+      ],
+      "id": "msg_<id-8>",
+      "internal_chat_message_metadata_passthrough": {
+       "content_item_kinds": [
+        "host_skills.instructions",
+        "permissions.instructions"
+       ],
+       "create_time": 0,
+       "turn_id": "<id-1>"
+      },
+      "role": "developer",
+      "type": "message"
+     },
+     {
+      "content": [
+       {
+        "text": "<environment_context>\n  <cwd><work></cwd>\n  <shell>zsh</shell>\n  <current_date>2026-09-24</current_date>\n  <timezone>GMT</timezone>\n  <filesystem><workspace_roots><root><work></root></workspace_roots><permission_profile type=\"managed\"><file_system type=\"restricted\"><entry access=\"read\"><special>:root</special></entry></file_system></permission_profile></filesystem>\n</environment_context>",
+        "type": "input_text"
+       }
+      ],
+      "id": "msg_<id-9>",
+      "internal_chat_message_metadata_passthrough": {
+       "content_item_kinds": [
+        "environments.environment_context"
+       ],
+       "create_time": 0,
+       "turn_id": "<id-1>"
+      },
+      "role": "user",
+      "type": "message"
+     },
+     {
+      "content": [
+       {
+        "text": "Continue the synthetic task.",
+        "type": "input_text"
+       }
+      ],
+      "id": "msg_<id-10>",
+      "internal_chat_message_metadata_passthrough": {
+       "content_item_kinds": [
+        "user.text"
+       ],
+       "create_time": 0,
+       "turn_id": "<id-1>"
+      },
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "<instructions sha256=100dc5791344800493f83275026847746ad260b718c9a3c2d1254e892d51f46c>",
+    "model": "deepseek/deepseek-v4.1-flash",
+    "parallel_tool_calls": true,
+    "prompt_cache_key": "<prompt_cache_key>",
+    "reasoning": {
+     "effort": "low"
+    },
+    "store": false,
+    "stream": true,
+    "tool_choice": "auto",
+    "tools": [
+     {
+      "description": "Request user input for one to three short questions and wait for the response. T",
+      "name": "request_user_input",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {
+        "questions": {
+         "description": "Questions to show the user. Prefer 1 and do not exceed 3",
+         "items": {
+          "additionalProperties": false,
+          "properties": {
+           "header": {
+            "description": "Short header label shown in the UI (12 or fewer chars).",
+            "type": "string"
+           },
+           "id": {
+            "description": "Stable identifier for mapping answers (snake_case).",
+            "type": "string"
+           },
+           "options": {
+            "description": "Provide 2-3 mutually exclusive choices. Put the recommended option first and suf",
+            "items": {
+             "additionalProperties": false,
+             "properties": {
+              "description": {
+               "description": "One short sentence explaining impact/tradeoff if selected.",
+               "type": "string"
+              },
+              "label": {
+               "description": "User-facing label (1-5 words).",
+               "type": "string"
+              }
+             },
+             "required": [
+              "label",
+              "description"
+             ],
+             "type": "object"
+            },
+            "type": "array"
+           },
+           "question": {
+            "description": "Single-sentence prompt shown to the user.",
+            "type": "string"
+           }
+          },
+          "required": [
+           "id",
+           "header",
+           "question",
+           "options"
+          ],
+          "type": "object"
+         },
+         "type": "array"
+        }
+       },
+       "required": [
+        "questions"
+       ],
+       "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+     },
+     {
+      "description": "The `apply_patch` tool can be used to edit files. This is a FREEFORM tool, so do",
+      "format": {
+       "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\n\nhunk: add_hunk | delete_hunk | update_hunk\nadd_hunk: \"*** Add File: \" filename LF add_line+\ndelete_hunk: \"*** Delete File: \" filename LF\nupdate_hunk: \"*** Update File: \" filename LF change_move? change?\n\nfilename: /(.+)/\nadd_line: \"+\" /(.*)/ LF -> line\n\nchange_move: \"*** Move to: \" filename LF\nchange: (change_context | change_line)+ eof_line?\nchange_context: (\"@@\" | \"@@ \" /(.+)/) LF\nchange_line: (\"+\" | \"-\" | \" \") /(.*)/ LF\neof_line: \"*** End of File\" LF\n\n%import common.LF\n",
+       "syntax": "lark",
+       "type": "grammar"
+      },
+      "name": "apply_patch",
+      "type": "custom"
+     },
+     {
+      "description": "View a local image file from the filesystem when visual inspection is needed. Us",
+      "name": "view_image",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {
+        "detail": {
+         "description": "Image detail level. Defaults to `high`; use `original` to preserve exact resolut",
+         "enum": [
+          "high",
+          "original"
+         ],
+         "type": "string"
+        },
+        "path": {
+         "description": "Local filesystem path to an image file.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "path"
+       ],
+       "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+     },
+     {
+      "description": "Get the current goal for this thread, including status, budgets, token and elaps",
+      "name": "get_goal",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {},
+       "required": [],
+       "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+     },
+     {
+      "description": "Create a goal only when explicitly requested by the user or system/developer ins",
+      "name": "create_goal",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {
+        "objective": {
+         "description": "Required. The concrete objective to start pursuing. This starts a new active goa",
+         "type": "string"
+        },
+        "token_budget": {
+         "description": "Positive token budget for the new goal. Omit unless explicitly requested.",
+         "type": "integer"
+        }
+       },
+       "required": [
+        "objective"
+       ],
+       "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+     },
+     {
+      "description": "Update the existing goal.\nSet status to `paused` only at the user's explicit req",
+      "name": "update_goal",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {
+        "status": {
+         "description": "Required. `paused` requires an explicit user request. Set to `complete` only whe",
+         "enum": [
+          "complete",
+          "blocked",
+          "paused"
+         ],
+         "type": "string"
+        }
+       },
+       "required": [
+        "status"
+       ],
+       "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+     },
+     {
+      "description": "# Tool discovery\n\nSearches over deferred tool metadata with BM25 and exposes mat",
+      "execution": "client",
+      "parameters": {
+       "additionalProperties": false,
+       "properties": {
+        "limit": {
+         "description": "Maximum number of tools to return. Defaults to 8.",
+         "type": "number"
+        },
+        "query": {
+         "description": "Search query for deferred tools.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "query"
+       ],
+       "type": "object"
+      },
+      "type": "tool_search"
+     }
+    ]
+   },
+   "via": "prepare"
+  }
+ ],
+ "scenario": "compaction"
+}

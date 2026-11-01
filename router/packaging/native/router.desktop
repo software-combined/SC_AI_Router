@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Install SCG Router
+Exec=AppRun
+Icon=router
+Categories=Utility;
+Terminal=false

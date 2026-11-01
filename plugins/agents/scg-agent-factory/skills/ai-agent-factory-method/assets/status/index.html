@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project progress</title>
+  <!--STATUS_STYLE-->
+</head>
+<body>
+<a class="skip" href="#all">Skip to work</a>
+<div class="shell">
+  <header>
+    <div class="mast"><span>Software Combined</span><div class="mast-actions"><button id="help-open" type="button">Help</button><button id="theme-toggle" type="button">Dark mode</button></div></div>
+    <h1 id="title">Project progress</h1>
+    <p id="outcome" class="lead" hidden></p>
+    <p id="availability" class="availability"></p>
+    <p class="context"><span id="checked"></span><a id="source" target="_blank" rel="noopener" hidden>Work plan ↗</a></p>
+    <p class="banner" id="notice" hidden></p>
+    <nav class="tabs" role="tablist" aria-label="Project views">
+      <button role="tab" id="tab-overview" aria-controls="overview" aria-selected="true">Overview</button>
+      <button role="tab" id="tab-input" aria-controls="list" aria-selected="false" tabindex="-1">Your input <span class="count" data-count="input"></span></button>
+      <button role="tab" id="tab-all" aria-controls="list" aria-selected="false" tabindex="-1">All work <span class="count" data-count="all"></span></button>
+    </nav>
+  </header>
+  <main>
+    <div id="error" class="banner" role="alert" hidden><p>These records could not be shown. No progress is reported.</p><p id="error-detail"></p></div>
+    <section id="overview" role="tabpanel" aria-labelledby="tab-overview">
+      <h2 class="sr-only">Overview</h2>
+      <div class="panel input-panel"><h3>Needs your input</h3><ul id="requests" class="requests"></ul></div>
+      <div id="tiles" class="tiles"></div>
+      <p id="tile-note" class="muted"></p>
+      <div class="overview-grid">
+        <div class="panel"><h3>The team is handling</h3><ul id="reasons" class="reasons"></ul></div>
+        <div class="panel" id="changes-panel"><h3>Recent changes</h3><ul id="changes" class="changes"></ul></div>
+      </div>
+      <details class="breakdown"><summary>More about progress</summary><ul id="breakdown"></ul></details>
+    </section>
+    <section id="list" role="tabpanel" aria-labelledby="tab-all" hidden>
+      <div class="list-head"><h2 id="list-title">All work</h2><span id="list-count" role="status" aria-live="polite"></span></div>
+      <div class="toolbar">
+        <label class="search">Search<input id="search" type="search" placeholder="Find work or an owner"></label>
+        <label id="phase-field">Stage<select id="phase"></select></label>
+        <label id="owner-field">Owner<select id="owner"></select></label>
+      </div>
+      <div id="chips" class="chips" role="group" aria-label="Progress filter"></div>
+      <ul id="cards" class="cards"></ul>
+      <p id="empty" class="panel" hidden>No work matches. Clear the search or change a filter.</p>
+    </section>
+  </main>
+  <footer><span>Software Combined · Project progress</span><span id="updated"></span></footer>
+</div>
+<dialog id="detail" aria-labelledby="detail-title">
+  <div class="detail-head"><p id="detail-tags" class="tags"></p><button id="close-detail" type="button">Close</button></div>
+  <h2 id="detail-title"></h2><div id="detail-body"></div>
+</dialog>
+<dialog id="help" aria-labelledby="help-title">
+  <div class="detail-head"><h2 id="help-title">What the labels mean</h2><button id="close-help" type="button">Close</button></div>
+  <dl class="help-list">
+    <dt>Done ✓</dt><dd>The intended people can use it. A named person checked the agreed result against that version.</dd>
+    <dt>In progress / Being reviewed</dt><dd>The team is building or reviewing the work.</dd>
+    <dt>Ready to publish / On test version</dt><dd>The work is prepared, but the intended people cannot use the live version yet.</dd>
+    <dt>Live, user check due</dt><dd>People can use it. Their check of the agreed result is still missing.</dd>
+    <dt>Availability unconfirmed</dt><dd>The work is reported live, but the supporting record is missing.</dd>
+    <dt>Needs attention</dt><dd>There is a blocker, a due date has passed, or publication or a user check is still needed.</dd>
+    <dt>Your input</dt><dd>An open question or check is assigned to a person. The named owner replies in the project chat.</dd>
+    <dt>Not started / Status not recorded</dt><dd>Planned work and missing information are shown separately. An unknown result never counts as done.</dd>
+    <dt>Deferred</dt><dd>This work is outside the current plan and its progress counts.</dd>
+  </dl>
+  <p class="muted">This page shows recorded facts. Refreshing the page does not verify the work again.</p>
+</dialog>
+<dialog id="picture" aria-label="Screenshot"><button id="close-picture" type="button">Close screenshot</button><img id="picture-image" alt=""><p id="picture-caption"></p></dialog>
+<!--STATUS_DATA-->
+<!--STATUS_SCRIPT-->
+</body>
+</html>

@@ -1,0 +1,191 @@
+{
+ "scenario": "s08_lite",
+ "targets": [
+  "subscription:gpt-6-astra",
+  "external:deepseek/deepseek-v4.1-flash-1017",
+  "external:z-ai/glm-5.3-flash"
+ ],
+ "payload": {
+  "instructions": "You are the synthetic coding agent for the replay goldens.",
+  "input": [
+   {
+    "type": "message",
+    "role": "developer",
+    "content": [
+     {
+      "type": "input_text",
+      "text": "<permissions instructions>\nSynthetic sandbox: read-only; approvals are never requested.\n</permissions instructions>"
+     }
+    ]
+   },
+   {
+    "type": "additional_tools",
+    "role": "developer",
+    "id": "at_s08",
+    "tools": [
+     {
+      "type": "namespace",
+      "name": "collaboration",
+      "description": "Work with other agents.",
+      "tools": [
+       {
+        "type": "function",
+        "name": "spawn_agent",
+        "description": "Start a synthetic helper agent.",
+        "strict": true,
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "message": {
+           "type": "string",
+           "encrypted": true,
+           "description": "The assignment or message."
+          },
+          "target": {
+           "type": "string"
+          },
+          "task_name": {
+           "type": "string"
+          },
+          "model": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "message"
+         ],
+         "additionalProperties": false
+        }
+       },
+       {
+        "type": "function",
+        "name": "send_message",
+        "description": "Message a synthetic agent.",
+        "strict": true,
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "message": {
+           "type": "string",
+           "encrypted": true,
+           "description": "The assignment or message."
+          },
+          "target": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "message"
+         ],
+         "additionalProperties": false
+        }
+       },
+       {
+        "type": "function",
+        "name": "followup_task",
+        "description": "Give a synthetic agent more work.",
+        "strict": true,
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "message": {
+           "type": "string",
+           "encrypted": true,
+           "description": "The assignment or message."
+          },
+          "target": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "message"
+         ],
+         "additionalProperties": false
+        }
+       },
+       {
+        "type": "function",
+        "name": "close_agent",
+        "description": "Close a finished synthetic agent.",
+        "strict": true,
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "message": {
+           "type": "string",
+           "encrypted": true,
+           "description": "The assignment or message."
+          },
+          "target": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "message"
+         ],
+         "additionalProperties": false
+        }
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "message",
+    "role": "user",
+    "content": [
+     {
+      "type": "input_text",
+      "text": "Spawn a synthetic helper for the tests."
+     }
+    ]
+   }
+  ],
+  "tools": [
+   {
+    "type": "function",
+    "name": "exec_command",
+    "description": "Run a shell command in the synthetic workspace.",
+    "strict": false,
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "cmd": {
+       "type": "string",
+       "description": "The command to run."
+      }
+     },
+     "required": [
+      "cmd"
+     ],
+     "additionalProperties": false
+    }
+   },
+   {
+    "type": "custom",
+    "name": "apply_patch",
+    "description": "Edit files with a synthetic patch.",
+    "format": {
+     "type": "grammar",
+     "syntax": "lark",
+     "definition": "start: /(.|\\n)+/"
+    }
+   },
+   {
+    "type": "web_search"
+   }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true,
+  "reasoning": {
+   "effort": "low",
+   "summary": "auto"
+  },
+  "store": false,
+  "stream": true,
+  "include": [
+   "reasoning.encrypted_content"
+  ],
+  "prompt_cache_key": "replay-s08"
+ }
+}

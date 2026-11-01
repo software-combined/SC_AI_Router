@@ -1,0 +1,110 @@
+# Files the installer and its host-side service helpers run on the
+# interpreter that runs the installer: Python 3.9+ (the router itself needs
+# 3.14). Each line is `<mode> <path>`:
+#
+#   load  - imported by path at install or service time. The 3.9 check loads
+#           each one on the installer's interpreter and fails when that pulls
+#           in a router package, a module the interpreter does not have, or an
+#           unlisted runtime leaf.
+#   parse - entry points and subprocess tools. Syntax/compile checked only,
+#           never executed: the launchers act at import by design, and
+#           tools/disable.py detaches the live router when it runs (2026-09-13
+#           incident). Only the installer may run those, as a subprocess.
+#
+# Owners: tools/check_installer_python39.py and
+# tests/test_packaging.py::test_installer_surface_parses_as_python39.
+load packaging/install.py
+load packaging/install_delivery.py
+load packaging/windows_installation.py
+load packaging/repair_ui.py
+load packaging/download_auth.py
+load packaging/download_oauth.py
+load packaging/download_session.py
+load packaging/download_enrolment.py
+load packaging/download_notice.py
+load packaging/control_models.py
+load packaging/native_payload.py
+load packaging/native_resources.py
+load packaging/native/native_stage.py
+load packaging/native_controller.py
+load packaging/native_dialog.py
+load packaging/native_setup.py
+load packaging/native_shortcuts.py
+load packaging/native_readiness.py
+load packaging/atomic_write.py
+load packaging/owned_json.py
+load packaging/client_removal.py
+load packaging/bundle.py
+load packaging/claude_config.py
+load packaging/client_choice.py
+load packaging/claude_desktop_config.py
+load packaging/claude_desktop_policy.py
+load packaging/claude_desktop_platform.py
+load packaging/claude_desktop_switch.py
+load packaging/claude_profile_rules.py
+load packaging/claude_profile_identity.py
+load packaging/claude_profile_records.py
+load packaging/claude_profile_publish.py
+load packaging/claude_profile_transaction.py
+load packaging/claude_profile_history.py
+load packaging/claude_profile_bundle.py
+load packaging/claude_profile_sync.py
+load packaging/claude_profile_ledger.py
+load packaging/claude_profile_hook.py
+load packaging/codex_config.py
+load packaging/codex_owned.py
+load packaging/codex_recovery.py
+load packaging/codex_switch_config.py
+load packaging/codex_desktop_switch.py
+load packaging/codex_config_proof.py
+load packaging/codex_switch_offer.py
+load packaging/codex_switch_app.py
+load packaging/diagnostics.py
+load packaging/feed.py
+load packaging/feed_verify.py
+load packaging/launchd.py
+load packaging/notice.py
+load packaging/operator_surface.py
+load packaging/provider_keys.py
+load packaging/service.py
+load packaging/systemd.py
+load packaging/updater.py
+load packaging/update_reconcile.py
+load packaging/runtime_rebind.py
+load packaging/update_status.py
+load packaging/update_warning.py
+load packaging/platforms/__init__.py
+load packaging/desktop_windows.py
+load packaging/windows_native.py
+load packaging/windows_codex.py
+load packaging/windows_dialog.py
+load packaging/codex_switch_transaction.py
+load packaging/desktop_control.py
+load packaging/desktop_model.py
+load packaging/desktop_menu.py
+load packaging/desktop_service.py
+load packaging/desktop_startup.py
+parse packaging/desktop_launch.py
+load packaging/platforms/darwin.py
+load packaging/platforms/linux.py
+load packaging/platforms/windows.py
+load packaging/platforms/windows_tasks.py
+load ai_router/atomic_write.py
+load ai_router/dialog_tool.py
+load ai_router/provider_defs.py
+load ai_router/retired_slugs.py
+load ai_router/state.py
+load ai_router/subscription_roster.py
+load ai_router/clients/roster.py
+load ai_router/winacl.py
+load ai_router/winsecurity.py
+parse packaging/router_launch.py
+parse packaging/claude_profile_launch.py
+parse packaging/codex_switch_launch.py
+parse packaging/runtime_lock.py
+parse packaging/task_launch.py
+parse packaging/update_launch.py
+parse packaging/native_launch.py
+parse tools/disable.py
+parse tools/classify_attachments.py
+parse tools/global_instructions.py

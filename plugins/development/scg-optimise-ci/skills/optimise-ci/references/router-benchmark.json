@@ -1,0 +1,581 @@
+{
+  "repository": "https://github.com/software-combined/SC_AI_Router-archive",
+  "measured_on": "2026-10-23",
+  "payload": {
+    "commit": "bc2920a6688cceb9eed3caf40847fef4dc031f39",
+    "tree": "2b6076c122282b315b3ef724bcf0cc673745589a"
+  },
+  "harness": {
+    "commit": "a79f21a92a32f6eaed49ed79cc8ea825017fc930",
+    "source_url": "https://github.com/software-combined/SC_AI_Router-archive/blob/a79f21a92a32f6eaed49ed79cc8ea825017fc930/.github/workflows/router-ci-benchmark.yml"
+  },
+  "python": {
+    "acceptance": "3.14.8",
+    "compatibility": "3.9.25"
+  },
+  "installed_verification_packages": [
+    "cfn-lint-1.56.3",
+    "jsonpatch-1.36",
+    "jsonpointer-3.4",
+    "mpmath-1.3.0",
+    "networkx-3.7",
+    "pyyaml-6.0.3",
+    "regex-2026.9.29",
+    "ruff-0.16.7",
+    "sympy-1.14.0",
+    "typing_extensions-4.16.0"
+  ],
+  "sampling": {
+    "order": [
+      "serial-1",
+      "parallel-1",
+      "parallel-2",
+      "serial-2",
+      "serial-3",
+      "parallel-3"
+    ],
+    "samples_per_layout": 3,
+    "attempts_per_run": 1,
+    "failed_primary_runs": 0,
+    "workflow_reruns": 0,
+    "rule": "Six sequential runs in declared order; retain failures and stop. At most one diagnosed infrastructure replacement per layout; input corrections start a new cohort."
+  },
+  "definitions": {
+    "elapsed_seconds": "Workflow created_at through last executed job completed_at.",
+    "aggregate_job_seconds": "Sum of completed_at minus started_at across executed jobs; excludes queues and billing weights.",
+    "unit_step_seconds": "Unit suite step started_at through completed_at.",
+    "inventory_hash": "SHA-256 of UTF-8 compact JSON for sorted post-run discovered unittest identifiers, retaining duplicates; not an execution trace."
+  },
+  "coverage": {
+    "unit_reported_tests": 3492,
+    "unit_reported_skips": 21,
+    "unit_discovered_entries": 3492,
+    "unit_unique_discovered_ids": 3481,
+    "unit_case_ids_sha256": "ff65d6d1d606551ab406d5b774c5e9ee8ba874ba79e5440380348aadce760554",
+    "native_installers": {
+      "Installer (macOS)": {
+        "modules": 92,
+        "modules_sha256": "2eb4a7ff08d83fe1425900a0138ee35e57a0eeeffecaf1df69e12c33d3ebb426",
+        "reported_test_results": [
+          {
+            "tests": 905,
+            "skipped": 6
+          }
+        ]
+      },
+      "Installer (Windows)": {
+        "modules": 74,
+        "modules_sha256": "454562db7819c847d44f8ce7c0d2519cf196ff1c28f447485ce26e93cac0c8b2",
+        "reported_test_results": [
+          {
+            "tests": 748,
+            "skipped": 174
+          },
+          {
+            "tests": 31,
+            "skipped": 2
+          },
+          {
+            "tests": 1,
+            "skipped": 0
+          }
+        ]
+      }
+    },
+    "menu_targets": [
+      "darwin/arm64",
+      "darwin/x86_64",
+      "windows/x86_64",
+      "linux/x86_64",
+      "linux/arm64"
+    ],
+    "scheduler_and_hook_platforms": [
+      "ubuntu-latest",
+      "windows-latest"
+    ],
+    "scheduler_reports": {
+      "Plugin schedulers (ubuntu-latest)": [
+        {
+          "tests": 2,
+          "skipped": 0
+        },
+        {
+          "tests": 1,
+          "skipped": 0
+        }
+      ],
+      "Plugin schedulers (windows-latest)": [
+        {
+          "tests": 2,
+          "skipped": 1
+        }
+      ]
+    },
+    "hook_adapter_reports": {
+      "Hook adapter portability (ubuntu-latest)": [
+        {
+          "tests": 35,
+          "skipped": 2
+        }
+      ],
+      "Hook adapter portability (windows-latest)": [
+        {
+          "tests": 35,
+          "skipped": 5
+        }
+      ]
+    },
+    "source_checkout_verified_for_every_executed_job": true
+  },
+  "samples": [
+    {
+      "sample": "serial-1",
+      "layout": "serial",
+      "run_id": 39931873584,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/39931873584",
+      "elapsed_seconds": 857.0,
+      "aggregate_job_seconds": 1749.0,
+      "unit_step_seconds": 489.0,
+      "platform_seconds": {
+        "windows-latest": 363.0,
+        "ubuntu-latest": 549.0,
+        "macos-latest": 331.0,
+        "ubuntu-24.04": 141.0,
+        "macos-15-intel": 118.0,
+        "macos-15": 46.0,
+        "ubuntu-24.04-arm": 116.0,
+        "windows-2025": 85.0
+      },
+      "unit_start_delay_seconds": 348.0,
+      "native_execution_overlap_seconds": {
+        "Installer (macOS)": 0,
+        "Installer (Windows)": 0
+      },
+      "successful_jobs": 14,
+      "unit_reported_tests": 3492,
+      "unit_reported_skips": 21,
+      "inventory_sha256": "ff65d6d1d606551ab406d5b774c5e9ee8ba874ba79e5440380348aadce760554",
+      "setup_seconds": 319.0,
+      "runtime_download_jobs": 8,
+      "setup_jobs_without_runtime_download": 5
+    },
+    {
+      "sample": "parallel-1",
+      "layout": "parallel",
+      "run_id": 39933647660,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/39933647660",
+      "elapsed_seconds": 490.0,
+      "aggregate_job_seconds": 1738.0,
+      "unit_step_seconds": 451.0,
+      "platform_seconds": {
+        "windows-latest": 380.0,
+        "ubuntu-latest": 521.0,
+        "macos-latest": 358.0,
+        "windows-2025": 17.0,
+        "ubuntu-24.04": 138.0,
+        "macos-15-intel": 142.0,
+        "macos-15": 60.0,
+        "ubuntu-24.04-arm": 122.0
+      },
+      "unit_start_delay_seconds": 5.0,
+      "native_execution_overlap_seconds": {
+        "Installer (macOS)": 317.0,
+        "Installer (Windows)": 173.0
+      },
+      "successful_jobs": 15,
+      "unit_reported_tests": 3492,
+      "unit_reported_skips": 21,
+      "inventory_sha256": "ff65d6d1d606551ab406d5b774c5e9ee8ba874ba79e5440380348aadce760554",
+      "setup_seconds": 297.0,
+      "runtime_download_jobs": 7,
+      "setup_jobs_without_runtime_download": 7
+    },
+    {
+      "sample": "parallel-2",
+      "layout": "parallel",
+      "run_id": 39934670492,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/39934670492",
+      "elapsed_seconds": 530.0,
+      "aggregate_job_seconds": 1691.0,
+      "unit_step_seconds": 489.0,
+      "platform_seconds": {
+        "ubuntu-latest": 568.0,
+        "windows-latest": 361.0,
+        "ubuntu-24.04": 100.0,
+        "windows-2025": 73.0,
+        "macos-15-intel": 113.0,
+        "macos-latest": 305.0,
+        "ubuntu-24.04-arm": 111.0,
+        "macos-15": 60.0
+      },
+      "unit_start_delay_seconds": 6.0,
+      "native_execution_overlap_seconds": {
+        "Installer (macOS)": 283.0,
+        "Installer (Windows)": 182.0
+      },
+      "successful_jobs": 15,
+      "unit_reported_tests": 3492,
+      "unit_reported_skips": 21,
+      "inventory_sha256": "ff65d6d1d606551ab406d5b774c5e9ee8ba874ba79e5440380348aadce760554",
+      "setup_seconds": 299.0,
+      "runtime_download_jobs": 7,
+      "setup_jobs_without_runtime_download": 7
+    },
+    {
+      "sample": "serial-2",
+      "layout": "serial",
+      "run_id": 39935769534,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/39935769534",
+      "elapsed_seconds": 820.0,
+      "aggregate_job_seconds": 1689.0,
+      "unit_step_seconds": 464.0,
+      "platform_seconds": {
+        "ubuntu-latest": 520.0,
+        "windows-latest": 396.0,
+        "ubuntu-24.04": 118.0,
+        "macos-latest": 321.0,
+        "ubuntu-24.04-arm": 121.0,
+        "windows-2025": 55.0,
+        "macos-15": 46.0,
+        "macos-15-intel": 112.0
+      },
+      "unit_start_delay_seconds": 337.0,
+      "native_execution_overlap_seconds": {
+        "Installer (Windows)": 0,
+        "Installer (macOS)": 0
+      },
+      "successful_jobs": 14,
+      "unit_reported_tests": 3492,
+      "unit_reported_skips": 21,
+      "inventory_sha256": "ff65d6d1d606551ab406d5b774c5e9ee8ba874ba79e5440380348aadce760554",
+      "setup_seconds": 303.0,
+      "runtime_download_jobs": 7,
+      "setup_jobs_without_runtime_download": 6
+    },
+    {
+      "sample": "serial-3",
+      "layout": "serial",
+      "run_id": 39937474035,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/39937474035",
+      "elapsed_seconds": 825.0,
+      "aggregate_job_seconds": 1634.0,
+      "unit_step_seconds": 485.0,
+      "platform_seconds": {
+        "ubuntu-latest": 548.0,
+        "windows-latest": 317.0,
+        "ubuntu-24.04": 123.0,
+        "macos-latest": 303.0,
+        "ubuntu-24.04-arm": 118.0,
+        "macos-15-intel": 130.0,
+        "windows-2025": 52.0,
+        "macos-15": 43.0
+      },
+      "unit_start_delay_seconds": 320.0,
+      "native_execution_overlap_seconds": {
+        "Installer (macOS)": 0,
+        "Installer (Windows)": 0
+      },
+      "successful_jobs": 14,
+      "unit_reported_tests": 3492,
+      "unit_reported_skips": 21,
+      "inventory_sha256": "ff65d6d1d606551ab406d5b774c5e9ee8ba874ba79e5440380348aadce760554",
+      "setup_seconds": 275.0,
+      "runtime_download_jobs": 7,
+      "setup_jobs_without_runtime_download": 6
+    },
+    {
+      "sample": "parallel-3",
+      "layout": "parallel",
+      "run_id": 39939149481,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/39939149481",
+      "elapsed_seconds": 509.0,
+      "aggregate_job_seconds": 1730.0,
+      "unit_step_seconds": 461.0,
+      "platform_seconds": {
+        "windows-latest": 373.0,
+        "ubuntu-latest": 538.0,
+        "macos-latest": 306.0,
+        "ubuntu-24.04-arm": 117.0,
+        "macos-15-intel": 129.0,
+        "windows-2025": 75.0,
+        "macos-15": 46.0,
+        "ubuntu-24.04": 146.0
+      },
+      "unit_start_delay_seconds": 6.0,
+      "native_execution_overlap_seconds": {
+        "Installer (macOS)": 277.0,
+        "Installer (Windows)": 154.0
+      },
+      "successful_jobs": 15,
+      "unit_reported_tests": 3492,
+      "unit_reported_skips": 21,
+      "inventory_sha256": "ff65d6d1d606551ab406d5b774c5e9ee8ba874ba79e5440380348aadce760554",
+      "setup_seconds": 338.0,
+      "runtime_download_jobs": 8,
+      "setup_jobs_without_runtime_download": 6
+    }
+  ],
+  "summary": {
+    "serial": {
+      "samples": 3,
+      "elapsed_seconds": {
+        "median": 825.0,
+        "minimum": 820.0,
+        "maximum": 857.0
+      },
+      "aggregate_job_seconds": {
+        "median": 1689.0,
+        "minimum": 1634.0,
+        "maximum": 1749.0
+      },
+      "unit_step_seconds": {
+        "median": 485.0,
+        "minimum": 464.0,
+        "maximum": 489.0
+      }
+    },
+    "parallel": {
+      "samples": 3,
+      "elapsed_seconds": {
+        "median": 509.0,
+        "minimum": 490.0,
+        "maximum": 530.0
+      },
+      "aggregate_job_seconds": {
+        "median": 1730.0,
+        "minimum": 1691.0,
+        "maximum": 1738.0
+      },
+      "unit_step_seconds": {
+        "median": 461.0,
+        "minimum": 451.0,
+        "maximum": 489.0
+      }
+    }
+  },
+  "observed_runner_profiles": {
+    "Benchmark verification": [
+      [
+        "Version: 20261012.601",
+        "Image: ubuntu-26.04",
+        "Version: 20261012.163.1",
+        "Successfully set up CPython (3.14.8)"
+      ]
+    ],
+    "Change scope": [
+      [
+        "Version: 20261012.601",
+        "Image: ubuntu-26.04",
+        "Version: 20261012.163.1"
+      ]
+    ],
+    "Desktop menu (darwin/arm64)": [
+      [
+        "Version: 20260828.587",
+        "Image: macos-15-arm64",
+        "Version: 20260907.0337.1",
+        "Successfully set up CPython (3.14.8)"
+      ]
+    ],
+    "Desktop menu (darwin/x86_64)": [
+      [
+        "Version: 20260819.586",
+        "Image: macos-15",
+        "Version: 20260824.0482.1",
+        "Successfully set up CPython (3.14.8)"
+      ]
+    ],
+    "Desktop menu (linux/arm64)": [
+      [
+        "Version: 20261012.601",
+        "Image: ubuntu-24.04-arm",
+        "Version: 20261012.149.1",
+        "Successfully set up CPython (3.14.8)"
+      ]
+    ],
+    "Desktop menu (linux/x86_64)": [
+      [
+        "Version: 20261012.601",
+        "Image: ubuntu-24.04",
+        "Version: 20261012.334.1",
+        "Successfully set up CPython (3.14.8)"
+      ]
+    ],
+    "Desktop menu (windows/x86_64)": [
+      [
+        "Version: 20261002.596",
+        "Image: windows-2025-vs2026",
+        "Version: 20261007.264.1",
+        "Successfully set up CPython (3.14.8)"
+      ],
+      [
+        "Version: 20261021.618",
+        "Image: windows-2025-vs2026",
+        "Version: 20261021.278.1",
+        "Successfully set up CPython (3.14.8)"
+      ]
+    ],
+    "Hook adapter portability (ubuntu-latest)": [
+      [
+        "Version: 20261012.601",
+        "Image: ubuntu-26.04",
+        "Version: 20261012.163.1",
+        "Successfully set up CPython (3.14.8)"
+      ]
+    ],
+    "Hook adapter portability (windows-latest)": [
+      [
+        "Version: 20261021.618",
+        "Image: windows-2025-vs2026",
+        "Version: 20261021.278.1",
+        "Successfully set up CPython (3.14.8)"
+      ]
+    ],
+    "Installer (Python 3.9)": [
+      [
+        "Version: 20261012.601",
+        "Image: ubuntu-24.04",
+        "Version: 20261012.334.1",
+        "Successfully set up CPython (3.9.25)"
+      ]
+    ],
+    "Installer (Windows)": [
+      [
+        "Version: 20261002.596",
+        "Image: windows-2025-vs2026",
+        "Version: 20261007.264.1",
+        "Successfully set up CPython (3.14.8)"
+      ],
+      [
+        "Version: 20261021.618",
+        "Image: windows-2025-vs2026",
+        "Version: 20261021.278.1",
+        "Successfully set up CPython (3.14.8)"
+      ]
+    ],
+    "Installer (macOS)": [
+      [
+        "Version: 20261012.601",
+        "Image: macos-26-arm64",
+        "Version: 20261013.0424.1",
+        "Successfully set up CPython (3.14.8)"
+      ],
+      [
+        "Version: 20261021.618",
+        "Image: macos-26-arm64",
+        "Version: 20261021.0445.8",
+        "Successfully set up CPython (3.14.8)"
+      ]
+    ],
+    "Offline unit suite (parallel)": [
+      [
+        "Version: 20261012.601",
+        "Image: ubuntu-26.04",
+        "Version: 20261012.163.1",
+        "Successfully set up CPython (3.14.8)"
+      ]
+    ],
+    "Plugin schedulers (ubuntu-latest)": [
+      [
+        "Version: 20261012.601",
+        "Image: ubuntu-26.04",
+        "Version: 20261012.163.1",
+        "Successfully set up CPython (3.14.8)"
+      ]
+    ],
+    "Plugin schedulers (windows-latest)": [
+      [
+        "Version: 20261021.618",
+        "Image: windows-2025-vs2026",
+        "Version: 20261021.278.1",
+        "Successfully set up CPython (3.14.8)"
+      ]
+    ]
+  },
+  "observed_compilers": {
+    "Desktop menu (darwin/arm64)": [
+      [
+        "Apple Swift version 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)"
+      ]
+    ],
+    "Desktop menu (darwin/x86_64)": [
+      [
+        "Apple Swift version 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)"
+      ]
+    ],
+    "Desktop menu (linux/arm64)": [
+      [
+        "rustc 1.90.0 (1159e78c4 2025-09-14)",
+        "commit-hash: 1159e78c4747b02ef996e55082b704c09b970588",
+        "cargo 1.90.0 (840b83a10 2025-07-30)"
+      ]
+    ],
+    "Desktop menu (linux/x86_64)": [
+      [
+        "rustc 1.90.0 (1159e78c4 2025-09-14)",
+        "commit-hash: 1159e78c4747b02ef996e55082b704c09b970588",
+        "cargo 1.90.0 (840b83a10 2025-07-30)"
+      ]
+    ],
+    "Desktop menu (windows/x86_64)": [
+      [
+        "{\"compiler\": \"Framework64/csc.exe\", \"version\": \"4.8.9221.0 built by: NET481REL1LAST_25H2\", \"sha256\": \"46809206887326d2d24db1eff1f3064de972c3451abe766b49111450a5e08e00\"}"
+      ]
+    ]
+  },
+  "limits": [
+    "Hosted images and machine load were not controlled.",
+    "All setup and runtime-download costs remain in elapsed and job execution totals.",
+    "No project dependency cache was configured; hosted tool-cache state varied.",
+    "Post-run discovery and reported test/skip totals are not an execution trace or line/branch coverage measurement.",
+    "Three samples per layout support descriptive results, not typical savings or reliability claims."
+  ],
+  "excluded_preliminary_runs": [
+    {
+      "run_id": 39926550665,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/39926550665",
+      "layout": "serial",
+      "elapsed_seconds": 830.0,
+      "aggregate_job_seconds": 1460.0,
+      "unit_step_seconds": 486.0,
+      "harness_commit": "d81ff9eee6e5ea3571021b9938a52693fb92aea8",
+      "observed_python_versions": [
+        "Successfully set up CPython (3.14.7)",
+        "Successfully set up CPython (3.14.8)",
+        "Successfully set up CPython (3.14.9)",
+        "Successfully set up CPython (3.9.25)"
+      ]
+    },
+    {
+      "run_id": 39928322182,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/39928322182",
+      "layout": "parallel",
+      "elapsed_seconds": 513.0,
+      "aggregate_job_seconds": 1446.0,
+      "unit_step_seconds": 464.0,
+      "harness_commit": "d81ff9eee6e5ea3571021b9938a52693fb92aea8",
+      "observed_python_versions": [
+        "Successfully set up CPython (3.14.7)",
+        "Successfully set up CPython (3.14.8)",
+        "Successfully set up CPython (3.14.9)",
+        "Successfully set up CPython (3.9.25)"
+      ]
+    },
+    {
+      "run_id": 39929449357,
+      "url": "https://github.com/software-combined/SC_AI_Router-archive/actions/runs/39929449357",
+      "layout": "parallel",
+      "elapsed_seconds": 531.0,
+      "aggregate_job_seconds": 1502.0,
+      "unit_step_seconds": 489.0,
+      "harness_commit": "d81ff9eee6e5ea3571021b9938a52693fb92aea8",
+      "observed_python_versions": [
+        "Successfully set up CPython (3.14.7)",
+        "Successfully set up CPython (3.14.8)",
+        "Successfully set up CPython (3.14.9)",
+        "Successfully set up CPython (3.9.25)"
+      ]
+    }
+  ],
+  "preliminary_exclusion_reason": "Floating Python selectors resolved to different patch versions; the primary cohort pins all runtime setup calls."
+}

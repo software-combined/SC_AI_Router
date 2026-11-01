@@ -1,0 +1,9 @@
+{
+  "name": "scg-subagents",
+  "version": "0.8.1",
+  "description": "Subagent coordination, model selection, router-model workers and evidence refresh.",
+  "author": {
+    "name": "Software Combined"
+  },
+  "license": "Apache-2.0"
+}

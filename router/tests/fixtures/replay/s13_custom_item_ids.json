@@ -1,0 +1,18 @@
+{
+ "scenario": "s13_custom_item_ids",
+ "targets": ["subscription:gpt-6.1-sol"],
+ "payload": {
+  "input": [
+   {"type": "additional_tools", "id": "at_synthetic", "role": "developer", "tools": []},
+   {"type": "function_call", "id": "fc_function", "call_id": "call_function", "name": "echo", "arguments": "{}"},
+   {"type": "function_call_output", "id": "fco_function", "call_id": "call_function", "output": "synthetic marker"},
+   {"type": "custom_tool_call", "id": "fc_tmp_legacy", "call_id": "call_legacy", "name": "apply_patch", "input": "synthetic patch", "status": "completed"},
+   {"type": "custom_tool_call_output", "id": "ctco_legacy", "call_id": "call_legacy", "output": "synthetic result"},
+   {"type": "message", "id": "msg_switch", "role": "developer", "content": "<model_switch>"},
+   {"type": "custom_tool_call", "id": "ctc_native", "call_id": "call_native", "name": "apply_patch", "input": "synthetic patch", "status": "completed"},
+   {"type": "custom_tool_call_output", "id": "ctco_native", "call_id": "call_native", "output": "synthetic result"}
+  ],
+  "stream": true,
+  "store": false
+ }
+}
