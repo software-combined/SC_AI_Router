@@ -72,6 +72,22 @@ See [contributing](CONTRIBUTING.md) for reviews, plugin validation, and releases
 Normal pull requests target `development`; `main` is the release branch.
 Router and plugins retain separate version and release rules.
 
+## Historical contributors
+
+SC_AI builds on work by the contributors below. These credits preserve their
+contributions before the repository moved to clean history on 1 November 2026.
+
+- Cyril Allart ([SC-Cyril](https://github.com/SC-Cyril))
+- Brent Maxwell ([BrentJMaxwell](https://github.com/BrentJMaxwell), [SC-Brent](https://github.com/SC-Brent))
+- [activate-craigmassey](https://github.com/activate-craigmassey)
+- [activate-robbieburke](https://github.com/activate-robbieburke)
+- Jack Davis ([JackSoftcom](https://github.com/JackSoftcom))
+- Puja Soham ([puja-sc](https://github.com/puja-sc))
+- Guy Bane ([gbane-softcom](https://github.com/gbane-softcom))
+
+This list is separate from GitHub's automatic Contributors panel. The old
+commit history is not included in this repository.
+
 ## Help and licence
 
 Start with [operations](docs/operations.md) or [recovery](docs/recovery.md).
